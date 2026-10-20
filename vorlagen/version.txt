@@ -1,2 +1,2 @@
-13
-Beim Speichern kann man jetzt zwischen Excel und PDF wählen. Die Einträge bleiben stehen, bis die Vorlage geschlossen wird. Prüfung elektr. Geräte: Ladegerät, Schutzklasse 1 und Einheit A sind fest vorausgefüllt.
+14
+Kleine Korrekturen: Speichern als PDF klappt jetzt auch bei Formularen mit Punkt im Namen (z. B. Prüfung elektr. Geräte), Geräteliste speichern löst beim Schließen keine unnötige Nachfrage mehr aus.
