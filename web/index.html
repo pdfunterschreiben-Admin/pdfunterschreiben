@@ -158,6 +158,10 @@ dialog::backdrop{background:rgba(10,15,30,.55)}
 .order-head{display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap}
 .order-head .seg{flex:1 1 360px}
 .order .thumbs{min-height:60px}
+.files{display:flex;flex-wrap:wrap;gap:6px}
+.files .fchip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:3px 4px 3px 10px;background:var(--paper);font-size:13px;cursor:grab;max-width:100%}
+.files .fchip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:260px}
+.files .fchip button{width:22px;height:22px;padding:0;border-radius:50%;font-size:14px;line-height:1}
 .thumbs figure{cursor:grab}
 .thumbs figcaption{position:absolute;left:0;right:0;bottom:0;padding:2px 6px;font-size:11px;color:#fff;background:linear-gradient(transparent,rgba(0,0,0,.65))}
 .dlg{display:flex;flex-direction:column;max-height:calc(100vh - 32px)}
@@ -302,6 +306,7 @@ dialog::backdrop{background:rgba(10,15,30,.55)}
       </ul>
       <h3>4. Dokumentation (Umbau, Gewaltschaden, Garantie)</h3>
       <p>„Dokumentation“ öffnen, Berichte auswählen und alle Fotos auf einmal hinzufügen. Die Fotos werden nach Aufnahmezeit sortiert und über das Typenschild bzw. das Datum dem richtigen Auftrag zugeordnet; falsch einsortierte Fotos einfach mit der Maus verschieben. Pro Auftrag die Art wählen – dann öffnet sich je Auftrag eine E-Mail an d.dokumentation@schlueter-gabelstapler.de mit Betreff „Auftragsnummer Art“ und einer PDF (Bericht vorne, danach die Fotos).</p>
+      <p><b>Fotos vom Handy:</b> QR-Code anzeigen, mit dem Handy scannen und die Fotos aus der Galerie auswählen (Typenschild zuerst) – sie kommen mit der echten Aufnahmezeit direkt ins Programm. <b>TruckReport:</b> Dateien (PDF, JSON …) werden über die Seriennummer dem Auftrag zugeordnet und unverändert zusätzlich an dessen E-Mail gehängt.</p>
       <h3>Sonstiges</h3>
       <ul>
         <li>Updates kommen automatisch: oben erscheint dann „Jetzt aktualisieren“.</li>
@@ -322,10 +327,11 @@ dialog::backdrop{background:rgba(10,15,30,.55)}
         <div class="row"><button type="button" id="docuAddDoc">Bericht hinzufügen …</button></div>
       </div>
       <div class="docu-drop">
-        <span class="hint">Alle Fotos auf einmal auswählen oder hier hineinziehen. Sie werden nach Aufnahmezeit sortiert und über das Typenschild bzw. das Datum dem richtigen Auftrag zugeordnet.</span>
+        <span class="hint">Alle Fotos auf einmal auswählen oder hier hineinziehen. Sie werden nach Aufnahmezeit sortiert und über das Typenschild bzw. das Datum dem richtigen Auftrag zugeordnet. TruckReport-Dateien (PDF, JSON …) kommen über die Seriennummer zum Auftrag und hängen zusätzlich an dessen E-Mail.</span>
         <div class="row" style="gap:8px;flex-wrap:wrap">
           <label class="btn file-btn">Fotos hinzufügen …<input type="file" id="docuPhotoIn" accept="image/jpeg,image/png,image/webp,image/bmp,image/gif" multiple></label>
           <button type="button" id="docuPhone">📱 Fotos vom Handy</button>
+          <label class="btn file-btn" title="TruckReport-Dateien (PDF, JSON, …) – werden zusätzlich an die E-Mail des Auftrags gehängt">📎 TruckReport …<input type="file" id="docuFileIn" multiple></label>
         </div>
       </div>
       <span class="hint" id="docuOcr" hidden></span>
@@ -1747,7 +1753,7 @@ function ideaCard(i){
 // 1. Seriennummer vom Typenschild (Texterkennung von Windows) = „Serien-Nr.“ im Bericht
 // 2. sonst gleiches Datum wie im Bericht (wenn es an dem Tag nur einen Auftrag gibt)
 // Was nicht eindeutig ist, landet unter „Nicht zugeordnet“ und wird mit der Maus zum Auftrag gezogen.
-const docu = {photos: [], orders: new Map(), manual: null, pick: new Map(), ocrOff: "", ocrBusy: false, pid: 0};
+const docu = {photos: [], files: [], orders: new Map(), manual: null, pick: new Map(), ocrOff: "", ocrBusy: false, pid: 0};
 const isPhoto = f => /^image\//.test(f.type) || /\.(jpe?g|png|webp|bmp|gif|heic|heif)$/i.test(f.name);
 const docuErr = m => { $("#docuErr").textContent = m; $("#docuErr").hidden = !m; };
 const ARTEN = ["Umbau", "Gewaltschaden", "Garantie"];
@@ -1936,7 +1942,7 @@ async function runOcr(){
 }
 
 async function refreshDocu(){
-  await syncOrders(); assignPhotos(); renderDocu(); runOcr();
+  await syncOrders(); assignPhotos(); assignFiles(); renderDocu(); runOcr();
 }
 
 const HOW = {serial: "Seriennummer vom Typenschild erkannt", date: "gleiches Datum wie im Bericht", single: "einziger Auftrag", hand: "von Hand zugeordnet"};
@@ -1951,9 +1957,16 @@ function thumbEl(p){
   return f;
 }
 function dropZone(el, orderId){
-  el.ondragover = e => { if(e.dataTransfer.types.includes("text/pu-photo")){ e.preventDefault(); el.classList.add("over"); } };
+  el.ondragover = e => { if(e.dataTransfer.types.includes("text/pu-photo") || e.dataTransfer.types.includes("text/pu-file")){ e.preventDefault(); el.classList.add("over"); } };
   el.ondragleave = () => el.classList.remove("over");
   el.ondrop = e => {
+    const fid = e.dataTransfer.getData("text/pu-file");
+    if(fid){
+      e.preventDefault(); e.stopPropagation(); el.classList.remove("over");
+      const f = docu.files.find(x => x.id === fid);
+      if(f){ f.order = orderId; f.how = orderId ? "hand" : null; renderDocu(); }
+      return;
+    }
     const id = e.dataTransfer.getData("text/pu-photo");
     if(!id) return;
     e.preventDefault(); e.stopPropagation(); el.classList.remove("over");
@@ -1984,7 +1997,7 @@ function renderDocu(){
         <div class="seg">${ARTEN.map(a => `<label><input type="radio" name="art-${o.id}" value="${a}"> ${a}</label>`).join("")}</div>
       </div>
       <span class="hint">${meta}${o.nrAuto ? " · Auftragsnummer aus dem Bericht übernommen" : ""}</span>
-      <div class="thumbs"></div>`;
+      <div class="thumbs"></div><div class="files"></div>`;
     const nrIn = card.querySelector(".o-nr"); nrIn.value = o.nr;
     nrIn.oninput = () => { o.nr = nrIn.value.trim(); o.nrAuto = false; };
     card.querySelectorAll('input[type=radio]').forEach(r => {
@@ -1994,24 +2007,27 @@ function renderDocu(){
     const th = card.querySelector(".thumbs");
     ph.forEach(p => th.appendChild(thumbEl(p)));
     if(!ph.length) th.innerHTML = '<span class="hint">Keine Fotos – Fotos hierher ziehen.</span>';
+    docu.files.filter(f => f.order === o.id).forEach(f => card.querySelector(".files").appendChild(fileChip(f)));
     dropZone(card, o.id);
     box.appendChild(card);
   }
-  const loose = docu.photos.filter(p => !p.order).sort(byTime);
-  if(loose.length){
+  const loose = docu.photos.filter(p => !p.order).sort(byTime), looseF = docu.files.filter(f => !f.order);
+  if(loose.length || looseF.length){
     const card = document.createElement("div"); card.className = "order loose";
     card.innerHTML = docu.ocrBusy
       ? `<strong>Noch nicht zugeordnet (${loose.length})</strong><span class="hint"><b>Typenschilder werden gerade gelesen – bitte kurz warten</b>, die Fotos wandern gleich automatisch zum richtigen Auftrag.</span><div class="thumbs"></div>`
-      : `<strong>Nicht zugeordnet (${loose.length})</strong><span class="hint">Zieh diese Fotos mit der Maus zum richtigen Auftrag oder entferne sie.</span><div class="thumbs"></div>`;
+      : `<strong>Nicht zugeordnet (${loose.length})</strong><span class="hint">Zieh diese Fotos/Dateien mit der Maus zum richtigen Auftrag oder entferne sie.</span><div class="thumbs"></div>`;
+    const st = card.querySelector("strong"); st.textContent = st.textContent.replace(/\(\d+\)/, `(${loose.length + looseF.length})`);
     loose.forEach(p => card.querySelector(".thumbs").appendChild(thumbEl(p)));
+    if(looseF.length){ const fl = document.createElement("div"); fl.className = "files"; looseF.forEach(f => fl.appendChild(fileChip(f))); card.appendChild(fl); }
     dropZone(card, null);
     box.appendChild(card);
   }
   if(keep){ const el = box.querySelector(`.order[data-oid="${keep.oid}"] .o-nr`); if(el){ el.focus(); el.setSelectionRange(keep.pos, keep.pos); } }
   $("#docuOcr").hidden = !(docu.ocrBusy || docu.ocrOff);
   if(!docu.ocrBusy && docu.ocrOff) $("#docuOcr").textContent = `Typenschilder konnten nicht gelesen werden (${docu.ocrOff}). Zuordnung nur nach Datum.`;
-  const n = orders.filter(o => o.doc || docu.photos.some(p => p.order === o.id)).length;
-  $("#docuInfo").textContent = `${orders.length} ${orders.length === 1 ? "Auftrag" : "Aufträge"} · ${docu.photos.length} ${docu.photos.length === 1 ? "Foto" : "Fotos"}`;
+  const n = orders.filter(o => o.doc || docu.photos.some(p => p.order === o.id) || docu.files.some(f => f.order === o.id)).length;
+  $("#docuInfo").textContent = `${orders.length} ${orders.length === 1 ? "Auftrag" : "Aufträge"} · ${docu.photos.length} ${docu.photos.length === 1 ? "Foto" : "Fotos"}` + (docu.files.length ? ` · ${docu.files.length} ${docu.files.length === 1 ? "Datei" : "Dateien"}` : "");
   $("#docuSend").textContent = n > 1 ? `${n} E-Mails erstellen` : "Als PDF per E-Mail senden";
   // Solange Typenschilder gelesen werden: sichtbar warten lassen und noch nicht senden
   const sb = $("#docuSend");
@@ -2027,6 +2043,53 @@ $("#docuBtn").onclick = async () => {
 $("#docuClose").onclick = () => $("#docuDlg").close();
 $("#docuAddDoc").onclick = () => $("#pdfFile").click();
 $("#docuPhotoIn").onchange = e => { addPhotos([...e.target.files]); e.target.value = ""; };
+
+// ---- TruckReport-Dateien: werden unverändert zusätzlich an die E-Mail des Auftrags gehängt ----
+function fileChip(f){
+  const c = document.createElement("span");
+  c.className = "fchip"; c.draggable = true;
+  c.title = `${f.file.name} (${Math.max(1, Math.round(f.file.size / 1024))} KB)` + (f.how === "serial" ? "\nZugeordnet: Seriennummer in der Datei gefunden" : f.how === "single" ? "\nZugeordnet: einziger Auftrag" : f.how === "hand" ? "\nZugeordnet: von Hand" : "");
+  c.innerHTML = `📎 <span></span><button type="button" title="Datei entfernen" aria-label="Datei entfernen">×</button>`;
+  c.querySelector("span").textContent = f.file.name;
+  c.querySelector("button").onclick = () => { docu.files = docu.files.filter(x => x !== f); renderDocu(); };
+  c.ondragstart = e => { e.dataTransfer.setData("text/pu-file", f.id); e.dataTransfer.effectAllowed = "move"; };
+  return c;
+}
+// Text einer Datei zum Suchen der Seriennummer (PDF über pdf.js, Text-Dateien direkt)
+async function fileText(file){
+  let t = file.name + "\n";
+  try{
+    if(/\.pdf$/i.test(file.name) || file.type === "application/pdf"){
+      const pdf = await openPdf(new Uint8Array(await file.arrayBuffer()));
+      for(let i = 1; i <= Math.min(pdf.numPages, 10); i++){
+        const tc = await (await pdf.getPage(i)).getTextContent();
+        t += tc.items.map(x => x.str).join(" ") + "\n";
+      }
+      pdf.destroy && pdf.destroy();
+    } else if(file.size < 20 << 20 && /\.(json|txt|csv|xml|log|html?|ini|cfg)$/i.test(file.name)){
+      t += await file.text();
+    }
+  }catch(e){}
+  return t;
+}
+function assignFiles(){
+  const orders = orderList();
+  for(const f of docu.files){
+    if(f.how === "hand" && orders.some(o => o.id === f.order)) continue;
+    const hits = orders.filter(o => o.serial && serialIn(f.norm, o.serial));
+    if(hits.length === 1){ f.order = hits[0].id; f.how = "serial"; }
+    else if(orders.length === 1){ f.order = orders[0].id; f.how = "single"; }
+    else { f.order = null; f.how = null; }
+  }
+}
+$("#docuFileIn").onchange = async e => {
+  const list = [...e.target.files]; e.target.value = "";
+  for(const file of list){
+    if(file.size > 50 << 20){ toast(`„${file.name}“ ist größer als 50 MB und wird nicht angehängt.`, 7000); continue; }
+    docu.files.push({id: "f" + (++docu.pid), file, norm: normSer(await fileText(file)), order: null, how: null});
+  }
+  assignFiles(); renderDocu();
+};
 
 // ---- Fotos vom Handy per QR-Code (über den Anmeldeserver) ----
 let phone = null;
@@ -2135,10 +2198,12 @@ async function buildDocuPdf(o, photos, kurz){
 let docuBusy = false;
 $("#docuSend").onclick = async () => {
   if(docuBusy) return;
-  const orders = orderList().filter(o => o.doc || docu.photos.some(p => p.order === o.id));
+  const orders = orderList().filter(o => o.doc || docu.photos.some(p => p.order === o.id) || docu.files.some(f => f.order === o.id));
   if(!orders.length) return docuErr("Bitte mindestens einen Bericht oder ein Foto hinzufügen.");
   const loose = docu.photos.filter(p => !p.order).length;
   if(loose) return docuErr(`${loose} ${loose === 1 ? "Foto ist" : "Fotos sind"} keinem Auftrag zugeordnet – bitte zum richtigen Auftrag ziehen oder entfernen.`);
+  const looseF = docu.files.filter(f => !f.order).length;
+  if(looseF) return docuErr(`${looseF} TruckReport-${looseF === 1 ? "Datei ist" : "Dateien sind"} keinem Auftrag zugeordnet – bitte zum richtigen Auftrag ziehen oder entfernen.`);
   for(const o of orders){
     const label = o.nr || (o.doc ? o.doc.name : "Auftrag");
     if(!o.art) return docuErr(`Bitte bei ${label} auswählen: Umbau, Gewaltschaden oder Garantie.`);
@@ -2157,15 +2222,22 @@ $("#docuSend").onclick = async () => {
       const photos = docu.photos.filter(p => p.order === o.id).sort((a, b) => a.time - b.time);
       const bytes = await buildDocuPdf(o, photos, kurz);
       const name = `${o.nr}_${kurz}`.replace(/[\\/:*?"<>|\s]+/g, "_") + ".pdf";
+      const files = [{name, data: b64(bytes)}], used = new Set([name.toLowerCase()]);
+      for(const f of docu.files.filter(x => x.order === o.id)){
+        let fn = f.file.name, k = 1;
+        while(used.has(fn.toLowerCase())) fn = f.file.name.replace(/(\.[^.]*)?$/, m => ` (${++k})${m}`);
+        used.add(fn.toLowerCase());
+        files.push({name: fn, data: b64(new Uint8Array(await f.file.arrayBuffer()))});
+      }
       const r = await (await fetch("/api/mail", {method: "POST", headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({subject: `${o.nr} ${o.art}`, to: DOCU_TO, files: [{name, data: b64(bytes)}]})})).json();
+        body: JSON.stringify({subject: `${o.nr} ${o.art}`, to: DOCU_TO, files})})).json();
       if(!r.ok) throw new Error(r.error || "E-Mail konnte nicht geöffnet werden.");
       via = r.via;
     }
     $("#docuDlg").close();
     toast(via === "explorer" ? "Kein E-Mail-Programm gefunden. Der Ordner mit den PDFs ist geöffnet."
       : orders.length > 1 ? `${orders.length} E-Mails an ${DOCU_TO} geöffnet – bitte prüfen und senden.` : `E-Mail „${orders[0].nr} ${orders[0].art}“ an ${DOCU_TO} geöffnet – bitte prüfen und senden.`, 9000);
-    docu.photos.forEach(p => URL.revokeObjectURL(p.url)); docu.photos = []; docu.orders.clear(); docu.manual = null; docu.ocrOff = "";
+    docu.photos.forEach(p => URL.revokeObjectURL(p.url)); docu.photos = []; docu.files = []; docu.orders.clear(); docu.manual = null; docu.ocrOff = "";
   }catch(e){
     docuErr((sent > 1 ? `${sent - 1} E-Mail(s) wurden schon geöffnet. ` : "") + (e.message && /^[„A-ZÄÖÜ]/.test(e.message) ? e.message : "Die PDF konnte nicht erstellt werden."));
   }
