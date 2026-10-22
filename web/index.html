@@ -2047,7 +2047,7 @@ $("#docuPhone").onclick = async () => {
   try{
     const r = await fotoApi({event: "fotostart"});
     if(!r.ok){ toast(r.error || "Keine Verbindung zum Server.", 6000); return; }
-    phone = {token: r.token, url: r.url, got: new Set(), n: 0, busy: false, err: ""};
+    phone = {token: r.token, url: r.url, got: new Set(), ack: [], tries: {}, n: 0, busy: false, err: ""};
     $("#phoneQr").src = "/api/fotos/qr?u=" + encodeURIComponent(r.url);
     phoneStatus(); $("#phoneDlg").showModal(); phonePoll();
   }catch(e){ toast("Keine Verbindung zum Server.", 6000); }
@@ -2058,7 +2058,9 @@ async function phonePoll(){
   // läuft im Hintergrund weiter, solange die Dokumentation offen ist (QR-Fenster darf zu sein)
   if(!p || p !== phone || !$("#docuDlg").open) return;
   try{
-    const l = await fotoApi({event: "fotoliste", token: p.token});
+    const ack = p.ack.splice(0);   // Empfang bestätigen -> Server löscht diese Fotos
+    const l = await fotoApi({event: "fotoliste", token: p.token, ack}).catch(e => { p.ack.push(...ack); throw e; });
+    if(!l.ok && !l.abgelaufen) p.ack.push(...ack);
     if(l.ok){
       const neu = l.files.filter(f => !p.got.has(f.id));
       p.busy = neu.length > 0; phoneStatus();
@@ -2069,8 +2071,14 @@ async function phonePoll(){
         part.forEach(f => p.got.add(f.id));
         const got = await Promise.all(part.map(f => fotoApi({event: "fotoholen", token: p.token, id: f.id}).catch(() => null)));
         const files = [];
-        for(const g of got){
-          if(!g || !g.ok) continue;
+        for(const [k, g] of got.entries()){
+          const id = part[k].id;
+          if(!g || !g.ok){   // nicht geklappt: beim nächsten Durchgang nochmal (höchstens 5 Versuche)
+            p.tries[id] = (p.tries[id] || 0) + 1;
+            if(p.tries[id] < 5) p.got.delete(id);
+            continue;
+          }
+          p.ack.push(id);
           const bin = atob(g.b64), bytes = new Uint8Array(bin.length);
           for(let k = 0; k < bin.length; k++) bytes[k] = bin.charCodeAt(k);
           const file = new File([bytes], g.name, {type: g.mime || "image/jpeg", lastModified: g.lm || Date.now()});
