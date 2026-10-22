@@ -1738,6 +1738,10 @@ const docuErr = m => { $("#docuErr").textContent = m; $("#docuErr").hidden = !m;
 const ARTEN = ["Umbau", "Gewaltschaden", "Garantie"];
 const DOCU_TO = "d.dokumentation@schlueter-gabelstapler.de"; // Empfänger für Dokumentationen
 const SERIES_GAP = 30 * 60 * 1000; // mehr als 30 Minuten Pause = neuer Auftrag
+// Reihenfolge der Fotos: Aufnahmezeit, bei gleicher Zeit (WhatsApp verschickt alles in derselben Sekunde)
+// die Nummer im Dateinamen („… 09.20.31.jpeg“, „… (1).jpeg“, „… (2).jpeg“) und zuletzt die Reihenfolge beim Einfügen.
+const photoSeq = p => { const m = /\((\d+)\)\.[a-z]+$/i.exec(p.file.name); return m ? +m[1] : 0; };
+const photoOrder = (a, b) => (a.time - b.time) || (photoSeq(a) - photoSeq(b)) || (+a.id.slice(1) - +b.id.slice(1));
 const dayKey = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 const fmtShort = d => d.toLocaleString("de-DE", {day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit"});
 const fmtDay = k => k.split("-").reverse().join(".");
@@ -1838,14 +1842,16 @@ const orderList = () => docu.manual ? [docu.manual] : [...docu.orders.values()];
 // Fotos automatisch zuordnen (von Hand verschobene bleiben, wo sie sind)
 function assignPhotos(){
   const orders = orderList();
-  const ph = docu.photos.slice().sort((a, b) => a.time - b.time);
+  const ph = docu.photos.slice().sort(photoOrder);
   ph.forEach(p => { p.hit = orders.find(o => o.serial && serialIn(p.ocrNorm, o.serial)) || null; });
   const series = [];
   let cur = null;
   for(const p of ph){
     const prev = cur && cur[cur.length - 1];
     const hitBefore = cur && cur.find(x => x.hit);
-    if(!cur || p.time - prev.time > SERIES_GAP || dayKey(p.time) !== dayKey(prev.time) || (p.hit && hitBefore && p.hit !== hitBefore.hit)){
+    // Ein neues Gerät beginnt immer mit dem Typenschild: jedes Typenschild-Foto startet eine neue Reihe,
+    // die folgenden Fotos gehören dazu – bis zum nächsten Typenschild oder einer langen Pause.
+    if(!cur || p.time - prev.time > SERIES_GAP || dayKey(p.time) !== dayKey(prev.time) || (p.hit && (hitBefore || cur.length))){
       cur = []; series.push(cur);
     }
     cur.push(p);
@@ -1945,7 +1951,7 @@ function renderDocu(){
     cb.onchange = () => { docu.pick.set(d, cb.checked); refreshDocu(); };
     rl.appendChild(l);
   });
-  const byTime = (a, b) => a.time - b.time;
+  const byTime = photoOrder;
   for(const o of orders){
     const card = document.createElement("div"); card.className = "order"; card.dataset.oid = o.id;
     const ph = docu.photos.filter(p => p.order === o.id).sort(byTime);
