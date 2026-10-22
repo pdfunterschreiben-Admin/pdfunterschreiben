@@ -34,6 +34,10 @@ function doPost(e) {
     } catch (x) { t = 'FEHLER\n' + x.message; }
     return ContentService.createTextOutput(t).setMimeType(ContentService.MimeType.TEXT);
   }
+  // Fotos vom Handy (QR-Code) – ohne Sperre
+  if (d && d.key === KEY && /^foto(start|liste|holen|ende)$/.test(String(d.event || ''))) {
+    try { return out(fotoAnfrage(d)); } catch (x) { return out({ ok: false, error: 'Fotos: ' + x.message }); }
+  }
   // Texterkennung (Typenschilder) – ohne Sperre, damit andere Anfragen nicht warten müssen
   if (d && d.key === KEY && d.event === 'ocr') {
     try { return out(ocrAnfrage(d)); } catch (x) { return out({ ok: false, error: 'Texterkennung: ' + x.message }); }
@@ -366,3 +370,120 @@ function berechtigungenPruefen() {
   DriveApp.getRootFolder();
   UrlFetchApp.fetch('https://www.googleapis.com/drive/v3/about?fields=user', { headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() } });
 }
+
+// ---------------- Fotos vom Handy (QR-Code) ----------------
+// Das Programm holt sich einen Einmal-Link (gilt FOTO_MIN Minuten) und zeigt ihn als QR-Code. Das Handy öffnet
+// die Upload-Seite (doGet), wählt die Original-Fotos aus der Galerie (mit Aufnahmezeit) und lädt sie in einen
+// eigenen Ordner in Drive. Das Programm holt sie dort ab; jedes abgeholte Foto wird sofort endgültig gelöscht.
+const FOTO_MIN = 30;
+
+function fotoOrdner() {
+  const name = 'PDF Unterschreiben – Handy-Fotos (temporär)';
+  const it = DriveApp.getRootFolder().getFoldersByName(name);
+  return it.hasNext() ? it.next() : DriveApp.getRootFolder().createFolder(name);
+}
+
+function fotoSitzung(token, nachlauf) {
+  if (!/^[a-f0-9]{40}$/.test(String(token || ''))) return null;
+  const v = PropertiesService.getScriptProperties().getProperty('foto_' + token);
+  if (!v) return null;
+  const s = JSON.parse(v);
+  return s.exp + (nachlauf ? 3600000 : 0) > Date.now() ? s : null;
+}
+
+function driveLoeschen(id) {
+  UrlFetchApp.fetch('https://www.googleapis.com/drive/v3/files/' + id,
+    { method: 'delete', headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() }, muteHttpExceptions: true });
+}
+
+// abgelaufene Sitzungen (älter als 1 Stunde nach Ablauf) samt Ordner entfernen
+function fotoAufraeumen() {
+  const p = PropertiesService.getScriptProperties(), alle = p.getProperties();
+  Object.keys(alle).forEach(function (k) {
+    if (k.indexOf('foto_') !== 0) return;
+    try {
+      const s = JSON.parse(alle[k]);
+      if (s.exp + 3600000 < Date.now()) { driveLoeschen(s.folder); p.deleteProperty(k); }
+    } catch (x) { p.deleteProperty(k); }
+  });
+}
+
+function fotoAnfrage(d) {
+  const mail = clean(d.email, 150).toLowerCase();
+  if (ADMIN_MAILS.indexOf(mail) < 0 && !mail.endsWith('@' + DOMAIN)) return { ok: false, error: 'Nicht berechtigt.' };
+  if (d.event === 'fotostart') {
+    fotoAufraeumen();
+    const token = (Utilities.getUuid() + Utilities.getUuid()).replace(/-/g, '').slice(0, 40);
+    const folder = fotoOrdner().createFolder('upload-' + token.slice(0, 8));
+    PropertiesService.getScriptProperties().setProperty('foto_' + token,
+      JSON.stringify({ exp: Date.now() + FOTO_MIN * 60000, folder: folder.getId() }));
+    return { ok: true, token: token, url: ScriptApp.getService().getUrl() + '?foto=' + token, minuten: FOTO_MIN };
+  }
+  const s = fotoSitzung(d.token, true);
+  if (!s) return { ok: false, abgelaufen: true, error: 'Der QR-Code ist abgelaufen.' };
+  if (d.event === 'fotoliste') {
+    const it = DriveApp.getFolderById(s.folder).getFiles(), a = [];
+    while (it.hasNext()) { const f = it.next(); a.push({ id: f.getId(), name: f.getName(), size: f.getSize() }); }
+    return { ok: true, files: a, exp: s.exp };
+  }
+  if (d.event === 'fotoholen') {
+    const f = DriveApp.getFileById(String(d.id || ''));
+    if (f.getParents().next().getId() !== s.folder) return { ok: false, error: 'Nicht berechtigt.' };
+    const b = f.getBlob();
+    const r = { ok: true, name: f.getName(), mime: b.getContentType(), lm: Number(f.getDescription()) || 0, b64: Utilities.base64Encode(b.getBytes()) };
+    driveLoeschen(f.getId());
+    return r;
+  }
+  if (d.event === 'fotoende') {
+    driveLoeschen(s.folder);
+    PropertiesService.getScriptProperties().deleteProperty('foto_' + d.token);
+    return { ok: true };
+  }
+  return { ok: false, error: 'Unbekannte Anfrage.' };
+}
+
+// vom Handy aufgerufen (google.script.run)
+function fotoHochladen(token, name, lm, mime, b64) {
+  const s = fotoSitzung(token, false);
+  if (!s) throw new Error('Der QR-Code ist abgelaufen. Bitte im Programm einen neuen anzeigen lassen.');
+  mime = String(mime || 'image/jpeg');
+  if (!/^image\//.test(mime)) throw new Error('Nur Fotos.');
+  b64 = String(b64 || '');
+  if (b64.length < 100 || b64.length > 40000000) throw new Error('Foto zu groß.');
+  const ordner = DriveApp.getFolderById(s.folder);
+  name = String(name || 'foto.jpg').replace(/[\\\/:*?"<>|]/g, '_').slice(0, 120);
+  const file = ordner.createFile(Utilities.newBlob(Utilities.base64Decode(b64), mime, name));
+  file.setDescription(String(Number(lm) || 0));
+  return true;
+}
+
+function doGet(e) {
+  const token = String((e && e.parameter && e.parameter.foto) || '');
+  const ok = !!fotoSitzung(token, false);
+  const html = ok ? FOTO_SEITE.replace('%TOKEN%', token) : FOTO_ABGELAUFEN;
+  return HtmlService.createHtmlOutput(html).setTitle('Fotos senden – PDF Unterschreiben')
+    .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+}
+
+const FOTO_ABGELAUFEN = '<div style="font:16px system-ui,sans-serif;padding:24px"><h2>Link abgelaufen</h2>' +
+  '<p>Bitte im Programm „PDF Unterschreiben &amp; Dokumentation“ bei der Dokumentation erneut auf „Fotos vom Handy“ tippen und den neuen QR-Code scannen.</p></div>';
+
+const FOTO_SEITE = '<style>body{font:16px system-ui,sans-serif;margin:0;padding:20px;color:#1a1a1a;background:#f6f6f4}' +
+  'h2{margin:0 0 6px;font-size:20px}.hint{color:#666;font-size:14px;margin:0 0 18px}' +
+  'label.btn{display:block;text-align:center;background:#c8102e;color:#fff;border-radius:10px;padding:16px;font-weight:600;font-size:17px}' +
+  'input{display:none}#liste{margin-top:18px;display:flex;flex-direction:column;gap:6px}' +
+  '.z{display:flex;justify-content:space-between;background:#fff;border-radius:8px;padding:10px 12px;font-size:14px}' +
+  '.ok{color:#1d7a35}.err{color:#c8102e}#fertig{margin-top:18px;font-weight:600;color:#1d7a35}</style>' +
+  '<h2>Fotos an PDF Unterschreiben senden</h2>' +
+  '<p class="hint">Fotos aus der Galerie auswählen (Typenschild zuerst). Sie erscheinen gleich im Programm am PC.</p>' +
+  '<label class="btn">Fotos auswählen<input type="file" id="f" accept="image/*" multiple></label>' +
+  '<div id="liste"></div><div id="fertig"></div>' +
+  '<script>var T="%TOKEN%",q=[],busy=false,n=0;' +
+  'document.getElementById("f").onchange=function(e){for(var i=0;i<e.target.files.length;i++){var f=e.target.files[i],z=document.createElement("div");' +
+  'z.className="z";z.innerHTML="<span></span><span>wartet …</span>";z.firstChild.textContent=f.name;document.getElementById("liste").appendChild(z);q.push({f:f,z:z});}' +
+  'e.target.value="";weiter();};' +
+  'function weiter(){if(busy)return;var j=q.shift();if(!j){if(n)document.getElementById("fertig").textContent="Fertig – "+n+" Foto(s) gesendet. Du kannst weitere auswählen oder die Seite schließen.";return;}' +
+  'busy=true;j.z.lastChild.textContent="wird gesendet …";var r=new FileReader();r.onload=function(){var b=String(r.result).split(",")[1];' +
+  'google.script.run.withSuccessHandler(function(){n++;j.z.lastChild.textContent="✓ gesendet";j.z.lastChild.className="ok";busy=false;weiter();})' +
+  '.withFailureHandler(function(err){j.z.lastChild.textContent="Fehler: "+(err&&err.message||err);j.z.lastChild.className="err";busy=false;weiter();})' +
+  '.fotoHochladen(T,j.f.name,j.f.lastModified,j.f.type||"image/jpeg",b);};r.readAsDataURL(j.f);}</script>';

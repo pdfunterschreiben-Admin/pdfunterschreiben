@@ -323,7 +323,10 @@ dialog::backdrop{background:rgba(10,15,30,.55)}
       </div>
       <div class="docu-drop">
         <span class="hint">Alle Fotos auf einmal auswählen oder hier hineinziehen. Sie werden nach Aufnahmezeit sortiert und über das Typenschild bzw. das Datum dem richtigen Auftrag zugeordnet.</span>
-        <label class="btn file-btn">Fotos hinzufügen …<input type="file" id="docuPhotoIn" accept="image/jpeg,image/png,image/webp,image/bmp,image/gif" multiple></label>
+        <div class="row" style="gap:8px;flex-wrap:wrap">
+          <label class="btn file-btn">Fotos hinzufügen …<input type="file" id="docuPhotoIn" accept="image/jpeg,image/png,image/webp,image/bmp,image/gif" multiple></label>
+          <button type="button" id="docuPhone">📱 Fotos vom Handy</button>
+        </div>
       </div>
       <span class="hint" id="docuOcr" hidden></span>
       <div class="col" id="docuOrders" style="gap:12px"></div>
@@ -332,6 +335,18 @@ dialog::backdrop{background:rgba(10,15,30,.55)}
     <div class="dlg-foot">
       <span class="hint" id="docuInfo"></span>
       <button type="button" class="primary" id="docuSend">Als PDF per E-Mail senden</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="phoneDlg">
+  <form method="dialog" class="dlg">
+    <div class="dlg-head"><strong>Fotos vom Handy</strong><button type="button" class="ghost" id="phoneClose">Fertig</button></div>
+    <div class="dlg-body col" style="gap:12px;align-items:center;text-align:center">
+      <span class="hint">QR-Code mit der Handy-Kamera scannen, dann die Fotos aus der <b>Galerie</b> auswählen (Typenschild zuerst).<br>Die Original-Fotos behalten ihre Aufnahmezeit – so werden sie sicher dem richtigen Auftrag zugeordnet.</span>
+      <img id="phoneQr" alt="QR-Code" width="260" height="260" style="image-rendering:pixelated;background:#fff;border-radius:8px">
+      <strong id="phoneStatus">Warte auf Fotos …</strong>
+      <span class="hint" id="phoneHint">Der QR-Code gilt 30 Minuten und nur für dich. Die Fotos werden nach dem Abholen sofort vom Server gelöscht.</span>
     </div>
   </form>
 </dialog>
@@ -2012,6 +2027,58 @@ $("#docuBtn").onclick = async () => {
 $("#docuClose").onclick = () => $("#docuDlg").close();
 $("#docuAddDoc").onclick = () => $("#pdfFile").click();
 $("#docuPhotoIn").onchange = e => { addPhotos([...e.target.files]); e.target.value = ""; };
+
+// ---- Fotos vom Handy per QR-Code (über den Anmeldeserver) ----
+let phone = null;
+const fotoApi = async o => (await fetch("/api/fotos", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(o)})).json();
+function phoneStatus(){
+  if(!phone) return;
+  $("#phoneStatus").textContent = phone.err ? phone.err
+    : phone.n ? `${phone.n} ${phone.n === 1 ? "Foto" : "Fotos"} empfangen${phone.busy ? " – weitere kommen …" : ""}`
+    : (phone.busy ? "Fotos kommen an …" : "Warte auf Fotos …");
+}
+$("#docuPhone").onclick = async () => {
+  const btn = $("#docuPhone"); btn.disabled = true;
+  try{
+    const r = await fotoApi({event: "fotostart"});
+    if(!r.ok){ toast(r.error || "Keine Verbindung zum Server.", 6000); return; }
+    phone = {token: r.token, got: new Set(), n: 0, busy: false, err: ""};
+    $("#phoneQr").src = "/api/fotos/qr?u=" + encodeURIComponent(r.url);
+    phoneStatus(); $("#phoneDlg").showModal(); phonePoll();
+  }catch(e){ toast("Keine Verbindung zum Server.", 6000); }
+  finally{ btn.disabled = false; }
+};
+async function phonePoll(){
+  const p = phone;
+  if(!p || p !== phone || !$("#phoneDlg").open) return;
+  try{
+    const l = await fotoApi({event: "fotoliste", token: p.token});
+    if(l.ok){
+      const neu = l.files.filter(f => !p.got.has(f.id));
+      p.busy = neu.length > 0; phoneStatus();
+      for(const f of neu){
+        if(p !== phone) return;
+        p.got.add(f.id);
+        const g = await fotoApi({event: "fotoholen", token: p.token, id: f.id});
+        if(!g.ok) continue;
+        const bin = atob(g.b64), bytes = new Uint8Array(bin.length);
+        for(let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        const file = new File([bytes], g.name, {type: g.mime || "image/jpeg", lastModified: g.lm || Date.now()});
+        p.n++; phoneStatus();
+        await addPhotos([file]);
+      }
+      p.busy = false; phoneStatus();
+      if(neu.length) runOcr();
+    } else if(l.abgelaufen){ p.err = "Der QR-Code ist abgelaufen – bitte neu öffnen."; phoneStatus(); return; }
+  }catch(e){ /* kurz keine Verbindung – nochmal versuchen */ }
+  setTimeout(phonePoll, 3000);
+}
+$("#phoneClose").onclick = () => $("#phoneDlg").close();
+$("#phoneDlg").addEventListener("close", () => {
+  const p = phone; phone = null;
+  if(p) fotoApi({event: "fotoende", token: p.token}).catch(() => {});
+  if(p && p.n) toast(`${p.n} ${p.n === 1 ? "Foto" : "Fotos"} vom Handy übernommen.`);
+});
 // neu geöffnete Berichte erscheinen sofort als Auftrag
 new MutationObserver(() => { if($("#docuDlg").open) refreshDocu(); }).observe($("#docs"), {childList: true});
 
