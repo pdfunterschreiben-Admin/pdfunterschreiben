@@ -346,7 +346,7 @@ dialog::backdrop{background:rgba(10,15,30,.55)}
       <span class="hint">QR-Code mit der Handy-Kamera scannen, dann die Fotos aus der <b>Galerie</b> auswählen (Typenschild zuerst).<br>Die Original-Fotos behalten ihre Aufnahmezeit – so werden sie sicher dem richtigen Auftrag zugeordnet.</span>
       <img id="phoneQr" alt="QR-Code" width="260" height="260" style="image-rendering:pixelated;background:#fff;border-radius:8px">
       <strong id="phoneStatus">Warte auf Fotos …</strong>
-      <span class="hint" id="phoneHint">Der QR-Code gilt 30 Minuten und nur für dich. Die Fotos werden nach dem Abholen sofort vom Server gelöscht.</span>
+      <span class="hint" id="phoneHint">Du kannst dieses Fenster schließen – die Fotos kommen trotzdem an, solange die Dokumentation offen ist. Der QR-Code gilt 30 Minuten und nur für dich; die Fotos werden nach dem Abholen sofort vom Server gelöscht.</span>
     </div>
   </form>
 </dialog>
@@ -2032,17 +2032,22 @@ $("#docuPhotoIn").onchange = e => { addPhotos([...e.target.files]); e.target.val
 let phone = null;
 const fotoApi = async o => (await fetch("/api/fotos", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(o)})).json();
 function phoneStatus(){
-  if(!phone) return;
-  $("#phoneStatus").textContent = phone.err ? phone.err
+  const b = $("#docuPhone");
+  if(!phone){ b.textContent = "📱 Fotos vom Handy"; return; }
+  const t = phone.err ? phone.err
     : phone.n ? `${phone.n} ${phone.n === 1 ? "Foto" : "Fotos"} empfangen${phone.busy ? " – weitere kommen …" : ""}`
     : (phone.busy ? "Fotos kommen an …" : "Warte auf Fotos …");
+  $("#phoneStatus").textContent = t;
+  b.textContent = phone.err ? "📱 Fotos vom Handy" : `📱 Handy verbunden · ${phone.n} empfangen`;
 }
 $("#docuPhone").onclick = async () => {
+  // Link läuft noch: denselben QR-Code wieder zeigen
+  if(phone && !phone.err){ phoneStatus(); $("#phoneDlg").showModal(); return; }
   const btn = $("#docuPhone"); btn.disabled = true;
   try{
     const r = await fotoApi({event: "fotostart"});
     if(!r.ok){ toast(r.error || "Keine Verbindung zum Server.", 6000); return; }
-    phone = {token: r.token, got: new Set(), n: 0, busy: false, err: ""};
+    phone = {token: r.token, url: r.url, got: new Set(), n: 0, busy: false, err: ""};
     $("#phoneQr").src = "/api/fotos/qr?u=" + encodeURIComponent(r.url);
     phoneStatus(); $("#phoneDlg").showModal(); phonePoll();
   }catch(e){ toast("Keine Verbindung zum Server.", 6000); }
@@ -2050,7 +2055,8 @@ $("#docuPhone").onclick = async () => {
 };
 async function phonePoll(){
   const p = phone;
-  if(!p || p !== phone || !$("#phoneDlg").open) return;
+  // läuft im Hintergrund weiter, solange die Dokumentation offen ist (QR-Fenster darf zu sein)
+  if(!p || p !== phone || !$("#docuDlg").open) return;
   try{
     const l = await fotoApi({event: "fotoliste", token: p.token});
     if(l.ok){
@@ -2074,10 +2080,10 @@ async function phonePoll(){
   setTimeout(phonePoll, 3000);
 }
 $("#phoneClose").onclick = () => $("#phoneDlg").close();
-$("#phoneDlg").addEventListener("close", () => {
-  const p = phone; phone = null;
+// Erst beim Schließen der Dokumentation den Handy-Link beenden (Reste auf dem Server werden gelöscht)
+$("#docuDlg").addEventListener("close", () => {
+  const p = phone; phone = null; phoneStatus();
   if(p) fotoApi({event: "fotoende", token: p.token}).catch(() => {});
-  if(p && p.n) toast(`${p.n} ${p.n === 1 ? "Foto" : "Fotos"} vom Handy übernommen.`);
 });
 // neu geöffnete Berichte erscheinen sofort als Auftrag
 new MutationObserver(() => { if($("#docuDlg").open) refreshDocu(); }).observe($("#docs"), {childList: true});
