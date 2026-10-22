@@ -1971,7 +1971,9 @@ function renderDocu(){
   const loose = docu.photos.filter(p => !p.order).sort(byTime);
   if(loose.length){
     const card = document.createElement("div"); card.className = "order loose";
-    card.innerHTML = `<strong>Nicht zugeordnet (${loose.length})</strong><span class="hint">Zieh diese Fotos mit der Maus zum richtigen Auftrag oder entferne sie.</span><div class="thumbs"></div>`;
+    card.innerHTML = docu.ocrBusy
+      ? `<strong>Noch nicht zugeordnet (${loose.length})</strong><span class="hint"><b>Typenschilder werden gerade gelesen – bitte kurz warten</b>, die Fotos wandern gleich automatisch zum richtigen Auftrag.</span><div class="thumbs"></div>`
+      : `<strong>Nicht zugeordnet (${loose.length})</strong><span class="hint">Zieh diese Fotos mit der Maus zum richtigen Auftrag oder entferne sie.</span><div class="thumbs"></div>`;
     loose.forEach(p => card.querySelector(".thumbs").appendChild(thumbEl(p)));
     dropZone(card, null);
     box.appendChild(card);
@@ -1982,6 +1984,12 @@ function renderDocu(){
   const n = orders.filter(o => o.doc || docu.photos.some(p => p.order === o.id)).length;
   $("#docuInfo").textContent = `${orders.length} ${orders.length === 1 ? "Auftrag" : "Aufträge"} · ${docu.photos.length} ${docu.photos.length === 1 ? "Foto" : "Fotos"}`;
   $("#docuSend").textContent = n > 1 ? `${n} E-Mails erstellen` : "Als PDF per E-Mail senden";
+  // Solange Typenschilder gelesen werden: sichtbar warten lassen und noch nicht senden
+  const sb = $("#docuSend");
+  if(docu.ocrBusy){
+    $("#docuInfo").textContent = "⏳ Typenschilder werden gelesen … (ca. 10–30 Sekunden)";
+    sb.disabled = true; sb.dataset.ocrWait = "1";
+  } else if(sb.dataset.ocrWait){ sb.disabled = false; delete sb.dataset.ocrWait; }
 }
 $("#docuBtn").onclick = async () => {
   if(reportOn && state.blocked){ $("#blockDlg").showModal(); return; }
