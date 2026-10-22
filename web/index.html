@@ -1906,7 +1906,7 @@ async function addPhotos(files){
   for(const f of files){
     if(/\.(heic|heif)$/i.test(f.name) || /hei[cf]/i.test(f.type)){ bad++; continue; }
     try{ const bmp = await createImageBitmap(f); bmp.close(); }catch(e){ bad++; continue; }
-    const ex = await exifTime(f), nt = ex ? null : nameTime(f.name);
+    const ex = f.aufnahme || await exifTime(f), nt = ex ? null : nameTime(f.name);
     docu.photos.push({id: "p" + (++docu.pid), file: f, url: URL.createObjectURL(f), time: ex || nt || new Date(f.lastModified), timeSrc: ex ? "exif" : nt ? "name" : "datei", order: null, how: null, ocrNorm: null});
   }
   if(bad) toast(`${bad} ${bad === 1 ? "Foto konnte" : "Fotos konnten"} nicht gelesen werden. Bitte als JPG oder PNG speichern (iPhone-Fotos im HEIC-Format gehen nicht).`, 8000);
@@ -2062,16 +2062,24 @@ async function phonePoll(){
     if(l.ok){
       const neu = l.files.filter(f => !p.got.has(f.id));
       p.busy = neu.length > 0; phoneStatus();
-      for(const f of neu){
+      // je 3 Fotos gleichzeitig abholen
+      for(let i = 0; i < neu.length; i += 3){
         if(p !== phone) return;
-        p.got.add(f.id);
-        const g = await fotoApi({event: "fotoholen", token: p.token, id: f.id});
-        if(!g.ok) continue;
-        const bin = atob(g.b64), bytes = new Uint8Array(bin.length);
-        for(let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-        const file = new File([bytes], g.name, {type: g.mime || "image/jpeg", lastModified: g.lm || Date.now()});
-        p.n++; phoneStatus();
-        await addPhotos([file]);
+        const part = neu.slice(i, i + 3);
+        part.forEach(f => p.got.add(f.id));
+        const got = await Promise.all(part.map(f => fotoApi({event: "fotoholen", token: p.token, id: f.id}).catch(() => null)));
+        const files = [];
+        for(const g of got){
+          if(!g || !g.ok) continue;
+          const bin = atob(g.b64), bytes = new Uint8Array(bin.length);
+          for(let k = 0; k < bin.length; k++) bytes[k] = bin.charCodeAt(k);
+          const file = new File([bytes], g.name, {type: g.mime || "image/jpeg", lastModified: g.lm || Date.now()});
+          // Aufnahmezeit hat das Handy vor dem Verkleinern aus dem Foto gelesen
+          if(g.exif && g.lm) file.aufnahme = new Date(g.lm);
+          files.push(file);
+        }
+        p.n += files.length; phoneStatus();
+        if(files.length) await addPhotos(files);
       }
       p.busy = false; phoneStatus();
       if(neu.length) runOcr();

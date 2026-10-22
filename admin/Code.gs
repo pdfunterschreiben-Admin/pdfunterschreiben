@@ -430,7 +430,9 @@ function fotoAnfrage(d) {
     const f = DriveApp.getFileById(String(d.id || ''));
     if (f.getParents().next().getId() !== s.folder) return { ok: false, error: 'Nicht berechtigt.' };
     const b = f.getBlob();
-    const r = { ok: true, name: f.getName(), mime: b.getContentType(), lm: Number(f.getDescription()) || 0, b64: Utilities.base64Encode(b.getBytes()) };
+    let info = {};
+    try { info = JSON.parse(f.getDescription() || '{}') || {}; } catch (x) { info = { lm: Number(f.getDescription()) || 0 }; }
+    const r = { ok: true, name: f.getName(), mime: b.getContentType(), lm: info.lm || 0, exif: info.exif ? 1 : 0, b64: Utilities.base64Encode(b.getBytes()) };
     driveLoeschen(f.getId());
     return r;
   }
@@ -443,7 +445,7 @@ function fotoAnfrage(d) {
 }
 
 // vom Handy aufgerufen (google.script.run)
-function fotoHochladen(token, name, lm, mime, b64) {
+function fotoHochladen(token, name, lm, mime, b64, exif) {
   const s = fotoSitzung(token, false);
   if (!s) throw new Error('Der QR-Code ist abgelaufen. Bitte im Programm einen neuen anzeigen lassen.');
   mime = String(mime || 'image/jpeg');
@@ -453,7 +455,7 @@ function fotoHochladen(token, name, lm, mime, b64) {
   const ordner = DriveApp.getFolderById(s.folder);
   name = String(name || 'foto.jpg').replace(/[\\\/:*?"<>|]/g, '_').slice(0, 120);
   const file = ordner.createFile(Utilities.newBlob(Utilities.base64Decode(b64), mime, name));
-  file.setDescription(String(Number(lm) || 0));
+  file.setDescription(JSON.stringify({ lm: Number(lm) || 0, exif: exif ? 1 : 0 }));
   return true;
 }
 
@@ -475,15 +477,7 @@ const FOTO_SEITE = '<style>body{font:16px system-ui,sans-serif;margin:0;padding:
   '.z{display:flex;justify-content:space-between;background:#fff;border-radius:8px;padding:10px 12px;font-size:14px}' +
   '.ok{color:#1d7a35}.err{color:#c8102e}#fertig{margin-top:18px;font-weight:600;color:#1d7a35}</style>' +
   '<h2>Fotos an PDF Unterschreiben senden</h2>' +
-  '<p class="hint">Fotos aus der Galerie auswählen (Typenschild zuerst). Sie erscheinen gleich im Programm am PC.</p>' +
+  '<p class="hint">Fotos aus der Galerie auswählen (Typenschild zuerst). Sie werden für die Übertragung verkleinert und erscheinen gleich im Programm am PC.</p>' +
   '<label class="btn">Fotos auswählen<input type="file" id="f" accept="image/*" multiple></label>' +
   '<div id="liste"></div><div id="fertig"></div>' +
-  '<script>var T="%TOKEN%",q=[],busy=false,n=0;' +
-  'document.getElementById("f").onchange=function(e){for(var i=0;i<e.target.files.length;i++){var f=e.target.files[i],z=document.createElement("div");' +
-  'z.className="z";z.innerHTML="<span></span><span>wartet …</span>";z.firstChild.textContent=f.name;document.getElementById("liste").appendChild(z);q.push({f:f,z:z});}' +
-  'e.target.value="";weiter();};' +
-  'function weiter(){if(busy)return;var j=q.shift();if(!j){if(n)document.getElementById("fertig").textContent="Fertig – "+n+" Foto(s) gesendet. Du kannst weitere auswählen oder die Seite schließen.";return;}' +
-  'busy=true;j.z.lastChild.textContent="wird gesendet …";var r=new FileReader();r.onload=function(){var b=String(r.result).split(",")[1];' +
-  'google.script.run.withSuccessHandler(function(){n++;j.z.lastChild.textContent="✓ gesendet";j.z.lastChild.className="ok";busy=false;weiter();})' +
-  '.withFailureHandler(function(err){j.z.lastChild.textContent="Fehler: "+(err&&err.message||err);j.z.lastChild.className="err";busy=false;weiter();})' +
-  '.fotoHochladen(T,j.f.name,j.f.lastModified,j.f.type||"image/jpeg",b);};r.readAsDataURL(j.f);}</script>';
+  '<script>' + "var T=\"%TOKEN%\",q=[],aktiv=0,n=0,MAX=3;\nfunction exifZeit(buf){try{var v=new DataView(buf);if(v.getUint16(0)!==0xFFD8)return 0;var o=2;\nwhile(o<v.byteLength-10){var m=v.getUint16(o),len=v.getUint16(o+2);\nif(m===0xFFE1&&v.getUint32(o+4)===0x45786966){var t=o+10,le=v.getUint16(t)===0x4949;\nvar u16=function(p){return v.getUint16(p,le)},u32=function(p){return v.getUint32(p,le)};\nvar ex=0,dt=0,scan=function(p){var c=u16(p);for(var i=0;i<c;i++){var e=p+2+i*12,tag=u16(e);\nif(tag===0x8769)ex=t+u32(e+8);if(tag===0x9003||(tag===0x0132&&!dt))dt=t+u32(e+8);}};\nscan(t+u32(t+4));if(ex)scan(ex);if(!dt)return 0;var s=\"\";for(var k=0;k<19;k++)s+=String.fromCharCode(v.getUint8(dt+k));\nvar a=/(\\d{4}):(\\d{2}):(\\d{2}) (\\d{2}):(\\d{2}):(\\d{2})/.exec(s);return a?new Date(+a[1],a[2]-1,+a[3],+a[4],+a[5],+a[6]).getTime():0;}\nif((m&0xFF00)!==0xFF00)break;o+=2+len;}}catch(e){}return 0;}\nfunction lesen(f,wie){return new Promise(function(ok,no){var r=new FileReader();r.onload=function(){ok(r.result)};r.onerror=no;wie===\"buf\"?r.readAsArrayBuffer(f):r.readAsDataURL(f);});}\nfunction verkleinern(f){return createImageBitmap(f).then(function(b){var s=Math.min(1,2400/Math.max(b.width,b.height)),c=document.createElement(\"canvas\");\nc.width=Math.round(b.width*s);c.height=Math.round(b.height*s);c.getContext(\"2d\").drawImage(b,0,0,c.width,c.height);return c.toDataURL(\"image/jpeg\",0.88).split(\",\")[1];});}\ndocument.getElementById(\"f\").onchange=function(e){for(var i=0;i<e.target.files.length;i++){var f=e.target.files[i],z=document.createElement(\"div\");\nz.className=\"z\";z.innerHTML=\"<span></span><span>wartet …</span>\";z.firstChild.textContent=f.name;document.getElementById(\"liste\").appendChild(z);q.push({f:f,z:z,nr:q.length});}\ne.target.value=\"\";for(var k=0;k<MAX;k++)weiter();};\nfunction weiter(){if(aktiv>=MAX)return;var j=q.shift();if(!j){if(!aktiv&&n)document.getElementById(\"fertig\").textContent=\"Fertig – \"+n+\" Foto(s) gesendet. Du kannst weitere auswählen oder die Seite schließen.\";return;}\naktiv++;j.z.lastChild.textContent=\"wird vorbereitet …\";var zeit=0;\nlesen(j.f.slice(0,262144),\"buf\").then(function(b){zeit=exifZeit(b);return verkleinern(j.f).catch(function(){return lesen(j.f).then(function(d){return String(d).split(\",\")[1];});});})\n.then(function(b64){j.z.lastChild.textContent=\"wird gesendet …\";\ngoogle.script.run.withSuccessHandler(function(){n++;j.z.lastChild.textContent=\"✓ gesendet\";j.z.lastChild.className=\"ok\";aktiv--;weiter();})\n.withFailureHandler(function(err){j.z.lastChild.textContent=\"Fehler: \"+(err&&err.message||err);j.z.lastChild.className=\"err\";aktiv--;weiter();})\n.fotoHochladen(T,j.f.name.replace(/\\.[^.]+$/,\"\")+\".jpg\",zeit||j.f.lastModified,\"image/jpeg\",b64,zeit?1:0);})\n.catch(function(err){j.z.lastChild.textContent=\"Fehler: \"+err;j.z.lastChild.className=\"err\";aktiv--;weiter();});}\n" + '</script>';
