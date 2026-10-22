@@ -1740,6 +1740,9 @@ const DOCU_TO = "d.dokumentation@schlueter-gabelstapler.de"; // Empfänger für 
 const SERIES_GAP = 30 * 60 * 1000; // mehr als 30 Minuten Pause = neuer Auftrag
 // Reihenfolge der Fotos: Aufnahmezeit, bei gleicher Zeit (WhatsApp verschickt alles in derselben Sekunde)
 // die Nummer im Dateinamen („… 09.20.31.jpeg“, „… (1).jpeg“, „… (2).jpeg“) und zuletzt die Reihenfolge beim Einfügen.
+// Sieht der erkannte Text nach einem Typenschild aus? (auch wenn die Nummer zu keinem Bericht passt)
+const PLATE_WORDS = /\b(MODELL?|TYPE?|S\s*\/\s*N|SERIAL|SER\.?\s*NO|SERIEN|FABR|HERGESTELLT|BAUJAHR|TRAGF\S*|NENNLAST|CAPACITY|GEWICHT|WEIGHT|FLURF\S*|BATTERIESPANNUNG|MANUFACTUR\S*)\b/gi;
+const looksLikePlate = t => new Set((String(t || "").match(PLATE_WORDS) || []).map(w => w.toUpperCase().slice(0, 5))).size >= 3;
 const photoSeq = p => { const m = /\((\d+)\)\.[a-z]+$/i.exec(p.file.name); return m ? +m[1] : 0; };
 const photoOrder = (a, b) => (a.time - b.time) || (photoSeq(a) - photoSeq(b)) || (+a.id.slice(1) - +b.id.slice(1));
 const dayKey = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -1843,15 +1846,17 @@ const orderList = () => docu.manual ? [docu.manual] : [...docu.orders.values()];
 function assignPhotos(){
   const orders = orderList();
   const ph = docu.photos.slice().sort(photoOrder);
-  ph.forEach(p => { p.hit = orders.find(o => o.serial && serialIn(p.ocrNorm, o.serial)) || null; });
+  ph.forEach(p => {
+    p.hit = orders.find(o => o.serial && serialIn(p.ocrNorm, o.serial)) || null;
+    p.plate = !!p.hit || looksLikePlate(p.ocrText);
+  });
   const series = [];
   let cur = null;
   for(const p of ph){
     const prev = cur && cur[cur.length - 1];
-    const hitBefore = cur && cur.find(x => x.hit);
     // Ein neues Gerät beginnt immer mit dem Typenschild: jedes Typenschild-Foto startet eine neue Reihe,
     // die folgenden Fotos gehören dazu – bis zum nächsten Typenschild oder einer langen Pause.
-    if(!cur || p.time - prev.time > SERIES_GAP || dayKey(p.time) !== dayKey(prev.time) || (p.hit && (hitBefore || cur.length))){
+    if(!cur || p.time - prev.time > SERIES_GAP || dayKey(p.time) !== dayKey(prev.time) || (p.plate && cur.length)){
       cur = []; series.push(cur);
     }
     cur.push(p);
@@ -1861,6 +1866,7 @@ function assignPhotos(){
     let o = null, how = null;
     if(orders.length === 1){ o = orders[0]; how = "single"; }
     else if(hit){ o = hit.hit; how = "serial"; }
+    else if(s[0].plate){ /* Typenschild eines Geräts ohne passenden Bericht: nicht raten */ }
     else {
       const k = dayKey(s[0].time), c1 = orders.filter(x => x.main.has(k)), c2 = orders.filter(x => x.dates.has(k));
       if(c1.length === 1){ o = c1[0]; how = "date"; }
