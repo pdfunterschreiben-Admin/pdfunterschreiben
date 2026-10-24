@@ -240,22 +240,43 @@ function renderTab(){
   bindFolds(m);
 }
 
+function userChip(u){
+  return u.blocked ? '<span class="chip warn">gesperrt</span>' : u.verified ? '<span class="chip ok">frei</span>' : '<span class="chip">Code offen</span>';
+}
+function userDetails(u){
+  return `<div class="muted">${esc(u.email)}</div>
+      <div class="muted">Version ${esc(u.version)} · zuletzt aktiv ${esc(ago(u.last))} · ${u.starts} Starts</div>
+      <div class="muted">Erste Anmeldung ${esc(fmt(u.first))}</div>
+      ${u.id === me().id ? "" : `<div class="row" style="margin-top:8px;justify-content:flex-end">
+        <button class="${u.blocked ? "" : "danger"}" data-block="${esc(u.id)}" data-v="${u.blocked ? "" : "ja"}">${u.blocked ? "Entsperren" : "Sperren"}</button></div>`}`;
+}
 function usersHtml(){
   const q = S.q.toLowerCase();
   const list = S.users.filter(u => !q || (u.name + " " + u.email).toLowerCase().includes(q))
     .sort((a, b) => new Date(b.last) - new Date(a.last));
   const blocked = S.users.filter(u => u.blocked).length;
+  // gleicher Name (z. B. mehrere Rechner oder Remote-Server) -> eine aufklappbare Gruppe
+  const groups = new Map();
+  for(const u of list){
+    const k = (u.name || u.email || "").trim().toLowerCase().replace(/\s+/g, " ");
+    if(!groups.has(k)) groups.set(k, []);
+    groups.get(k).push(u);
+  }
+  const personen = new Set(S.users.map(u => (u.name || u.email || "").trim().toLowerCase().replace(/\s+/g, " "))).size;
+  const html = [...groups.entries()].map(([k, us]) => {
+    if(us.length === 1){
+      const u = us[0];
+      return fold("user:" + u.id, false, `<span>${esc(u.name)}</span>${userChip(u)}`, esc(ago(u.last)), `<div class="in">${userDetails(u)}</div>`);
+    }
+    const gb = us.filter(u => u.blocked).length, starts = us.reduce((a, u) => a + (Number(u.starts) || 0), 0);
+    const chip = gb === us.length ? '<span class="chip warn">gesperrt</span>' : gb ? `<span class="chip warn">${gb} gesperrt</span>` : us.some(u => u.verified) ? '<span class="chip ok">frei</span>' : '<span class="chip">Code offen</span>';
+    return fold("gruppe:" + k, false, `<span>${esc(us[0].name)}</span><span class="chip">${us.length}×</span>${chip}`, esc(ago(us[0].last)),
+      `<div class="in"><div class="muted">${us.length} Anmeldungen (z. B. verschiedene Rechner) · zusammen ${starts} Starts</div>
+      ${us.map((u, i) => `<div class="who"><div style="display:flex;gap:8px;align-items:center"><b>Anmeldung ${i + 1}</b>${userChip(u)}</div>${userDetails(u)}</div>`).join("")}</div>`);
+  }).join("");
   return `<input class="search" id="q" type="search" placeholder="Name oder E-Mail suchen" value="${esc(S.q)}">
-    <p class="muted">${S.users.length} Nutzer${blocked ? ` · ${blocked} gesperrt` : ""}</p>` +
-    (list.length ? toolsHtml + list.map(u => fold("user:" + u.id, false,
-      `<span>${esc(u.name)}</span>${u.blocked ? '<span class="chip warn">gesperrt</span>' : u.verified ? '<span class="chip ok">frei</span>' : '<span class="chip">Code offen</span>'}`,
-      esc(ago(u.last)), `<div class="in">
-      <div class="muted">${esc(u.email)}</div>
-      <div class="muted">Version ${esc(u.version)} · zuletzt aktiv ${esc(ago(u.last))} · ${u.starts} Starts</div>
-      <div class="muted">Erste Anmeldung ${esc(fmt(u.first))}</div>
-      ${u.id === me().id ? "" : `<div class="row" style="margin-top:8px;justify-content:flex-end">
-        <button class="${u.blocked ? "" : "danger"}" data-block="${esc(u.id)}" data-v="${u.blocked ? "" : "ja"}">${u.blocked ? "Entsperren" : "Sperren"}</button></div>`}
-    </div>`)).join("") : '<p class="empty">Keine Nutzer gefunden.</p>');
+    <p class="muted">${personen} ${personen === 1 ? "Person" : "Personen"} · ${S.users.length} Anmeldungen${blocked ? ` · ${blocked} gesperrt` : ""}</p>` +
+    (list.length ? toolsHtml + html : '<p class="empty">Keine Nutzer gefunden.</p>');
 }
 function bindUsers(){
   const q = $("#q");
