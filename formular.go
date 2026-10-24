@@ -102,6 +102,7 @@ try {
     $ws.Activate()
     $ws.Range('A1').Select()
     if ($cfg.pdf) { $ws.ExportAsFixedFormat(0, $env:PU_PDF) }
+    if ($cfg.drucken) { [void]$ws.PrintOut() }
     # Excel: die ganze Allgemeine Vorlage mit allen Registern (ohne Makros und Knöpfe), nur dieses Formular ausgefüllt
     if ($cfg.xlsx) { $wb.SaveAs($env:PU_XLSX, 51) }
   } finally { $wb.Close($false) }
@@ -123,6 +124,7 @@ func (a *app) handleFormular(w http.ResponseWriter, r *http.Request) {
 		Kreuze map[string]bool   `json:"kreuze"`
 		XLSX   bool              `json:"xlsx"`
 		PDF    bool              `json:"pdf"`
+		Drucken bool             `json:"drucken"` // direkt auf dem Standarddrucker ausgeben
 		Nach   int               `json:"nach"`   // zusätzliche Tabellenzeilen unter dieser Zeile einfügen
 		Anzahl int               `json:"anzahl"`
 		Quelle string            `json:"quelle"` // Vorlage aus dem Drive-Ordner statt der Allgemeinen Vorlagen
@@ -131,7 +133,7 @@ func (a *app) handleFormular(w http.ResponseWriter, r *http.Request) {
 		fehler("Ungültige Anfrage.")
 		return
 	}
-	if !req.XLSX && !req.PDF {
+	if !req.XLSX && !req.PDF && !req.Drucken {
 		fehler("Bitte Excel und/oder PDF auswählen.")
 		return
 	}
@@ -161,7 +163,7 @@ func (a *app) handleFormular(w http.ResponseWriter, r *http.Request) {
 		fehler("Die Vorlage konnte nicht bereitgelegt werden.")
 		return
 	}
-	cfg, _ := json.Marshal(map[string]any{"blatt": req.Blatt, "nach": req.Nach, "anzahl": min(req.Anzahl, 200), "einseite": req.Quelle != "", "werte": req.Werte, "kreuze": req.Kreuze, "xlsx": req.XLSX, "pdf": req.PDF})
+	cfg, _ := json.Marshal(map[string]any{"blatt": req.Blatt, "nach": req.Nach, "anzahl": min(req.Anzahl, 200), "einseite": req.Quelle != "", "drucken": req.Drucken, "werte": req.Werte, "kreuze": req.Kreuze, "xlsx": req.XLSX, "pdf": req.PDF})
 	cfgPath := filepath.Join(dir, "auftrag.json")
 	_ = os.WriteFile(cfgPath, cfg, 0o600)
 	xlsx, pdf := filepath.Join(dir, "formular.xlsx"), filepath.Join(dir, "formular.pdf")

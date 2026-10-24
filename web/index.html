@@ -421,9 +421,11 @@ dialog{border-radius:16px}
     </div>
     <div class="dlg-foot row" style="gap:8px;justify-content:flex-end;flex-wrap:wrap">
       <span id="formStatus" class="form-status" hidden></span>
+      <button type="button" class="ghost" id="formTdoc" title="Lesezeichen „T-Doc → Excel“ im Browser einrichten">T-Doc-Lesezeichen einrichten</button>
       <button type="button" class="ghost" id="formNeu">Neues Formular</button>
       <label class="row" style="gap:4px"><input type="checkbox" id="formAlsXlsx"> Excel</label>
       <label class="row" style="gap:4px"><input type="checkbox" id="formAlsPdf" checked> PDF</label>
+      <button type="button" id="formDrucken">🖨 Drucken</button>
       <button type="button" class="primary" id="formSpeichern">Speichern …</button>
     </div>
   </form>
@@ -2706,6 +2708,8 @@ function tdocWerkzeug(f, w){
   const r = document.createElement("div"); r.className = "form-tools";
   const b = document.createElement("button"); b.type = "button"; b.textContent = "Ersatzteile aus T-Doc einfügen";
   const s = document.createElement("span"); s.className = "hint"; s.textContent = "Vorher in T-Doc die Teile mit dem Lesezeichen „T-Doc → Excel“ sammeln.";
+  const e = document.createElement("button"); e.type = "button"; e.className = "ghost"; e.textContent = "Lesezeichen einrichten";
+  e.onclick = () => $("#formTdoc").click();
   b.onclick = async () => {
     let t = ""; try{ t = await navigator.clipboard.readText(); }catch(e){ formMeldung("Die Zwischenablage konnte nicht gelesen werden."); return; }
     t = String(t).replace(/\r/g, "");
@@ -2723,7 +2727,7 @@ function tdocWerkzeug(f, w){
     formMerken(); formRender(); formMeldung(n ? `${n} Ersatzteil(e) eingefügt.` : "Diese Teile stehen schon in der Tabelle.");
     try{ await navigator.clipboard.writeText("TDOC-EINGEFUEGT"); }catch(e){}
   };
-  r.append(b, s); return r;
+  r.append(b, e, s); return r;
 }
 
 /* ---- Speichern ---- */
@@ -2735,10 +2739,10 @@ function zusatz(f, w, werte){
   for(const k of Object.keys(werte)){ const m = /^([A-Z]+)(\d+)$/.exec(k); if(m && +m[2] > l + n && +m[2] <= l + w["#mehr"]) delete werte[k]; }
   return n ? {nach: l, anzahl: n} : {};
 }
-async function formSpeichern(){
+async function formSpeichern(drucken){
   const f = formDef(), w = formWerte();
-  const xlsx = $("#formAlsXlsx").checked, pdf = $("#formAlsPdf").checked;
-  if(!xlsx && !pdf){ formMeldung("Bitte Excel und/oder PDF auswählen."); return; }
+  const xlsx = !drucken && $("#formAlsXlsx").checked, pdf = !drucken && $("#formAlsPdf").checked;
+  if(!drucken && !xlsx && !pdf){ formMeldung("Bitte Excel und/oder PDF auswählen."); return; }
   const werte = {}, kreuze = {};
   for(const [k, v] of Object.entries(w)){ if(k === "#mehr") continue; if(k[0] === "#") kreuze[k.slice(1)] = !!v; else if(v !== "" && v != null) werte[k] = String(v); }
   for(const a of f.abschnitte) for(const x of a.felder){
@@ -2750,9 +2754,9 @@ async function formSpeichern(){
   // leere Zellen mit Vorgabe in der Vorlage (z. B. „Ladegerät“) trotzdem überschreiben
   for(const a of f.abschnitte) for(const x of a.felder) if(x.z && typeof x.z === "string" && !(x.z in werte) && x.d) werte[x.z] = "";
   if(f.id === "reparatur" && werte.R6) werte.R56 = werte.R6;
-  const btn = $("#formSpeichern"); btn.disabled = true; const alt = btn.textContent; btn.textContent = "Bitte warten …"; formMeldung("Excel füllt das Formular aus – das dauert ein paar Sekunden …", 60000);
+  const btn = $("#formSpeichern"); btn.disabled = true; const alt = btn.textContent; btn.textContent = "Bitte warten …"; formMeldung(drucken ? "Excel füllt das Formular aus und druckt …" : "Excel füllt das Formular aus – das dauert ein paar Sekunden …", 60000);
   let r;
-  try{ r = await (await fetch("/api/formular", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({...zusatz(f, w, werte), blatt: f.blatt || "", quelle: f.quelle ? ((formState.register || []).find(g => g.name === f.quelle) || {}).id || "-" : "", werte, kreuze, xlsx, pdf})})).json(); }
+  try{ r = await (await fetch("/api/formular", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({...zusatz(f, w, werte), blatt: f.blatt || "", quelle: f.quelle ? ((formState.register || []).find(g => g.name === f.quelle) || {}).id || "-" : "", werte, kreuze, xlsx, pdf, drucken: !!drucken})})).json(); }
   catch(e){ r = {ok: false, error: "Keine Verbindung zum Programm."}; }
   btn.disabled = false; btn.textContent = alt;
   if(!r.ok){ formMeldung(r.error || "Das Formular konnte nicht erstellt werden.", 9000); return; }
@@ -2773,6 +2777,7 @@ async function formSpeichern(){
     const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([data], {type: mime})); a.download = name;
     document.body.appendChild(a); a.click(); a.remove(); return name;
   };
+  if(drucken){ formMeldung("An den Drucker geschickt.", 6000); return; }
   // Das „Speichern unter“-Fenster darf der Browser nur direkt nach einem Klick öffnen – deshalb eigene Knöpfe
   const e = $("#formStatus"); clearTimeout(formMeldT); e.hidden = false; e.textContent = "Fertig – jetzt speichern: ";
   const knopf = (t, fn) => { const b = document.createElement("button"); b.type = "button"; b.textContent = t; b.style.marginLeft = "6px"; b.onclick = fn; e.appendChild(b); return b; };
@@ -2792,7 +2797,9 @@ $("#formBtn").onclick = () => {
   fetch("/api/formular/register").then(r => r.json()).then(r => { if(r.ok){ formState.register = r.register || []; formRender(); } }).catch(() => {});
 };
 $("#formClose").onclick = () => $("#formDlg").close();
-$("#formSpeichern").onclick = formSpeichern;
+$("#formSpeichern").onclick = () => formSpeichern(false);
+$("#formDrucken").onclick = () => formSpeichern(true);
+$("#formTdoc").onclick = () => { fetch("/api/open?ziel=tdoc", {method: "POST"}); formMeldung("Die Einrichtungsseite öffnet sich im Browser – dort den roten Knopf in die Lesezeichenleiste ziehen.", 9000); };
 $("#formNeu").onclick = () => {
   if(!confirm(`„${formDef().titel}“ leeren und neu anfangen?`)) return;
   formState.daten[formState.akt] = formStart(formDef()); formMerken(); formRender();
