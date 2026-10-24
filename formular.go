@@ -68,7 +68,7 @@ try {
         [void]$ws.Rows($nach).Copy()
         [void]$ws.Rows($nach + $i).Insert(-4121)
       }
-      $xl.CutCopyMode = $false
+      try { $xl.CutCopyMode = 0 } catch {}
       [void]$ws.Range($ws.Rows($nach + 1), $ws.Rows($nach + $anzahl)).ClearContents()
       if ($pa -match '^(.*\$)(\d+)$' -and [int]$matches[2] -ge $nach) { $ws.PageSetup.PrintArea = $matches[1] + ([int]$matches[2] + $anzahl) }
     }
