@@ -381,3 +381,35 @@ func registerDatei(id string) (string, []byte, error) {
 	}
 	return ext, data, nil
 }
+
+// Sicherung der Formulareingaben: Bei jeder Änderung schickt das Fenster alle
+// Eingaben hierher. Stürzt Fenster oder Programm ab, sind sie beim nächsten Öffnen wieder da.
+func (a *app) handleFormularSicherung(w http.ResponseWriter, r *http.Request) {
+	p := filepath.Join(dataDir(), "formulare-sicherung.json")
+	if r.Method == http.MethodPost {
+		b, err := io.ReadAll(io.LimitReader(r.Body, 20<<20))
+		if err != nil || !json.Valid(b) {
+			http.Error(w, "ungültig", http.StatusBadRequest)
+			return
+		}
+		if alt, err := os.ReadFile(p); err == nil && len(alt) > 2 {
+			_ = os.WriteFile(p+".bak", alt, 0o644)
+		}
+		tmp := p + ".tmp"
+		if err := os.WriteFile(tmp, b, 0o644); err == nil {
+			_ = os.Rename(tmp, p)
+		}
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	b, err := os.ReadFile(p)
+	if err != nil || !json.Valid(b) {
+		b, err = os.ReadFile(p + ".bak")
+		if err != nil || !json.Valid(b) {
+			b = []byte("{}")
+		}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+	_, _ = w.Write(b)
+}

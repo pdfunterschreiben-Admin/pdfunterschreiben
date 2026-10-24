@@ -2544,7 +2544,32 @@ const FORMULARE = [
 const formState = {akt: "pruefung", daten: {}};
 function formLaden(){
   try{ if(localStorage.getItem("formulareV") !== "2"){ localStorage.removeItem("formulare"); localStorage.removeItem("formMerk"); localStorage.setItem("formulareV", "2"); } }catch(e){} try{ formState.daten = JSON.parse(localStorage.getItem("formulare") || "{}") || {}; }catch(e){ formState.daten = {}; } }
-function formMerken(){ try{ localStorage.setItem("formulare", JSON.stringify(formState.daten)); }catch(e){} }
+// Sicherung: jede Eingabe sofort im Browser und (kurz danach) als Datei beim Programm speichern
+let formSichT = 0, formSichOffen = false;
+function formSichern(){
+  formSichOffen = false; clearTimeout(formSichT);
+  const body = JSON.stringify({zeit: Date.now(), daten: formState.daten});
+  try{ fetch("/api/formular/sicherung", {method: "POST", headers: {"Content-Type": "application/json"}, body, keepalive: body.length < 60000}).catch(() => { formSichOffen = true; }); }catch(e){}
+}
+function formMerken(){
+  const zeit = Date.now();
+  try{ localStorage.setItem("formulare", JSON.stringify(formState.daten)); localStorage.setItem("formulareZeit", String(zeit)); }catch(e){}
+  formSichOffen = true; clearTimeout(formSichT); formSichT = setTimeout(formSichern, 800);
+}
+window.addEventListener("pagehide", () => { if(formSichOffen) formSichern(); });
+// Beim Öffnen: Falls die Sicherungsdatei neuer ist als der Browser-Stand, diese nehmen
+async function formSicherungHolen(){
+  try{
+    const s = await (await fetch("/api/formular/sicherung", {cache: "no-store"})).json();
+    let lokal = 0; try{ lokal = +localStorage.getItem("formulareZeit") || 0; }catch(e){}
+    const leer = !Object.values(formState.daten).some(w => w && Object.values(w).some(v => v !== "" && v != null && v !== 0));
+    if(s && s.daten && typeof s.daten === "object" && (s.zeit > lokal || leer) && Object.keys(s.daten).length){
+      formState.daten = s.daten;
+      try{ localStorage.setItem("formulare", JSON.stringify(s.daten)); localStorage.setItem("formulareZeit", String(s.zeit || Date.now())); }catch(e){}
+      formRender(); if(s.zeit > lokal && lokal) formMeldung("Deine letzten Eingaben wurden aus der Sicherung wiederhergestellt.", 6000);
+    }
+  }catch(e){}
+}
 const formDef = () => FORMULARE.find(f => f.id === formState.akt);
 function formWerte(){ return formState.daten[formState.akt] || (formState.daten[formState.akt] = formStart(formDef())); }
 function formStart(f){
@@ -2891,6 +2916,7 @@ async function formSpeichern(drucken){
 
 $("#formBtn").onclick = () => {
   formLaden(); formRender(); $("#formDlg").showModal();
+  formSicherungHolen();
   fetch("/api/formular/register").then(r => r.json()).then(r => { if(r.ok){ formState.register = r.register || []; formRender(); } }).catch(() => {});
 };
 $("#formClose").onclick = () => $("#formDlg").close();
