@@ -235,6 +235,8 @@ dialog{border-radius:16px}
 .dlg-head strong{font:600 17px var(--f-display)}
 .banner{border-radius:14px;background:linear-gradient(90deg,var(--brand),#a00d25)}
 .banner button{color:var(--brand)}
+.geraete-tab tbody tr{cursor:pointer}.geraete-tab tbody tr:hover td{background:var(--brand-soft)}
+.geraete-tab td{padding:6px 6px;border-bottom:1px solid var(--line);white-space:nowrap}.geraete-tab td:first-child,.geraete-tab td:nth-child(2){width:auto}
 </style>
 </head>
 <body>
@@ -2522,11 +2524,11 @@ function formStart(f){
 }
 
 function formRender(){
-  const f = formDef(), w = formWerte();
+  const f = formState.akt === "#geraete" ? FORMULARE[0] : formDef(), w = formState.akt === "#geraete" ? {} : formWerte();
   $("#formListe").innerHTML = "";
   for(const g of FORMULARE.filter(g => !g.quelle || (formState.register || []).some(r => r.name === g.quelle))){
     const b = document.createElement("button"); b.type = "button"; b.textContent = g.titel;
-    b.setAttribute("aria-current", g.id === f.id ? "true" : "false");
+    b.setAttribute("aria-current", g.id === formState.akt ? "true" : "false");
     b.onclick = () => { formState.akt = g.id; formRender(); };
     $("#formListe").appendChild(b);
   }
@@ -2544,6 +2546,10 @@ function formRender(){
       $("#formListe").appendChild(b);
     }
   }
+  { const h = document.createElement("span"); h.className = "hint"; h.style.margin = "10px 2px 2px"; h.textContent = "Nachschlagen"; $("#formListe").appendChild(h);
+    const b = document.createElement("button"); b.type = "button"; b.textContent = "📋 Geräteliste"; b.setAttribute("aria-current", formState.akt === "#geraete" ? "true" : "false");
+    b.onclick = () => { formState.akt = "#geraete"; formRender(); }; $("#formListe").appendChild(b); }
+  if(formState.akt === "#geraete"){ geraeteAnsicht(); return; }
   const box = $("#formInhalt"); box.innerHTML = "";
   const set = (k, v) => { w[k] = v; formMerken(); };
   for(const a of f.abschnitte){
@@ -2700,6 +2706,49 @@ async function geraetSuchen(f, w, nr){
   }catch(e){}
 }
 
+/* ---- Geräteliste ansehen und ins Formular übernehmen ---- */
+let geraeteZuletzt = "";
+async function geraeteAnsicht(){
+  const box = $("#formInhalt"); box.innerHTML = "";
+  const sek = document.createElement("div"); sek.className = "form-sek";
+  sek.innerHTML = '<strong>Geräteliste</strong><span class="hint">Alle Typenschilder, die in der Service-Mappe oder den Allgemeinen Vorlagen eingelesen wurden. Auf ein Gerät klicken, um es ins Formular zu übernehmen.</span>';
+  const r = document.createElement("div"); r.className = "form-tools";
+  const such = document.createElement("input"); such.type = "search"; such.placeholder = "Suchen: Fabr. Nr., Hersteller, Typ …"; such.value = geraeteZuletzt;
+  such.style.cssText = "flex:1;min-width:220px;font:inherit;padding:7px 10px;border:1px solid var(--line);border-radius:8px;background:var(--sheet);color:inherit";
+  const ziel = document.createElement("select"); ziel.style.cssText = "font:inherit;padding:7px 8px;border:1px solid var(--line);border-radius:8px;background:var(--sheet);color:inherit";
+  for(const f of FORMULARE.filter(f => f.abschnitte.some(a => a.felder.some(x => x.ts)))){ const o = document.createElement("option"); o.value = f.id; o.textContent = "Übernehmen in: " + f.titel; ziel.appendChild(o); }
+  const neu = document.createElement("button"); neu.type = "button"; neu.className = "ghost"; neu.textContent = "↻ Neu laden";
+  r.append(such, ziel, neu); sek.appendChild(r);
+  const info = document.createElement("span"); info.className = "hint"; info.textContent = "Wird geladen …"; sek.appendChild(info);
+  const tab = document.createElement("table"); tab.className = "form-tab geraete-tab";
+  tab.innerHTML = "<thead><tr><th>Fabr. Nr.</th><th>Hersteller</th><th>Typ</th><th>Baujahr</th><th>Leistung</th><th>Spannung</th><th>Strom</th><th>Geräteart</th><th>Prüflingsnr.</th></tr></thead><tbody></tbody>";
+  sek.appendChild(tab); box.appendChild(sek);
+  neu.onclick = () => { geraeteCache = null; geraeteAnsicht(); };
+  try{
+    if(!geraeteCache){ const x = await (await fetch("/api/formular/geraete", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({event: "g_holen", seit: 0})})).json();
+      if(!x.ok) throw new Error(x.error || "Die Liste konnte nicht geladen werden.");
+      geraeteCache = x.text.split("\n").slice(1).filter(z => z.trim()).map(z => z.split("\t")); }
+  }catch(e){ info.textContent = e.message || String(e); return; }
+  const zeigen = () => {
+    geraeteZuletzt = such.value; const q = such.value.trim().toLowerCase(), qn = normNr(such.value);
+    const liste = geraeteCache.filter(g => !q || g.join(" ").toLowerCase().includes(q) || (qn.length >= 3 && normNr(g[0]).includes(qn)));
+    info.textContent = liste.length + " von " + geraeteCache.length + " Geräten";
+    const tb = tab.querySelector("tbody"); tb.innerHTML = "";
+    for(const g of liste.slice(0, 300)){
+      const tr = document.createElement("tr"); tr.title = "Ins Formular übernehmen";
+      for(const t of [g[0], g[1], g[2], g[3], [g[5], g[6]].filter(Boolean).join(" "), g[7] ? g[7] + " V" : "", g[8] ? g[8] + " A" : "", g[9], g[10]]){ const td = document.createElement("td"); td.textContent = t || ""; tr.appendChild(td); }
+      tr.onclick = () => {
+        const f = FORMULARE.find(x => x.id === ziel.value); formState.akt = f.id; const w = formWerte();
+        TS_LISTE.forEach((k, i) => { const z = feldNachTs(f, k); if(z) w[z] = g[i] || (k === "SCHUTZKLASSE" ? "1" : k === "EINHEIT" ? "A" : ""); });
+        if(f.id === "pruefung"){ if(g[9]) w.L11 = g[9]; if(g[10]) w.D11 = g[10]; }
+        formMerken(); formRender(); formMeldung("Gerät " + g[0] + " ins Formular „" + f.titel + "“ übernommen.");
+      };
+      tb.appendChild(tr);
+    }
+  };
+  such.oninput = zeigen; zeigen(); such.focus();
+}
+
 /* ---- T-Doc-Ersatzteile aus der Zwischenablage ---- */
 // „MOTOR, VOLLST.“ → „Motor vollständig“: nur die Bezeichnung, ohne Zusatzangaben, gut lesbar
 const TEIL_ABK = {"VOLLST": "vollständig", "KPL": "komplett", "LI": "links", "RE": "rechts", "HYDR": "hydraulisch", "ELEKTR": "elektrisch"};
@@ -2744,6 +2793,7 @@ function zusatz(f, w, werte){
   return n ? {nach: l, anzahl: n} : {};
 }
 async function formSpeichern(drucken){
+  if(formState.akt === "#geraete"){ formMeldung("Bitte zuerst links ein Formular wählen."); return; }
   const f = formDef(), w = formWerte();
   const xlsx = !drucken && $("#formAlsXlsx").checked, pdf = !drucken && $("#formAlsPdf").checked;
   if(!drucken && !xlsx && !pdf){ formMeldung("Bitte Excel und/oder PDF auswählen."); return; }
@@ -2816,6 +2866,7 @@ function formNeu(behalten){
   formMeldung(behalten ? "Neues Formular – die Kundendaten sind stehen geblieben." : "Neues Formular – alles geleert.", 5000);
 }
 $("#formNeu").onclick = () => {
+  if(formState.akt === "#geraete") return;
   const e = $("#formStatus"); clearTimeout(formMeldT); e.hidden = false; e.textContent = "Neues Formular: ";
   const k = (t, fn, cls) => { const b = document.createElement("button"); b.type = "button"; b.textContent = t; b.style.marginLeft = "6px"; if(cls) b.className = cls; b.onclick = fn; e.appendChild(b); };
   k("Kundendaten behalten", () => formNeu(true), "primary");
