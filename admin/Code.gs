@@ -12,10 +12,15 @@ const CODE_MINUTEN = 30;
 const LISTEN_KEY = 'geraeteliste-v1';
 // Die Excel-Vorlage „Allgemeine Vorlagen“ darf damit NUR Typenschilder lesen lassen.
 const VORLAGEN_KEY = 'allgemeine-vorlagen-v1';
+// true = die Excel-Vorlage „Allgemeine Vorlagen“ bekommt keine Server-Funktionen mehr (abgelöst durch die Service-Mappe)
+const VORLAGEN_AUS = false;
+const VORLAGEN_AUS_TEXT = 'Die Allgemeinen Vorlagen werden nicht mehr verwendet. Bitte die Service-Mappe nutzen (Formulare).';
 
 function doPost(e) {
   let d;
   try { d = JSON.parse(e.postData.contents); } catch (x) { return out({ ok: false, error: 'Ungültige Anfrage.' }); }
+  if (VORLAGEN_AUS && d && d.key === VORLAGEN_KEY)
+    return ContentService.createTextOutput('FEHLER\n' + VORLAGEN_AUS_TEXT).setMimeType(ContentService.MimeType.TEXT);
   if (d && d.key === LISTEN_KEY && /^liste_/.test(String(d.event || ''))) {
     const l = LockService.getScriptLock();
     l.waitLock(20000);
@@ -24,7 +29,7 @@ function doPost(e) {
     finally { l.releaseLock(); }
   }
   // Typenschild direkt aus der Excel-Vorlage: Antwort als Text „OK“ + Ergebnis bzw. „FEHLER“ + Meldung
-  if (d && d.key === VORLAGEN_KEY && d.event === 'typenschild') {
+  if (d && (d.key === VORLAGEN_KEY || d.key === KEY) && d.event === 'typenschild') {
     let t;
     try {
       const b64 = String(d.b64 || '').replace(/\s/g, '');
@@ -41,7 +46,7 @@ function doPost(e) {
     return ContentService.createTextOutput(t).setMimeType(ContentService.MimeType.TEXT);
   }
   // Neue Register für die Allgemeinen Vorlagen (Excel-Dateien aus einem Drive-Ordner)
-  if (d && d.key === VORLAGEN_KEY && /^register_(liste|holen)$/.test(String(d.event || ''))) {
+  if (d && (d.key === VORLAGEN_KEY || d.key === KEY) && /^register_(liste|holen)$/.test(String(d.event || ''))) {
     let t;
     try { t = 'OK\n' + registerAnfrage(d); } catch (x) { t = 'FEHLER\n' + x.message; }
     return ContentService.createTextOutput(t).setMimeType(ContentService.MimeType.TEXT);

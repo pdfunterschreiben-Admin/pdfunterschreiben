@@ -243,7 +243,7 @@ func (a *app) handleFormularTypenschild(w http.ResponseWriter, r *http.Request) 
 		writeJSON(w, map[string]any{"ok": false, "error": "Kein Server eingerichtet."})
 		return
 	}
-	t, err := serverText(map[string]any{"key": "allgemeine-vorlagen-v1", "event": "typenschild",
+	t, err := serverText(map[string]any{"key": ReportKey, "event": "typenschild",
 		"b64": base64.StdEncoding.EncodeToString(img), "mime": http.DetectContentType(img)}, 90*time.Second)
 	if err != nil {
 		writeJSON(w, map[string]any{"ok": false, "error": "Keine Verbindung zum Server."})
@@ -309,7 +309,7 @@ func (a *app) handleFormularRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.Method == http.MethodGet {
-		t, err := serverText(map[string]any{"key": "allgemeine-vorlagen-v1", "event": "register_liste"}, 30*time.Second)
+		t, err := serverText(map[string]any{"key": ReportKey, "event": "register_liste"}, 30*time.Second)
 		if err != nil {
 			writeJSON(w, map[string]any{"ok": false, "offline": true, "error": "Keine Verbindung zum Server."})
 			return
@@ -362,7 +362,7 @@ func registerDatei(id string) (string, []byte, error) {
 	if !regexp.MustCompile(`^[A-Za-z0-9_\-]{10,80}$`).MatchString(id) {
 		return "", nil, errors.New("Ungültige Vorlage.")
 	}
-	t, err := serverText(map[string]any{"key": "allgemeine-vorlagen-v1", "event": "register_holen", "id": id}, 60*time.Second)
+	t, err := serverText(map[string]any{"key": ReportKey, "event": "register_holen", "id": id}, 60*time.Second)
 	if err != nil {
 		return "", nil, errors.New("Keine Verbindung zum Server.")
 	}

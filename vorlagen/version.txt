@@ -1,2 +1,2 @@
-15
-Neu: Typenschild per Handy (QR-Code), gemeinsame Geräteliste für alle (eingelesene Typenschilder werden automatisch gespeichert), neue Vorlagen kommen automatisch als neue Register, T-Doc-Ersatzteile aus mehreren Fenstern sammeln.
+16
+Pflicht-Update: Die Allgemeinen Vorlagen werden durch die Service-Mappe ersetzt. Alle Formulare gibt es jetzt dort unter „Formulare“. Bitte auf „Ja“ klicken.
