@@ -4,6 +4,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	_ "embed"
 	"encoding/base64"
 	"encoding/json"
@@ -58,7 +59,7 @@ try {
   try { $xl.AutomationSecurity = 3 } catch {}
   $wb = $xl.Workbooks.Open($env:PU_IN, 0, $false)
   try {
-    $ws = $wb.Worksheets.Item([string]$cfg.blatt)
+    if ($cfg.blatt) { $ws = $wb.Worksheets.Item([string]$cfg.blatt) } else { $ws = $wb.Worksheets.Item(1) }
     foreach ($p in $cfg.werte.PSObject.Properties) {
       $c = $ws.Range($p.Name)
       $v = [string]$p.Value
@@ -101,6 +102,7 @@ func (a *app) handleFormular(w http.ResponseWriter, r *http.Request) {
 		Kreuze map[string]bool   `json:"kreuze"`
 		XLSX   bool              `json:"xlsx"`
 		PDF    bool              `json:"pdf"`
+		Quelle string            `json:"quelle"` // Vorlage aus dem Drive-Ordner statt der Allgemeinen Vorlagen
 	}
 	if err := json.NewDecoder(io.LimitReader(r.Body, 4<<20)).Decode(&req); err != nil {
 		fehler("Ungültige Anfrage.")
@@ -122,8 +124,17 @@ func (a *app) handleFormular(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer os.RemoveAll(dir)
-	in := filepath.Join(dir, "vorlage.xlsm")
-	if err := os.WriteFile(in, vorlagenDatei(), 0o600); err != nil {
+	vorlage, endung := vorlagenDatei(), "xlsm"
+	if req.Quelle != "" {
+		e, d, err := registerDatei(req.Quelle)
+		if err != nil {
+			fehler(err.Error())
+			return
+		}
+		vorlage, endung = d, e
+	}
+	in := filepath.Join(dir, "vorlage."+endung)
+	if err := os.WriteFile(in, vorlage, 0o600); err != nil {
 		fehler("Die Vorlage konnte nicht bereitgelegt werden.")
 		return
 	}
@@ -301,25 +312,9 @@ func (a *app) handleFormularRegister(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]any{"ok": false, "error": "Ungültige Anfrage."})
 		return
 	}
-	t, err := serverText(map[string]any{"key": "allgemeine-vorlagen-v1", "event": "register_holen", "id": req.ID}, 60*time.Second)
+	ext, data, err := registerDatei(req.ID)
 	if err != nil {
-		writeJSON(w, map[string]any{"ok": false, "error": "Keine Verbindung zum Server."})
-		return
-	}
-	t = strings.ReplaceAll(t, "\r", "")
-	if !strings.HasPrefix(t, "OK\n") {
-		writeJSON(w, map[string]any{"ok": false, "error": strings.TrimSpace(strings.TrimPrefix(t, "FEHLER\n"))})
-		return
-	}
-	teile := strings.SplitN(t[3:], "\n", 2)
-	ext := strings.ToLower(strings.TrimSpace(teile[0]))
-	if len(teile) < 2 || (ext != "xlsx" && ext != "xlsm" && ext != "xls") {
-		writeJSON(w, map[string]any{"ok": false, "error": "Die Vorlage kam nicht richtig an."})
-		return
-	}
-	data, err := base64.StdEncoding.DecodeString(strings.ReplaceAll(teile[1], "\n", ""))
-	if err != nil || len(data) == 0 {
-		writeJSON(w, map[string]any{"ok": false, "error": "Die Vorlage kam nicht richtig an."})
+		writeJSON(w, map[string]any{"ok": false, "error": err.Error()})
 		return
 	}
 	name := regexp.MustCompile(`[\\/:*?"<>|]`).ReplaceAllString(strings.TrimSpace(req.Name), " ")
@@ -335,4 +330,29 @@ func (a *app) handleFormularRegister(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = hidden("rundll32.exe", "url.dll,FileProtocolHandler", pfad).Start()
 	writeJSON(w, map[string]any{"ok": true, "pfad": pfad})
+}
+
+// Datei einer Vorlage aus dem Drive-Ordner holen (Endung, Inhalt)
+func registerDatei(id string) (string, []byte, error) {
+	if !regexp.MustCompile(`^[A-Za-z0-9_\-]{10,80}$`).MatchString(id) {
+		return "", nil, errors.New("Ungültige Vorlage.")
+	}
+	t, err := serverText(map[string]any{"key": "allgemeine-vorlagen-v1", "event": "register_holen", "id": id}, 60*time.Second)
+	if err != nil {
+		return "", nil, errors.New("Keine Verbindung zum Server.")
+	}
+	t = strings.ReplaceAll(t, "\r", "")
+	if !strings.HasPrefix(t, "OK\n") {
+		return "", nil, errors.New(strings.TrimSpace(strings.TrimPrefix(t, "FEHLER\n")))
+	}
+	teile := strings.SplitN(t[3:], "\n", 2)
+	ext := strings.ToLower(strings.TrimSpace(teile[0]))
+	if len(teile) < 2 || (ext != "xlsx" && ext != "xlsm" && ext != "xls") {
+		return "", nil, errors.New("Die Vorlage kam nicht richtig an.")
+	}
+	data, err := base64.StdEncoding.DecodeString(strings.ReplaceAll(teile[1], "\n", ""))
+	if err != nil || len(data) == 0 {
+		return "", nil, errors.New("Die Vorlage kam nicht richtig an.")
+	}
+	return ext, data, nil
 }

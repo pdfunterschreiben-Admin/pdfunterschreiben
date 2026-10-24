@@ -2442,7 +2442,27 @@ const FORMULARE = [
     {titel: "Auftrag und Gerät", felder: [{t: "text", z: "B7", l: "Servicetechniker", d: TECHNIKER, merken: true}, {t: "datum", z: "B8", l: "Servicedatum"}, {t: "text", z: "B9", l: "Montage-Auftrag-Nr."}, {t: "text", z: "B11", l: "Fabrikat"}, {t: "text", z: "B12", l: "Type"}, {t: "text", z: "B13", l: "Fahrgestell-Nr."}, {t: "text", z: "B14", l: "Antriebsart"},
       {t: "text", z: "B15", l: "Baujahr"}, {t: "text", z: "B16", l: "Motor-Nr."}, {t: "text", z: "B17", l: "Getriebe-Nr."}, {t: "text", z: "B18", l: "Mast-Nr."}, {t: "text", z: "B19", l: "Betr. Std."}, {t: "text", z: "B20", l: "Ladegut"}, {t: "text", z: "B21", l: "Ladegewicht"}]},
     {titel: "Beschreibung", felder: [{t: "zeilen", l: "1. Symptome", z: ["A24", "A25", "A26", "A27"]}, {t: "zeilen", l: "2. Mögliche Ursachen", z: ["A29", "A30", "A31", "A32"]}, {t: "zeilen", l: "3. Änderungen", z: ["A34", "A35", "A36", "A37"]}, {t: "zeilen", l: "4. Kommentare", z: ["A39", "A40", "A41", "A42"]},
-      {t: "text", z: "B43", l: "5. Beigefügte Fotos (Anzahl)", stueck: true}]}]}
+      {t: "text", z: "B43", l: "5. Beigefügte Fotos (Anzahl)", stueck: true}]}]},
+  {id: "ladegeraet", titel: "Rückgabe Ladegerät", quelle: "Rückgabe Ladegerät", typenschild: true, abschnitte: [
+    {titel: "Angaben", felder: [{t: "text", z: "B3", l: "Servicetechniker", d: TECHNIKER, merken: true}, {t: "datum", z: "B5", l: "Rückgabedatum"}, {t: "datum", z: "B7", l: "Servicedatum"}, {t: "text", z: "B9", l: "Monteurbericht"}]},
+    {titel: "Kunde / Kommission", felder: [{t: "text", z: "F4", l: "Name"}, {t: "text", z: "F6", l: "Adresse"}, {t: "text", z: "F8", l: "Ort"}]},
+    {titel: "Ladegerät", werkzeug: "typenschild", felder: [{t: "text", z: "B11", l: "Hersteller", ts: "HERSTELLER"}, {t: "text", z: "B13", l: "Type", ts: "TYP"}, {t: "text", z: "B15", l: "Seriennummer", ts: "FABRNR", geraet: true}, {t: "text", z: "B17", l: "Fahrgestell-Nr."}, {t: "text", z: "B19", l: "Betr. Std."}]},
+    {titel: "Rückgabegrund", felder: [{t: "x", z: "D23", l: "Defekt"}, {t: "x", z: "D25", l: "Gebraucht"}, {t: "x", z: "D27", l: "Batteriedienst beauftragen"}, {t: "x", z: "D29", l: "Garantie"},
+      {t: "text", z: "B31", l: "Fehlercode"}, {t: "text", z: "B33", l: "Fehlerbeschreibung"}, {t: "text", z: "B35", l: "Weitere Gründe"}, {t: "zeilen", l: "Bemerkungen", z: ["B37", "B39"]}]}]},
+  {id: "toyota", titel: "Toyota Checkliste", quelle: "Toyota Checkliste", abschnitte: [
+    {titel: "Allgemein", felder: [{t: "text", z: "A4", l: "Name Servicetechniker", d: TECHNIKER, merken: true}, {t: "text", z: "M4", l: "Firma / SC", d: () => "Schlüter"}, {t: "text", z: "S4", l: "Telefon", d: () => "05424233115"}, {t: "datum", z: "AA4", l: "Datum", d: HEUTE, echt: true},
+      {t: "text", z: "A6", l: "Gerätenummer"}, {t: "text", z: "M6", l: "Betriebsstunden"}, {t: "text", z: "Q6", l: "Letzte Wartung"}, {t: "text", z: "V6", l: "Endkunde"}, {t: "text", z: "A8", l: "Anbaugerät"}]},
+    {titel: "Angaben", felder: [
+      {t: "xbeschr", l: "Wechsel des Anbaugerätes", o: [["V8", "oft"], ["Y8", "selten"], ["AC8", "nie"]]},
+      {t: "xbeschr", l: "Sonder-Umbauten vorhanden (ab Werk)", o: [["A11", "Ja, folgende:"], ["AC11", "Nein"]]}, {t: "text", z: "D11", l: "Folgende Sonder-Umbauten"},
+      {t: "flaeche", z: "H14", l: "Typischer Einsatz: wie wird das Gerät eingesetzt?"}, {t: "flaeche", z: "A17", l: "Besondere Belastung: Last, Boden, Temperatur …"}, {t: "flaeche", z: "M17", l: "Zustand des Gerätes, Bauteils, Auffälligkeiten"},
+      {t: "flaeche", z: "A25", l: "Angezeigte Fehlercodes"}, {t: "flaeche", z: "M25", l: "Softwarestand"}]},
+    {titel: "Fehler", felder: [{t: "flaeche", z: "A28", l: "Problembeschreibung"}, {t: "flaeche", z: "A39", l: "Wann tritt der Fehler auf (Zeit)"}, {t: "flaeche", z: "M39", l: "Wie oft tritt der Fehler auf (Intervall)"}, {t: "flaeche", z: "W39", l: "Wobei (Tätigkeit, Funktion)"},
+      {t: "flaeche", z: "A45", l: "Fehler in Bauteil / Baugruppe"}, {t: "flaeche", z: "M45", l: "Teilenummer"}, {t: "flaeche", z: "W45", l: "Handbuch: Kapitel, Seite"}, {t: "flaeche", z: "A50", l: "Messwerte: Maße, Verschleiß, Beschädigungen"},
+      {t: "flaeche", z: "A55", l: "Bereits durchgeführte Arbeiten, mögliche Ursachen"}, {t: "flaeche", z: "A61", l: "Fotos beigefügt: Überblick, Detail, Typenschild"}]}]},
+  {id: "spesen", titel: "Spesenfreie Arbeitszeiten", quelle: "Spesenfreie Arbeitszeiten", abschnitte: [
+    {titel: "Mitarbeiter", felder: [{t: "text", z: "B2", l: "Name", merken: true}, {t: "text", z: "B4", l: "Vorname", merken: true}, {t: "text", z: "B6", l: "Kalenderwoche / Jahr"}]},
+    {titel: "Zeiten", felder: [{t: "tabelle", l: "Zeiten", s: [["A", "Datum"], ["B", "Uhrzeit von"], ["C", "Uhrzeit bis"], ["D", "Standort"], ["E", "Tätigkeiten"]], r: [9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34]}]}]}
 ];
 
 const formState = {akt: "pruefung", daten: {}};
@@ -2463,15 +2483,15 @@ function formStart(f){
 function formRender(){
   const f = formDef(), w = formWerte();
   $("#formListe").innerHTML = "";
-  for(const g of FORMULARE){
+  for(const g of FORMULARE.filter(g => !g.quelle || (formState.register || []).some(r => r.name === g.quelle))){
     const b = document.createElement("button"); b.type = "button"; b.textContent = g.titel;
     b.setAttribute("aria-current", g.id === f.id ? "true" : "false");
     b.onclick = () => { formState.akt = g.id; formRender(); };
     $("#formListe").appendChild(b);
   }
-  if(formState.register && formState.register.length){
+  if(formState.register && formState.register.some(g => !FORMULARE.some(f => f.quelle === g.name))){
     const h = document.createElement("span"); h.className = "hint"; h.style.margin = "10px 2px 2px"; h.textContent = "Weitere Vorlagen"; $("#formListe").appendChild(h);
-    for(const g of formState.register){
+    for(const g of formState.register.filter(g => !FORMULARE.some(f => f.quelle === g.name))){
       const b = document.createElement("button"); b.type = "button"; b.textContent = g.name; b.title = "Öffnet eine frische Kopie in Excel";
       b.onclick = async () => {
         b.disabled = true; formMeldung("„" + g.name + "“ wird in Excel geöffnet …");
@@ -2514,6 +2534,17 @@ function formRender(){
         const l = document.createElement("label"); const c = document.createElement("input"); c.type = "checkbox";
         c.checked = x.t === "kreuz" ? !!w[k] : !!w[k]; c.onchange = () => set(k, x.t === "kreuz" ? c.checked : (c.checked ? "X" : ""));
         l.appendChild(c); l.appendChild(document.createTextNode(x.l)); kreuze.appendChild(l);
+      } else if(x.t === "xbeschr"){
+        kreuze = null;
+        const g = document.createElement("div"); g.className = "form-gruppe";
+        const sp = document.createElement("span"); sp.textContent = x.l; g.appendChild(sp);
+        const r = document.createElement("div"); r.className = "form-chips";
+        for(const [z, t] of x.o){
+          const b = document.createElement("button"); b.type = "button"; b.textContent = t; b.setAttribute("aria-pressed", w[z] ? "true" : "false");
+          b.onclick = () => { const an = !w[z]; for(const [z2] of x.o) delete w[z2]; if(an) w[z] = "☒ " + t; formMerken(); [...r.children].forEach((k, i) => k.setAttribute("aria-pressed", w[x.o[i][0]] ? "true" : "false")); };
+          r.appendChild(b);
+        }
+        g.appendChild(r); sek.appendChild(g);
       } else if(x.t === "xeins" || x.t === "xmehr"){
         kreuze = null;
         const g = document.createElement("div"); g.className = "form-gruppe";
@@ -2672,7 +2703,7 @@ async function formSpeichern(){
   if(f.id === "reparatur" && werte.R6) werte.R56 = werte.R6;
   const btn = $("#formSpeichern"); btn.disabled = true; const alt = btn.textContent; btn.textContent = "Bitte warten …"; formMeldung("Excel füllt das Formular aus – das dauert ein paar Sekunden …", 60000);
   let r;
-  try{ r = await (await fetch("/api/formular", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({blatt: f.blatt, werte, kreuze, xlsx, pdf})})).json(); }
+  try{ r = await (await fetch("/api/formular", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({blatt: f.blatt || "", quelle: f.quelle ? ((formState.register || []).find(g => g.name === f.quelle) || {}).id || "-" : "", werte, kreuze, xlsx, pdf})})).json(); }
   catch(e){ r = {ok: false, error: "Keine Verbindung zum Programm."}; }
   btn.disabled = false; btn.textContent = alt;
   if(!r.ok){ formMeldung(r.error || "Das Formular konnte nicht erstellt werden.", 9000); return; }
@@ -2680,7 +2711,7 @@ async function formSpeichern(){
   const feld = re => { for(const a of f.abschnitte) for(const x of a.felder) if(typeof x.z === "string" && re.test(x.l) && w[x.z]) return w[x.z]; return ""; };
   const extra = (f.id === "urlaub" ? [w.B4, w.B6] : [feld(/^(Kundenname|Auftraggeber)$/), feld(/^(Type|Typenbezeichnung)$/), feld(/^(Fahrgestell-Nr\.|Fabr\. Nr\.)$/)])
     .filter(Boolean).join(" ").replace(/[\\\/:*?"<>|]/g, " ").trim();
-  const basis = (f.blatt.replace(/\./g, "") + (extra ? " " + extra : "") + " " + d).replace(/\s+/g, " ").trim();
+  const basis = ((f.blatt || f.titel).replace(/\./g, "") + (extra ? " " + extra : "") + " " + d).replace(/\s+/g, " ").trim();
   const bytes = s => { const b = atob(s), a = new Uint8Array(b.length); for(let i = 0; i < b.length; i++) a[i] = b.charCodeAt(i); return a; };
   const speichern = async (data, ext, typ, mime) => {
     const name = basis + ext;
