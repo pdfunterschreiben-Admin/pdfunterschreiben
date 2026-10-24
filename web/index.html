@@ -2429,8 +2429,7 @@ const FORMULARE = [
       {t: "text", z: "D11", l: "Prüflingsnr."}, {t: "text", z: "L11", l: "Geräteart", d: () => "Ladegerät"},
       {t: "text", z: "T11", l: "Hersteller", ts: "HERSTELLER"}, {t: "text", z: "F12", l: "Typenbezeichnung", ts: "TYP"},
       {t: "text", z: "L12", l: "Fabr. Nr.", ts: "FABRNR", geraet: true}, {t: "text", z: "T12", l: "Baujahr", ts: "BAUJAHR"},
-      {t: "text", z: "E13", l: "Schutzklasse", d: () => "1", ts: "SCHUTZKLASSE"}, {t: "text", z: "J13", l: "Nennleistung", ts: "LEISTUNG"},
-      {t: "wahl", z: "K13", l: "Einheit", o: ["A", "W", "kW", "VA", "kVA"], d: () => "A", ts: "EINHEIT"},
+      {t: "text", z: "E13", l: "Schutzklasse", d: () => "1", ts: "SCHUTZKLASSE"}, {t: "text", z: "J13", l: "Nennleistung (A)", ts: "LEISTUNG"},
       {t: "text", z: "Q13", l: "Nennspannung (V)", ts: "SPANNUNG"}, {t: "text", z: "W13", l: "Nennstrom (A)", ts: "STROM"}]},
     {titel: "Prüfung", felder: [
       {t: "kreuz", n: "Check Box 1", l: "DIN VDE 0701-0702", d: true}, {t: "kreuz", n: "Check Box 2", l: "DGUV V3"},
@@ -2843,6 +2842,7 @@ async function formSpeichern(drucken){
   // leere Zellen mit Vorgabe in der Vorlage (z. B. „Ladegerät“) trotzdem überschreiben
   for(const a of f.abschnitte) for(const x of a.felder) if(x.z && typeof x.z === "string" && !(x.z in werte) && x.d) werte[x.z] = "";
   if(f.id === "reparatur" && werte.R6) werte.R56 = werte.R6;
+  if(f.id === "pruefung") werte.K13 = "A";   // Nennleistung immer in Ampere
   const btn = $("#formSpeichern"); btn.disabled = true; const alt = btn.textContent; btn.textContent = "Bitte warten …"; formMeldung(drucken ? "Excel füllt das Formular aus und druckt …" : "Excel füllt das Formular aus – das dauert ein paar Sekunden …", 60000);
   let r;
   try{ r = await (await fetch("/api/formular", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({...zusatz(f, w, werte), blatt: f.blatt || "", quelle: f.quelle ? ((formState.register || []).find(g => g.name === f.quelle) || {}).id || "-" : "", werte, kreuze, xlsx, pdf, drucken: !!drucken})})).json(); }
