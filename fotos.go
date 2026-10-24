@@ -78,7 +78,7 @@ func (a *app) handleFotos(w http.ResponseWriter, r *http.Request) {
 // QR-Code als PNG – nur für Links des Anmeldeservers
 func (a *app) handleFotosQR(w http.ResponseWriter, r *http.Request) {
 	u := r.URL.Query().Get("u")
-	if !strings.HasPrefix(u, "https://script.google.com/") || len(u) > 500 {
+	if !(strings.HasPrefix(u, "https://script.google.com/") || strings.HasPrefix(u, "https://pdfunterschreiben-admin.github.io/")) || len(u) > 500 {
 		http.Error(w, "Ungültiger Link", http.StatusBadRequest)
 		return
 	}
