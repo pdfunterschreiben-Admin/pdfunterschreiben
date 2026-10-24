@@ -2634,18 +2634,18 @@ async function formSpeichern(){
     const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([data], {type: mime})); a.download = name;
     document.body.appendChild(a); a.click(); a.remove(); return name;
   };
-  try{
-    const gesp = [];
-    if(r.xlsx){ const n = await speichern(bytes(r.xlsx), ".xlsx", "Excel-Arbeitsmappe", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"); if(n) gesp.push(n); }
-    if(r.pdf){
-      const pb = bytes(r.pdf);
-      const n = await speichern(pb, ".pdf", "PDF-Dokument", "application/pdf"); if(n) gesp.push(n);
-      if(confirm("Das PDF jetzt hier unterschreiben bzw. per E-Mail senden?")){
-        await addDoc(basis + ".pdf", pb, null, null); renderAll(); $("#formDlg").close();
-      }
-    }
-    if(gesp.length) formMeldung("Gespeichert: " + gesp.join(", "), 6000);
-  }catch(e){ formMeldung("Speichern fehlgeschlagen: " + (e.message || e), 7000); }
+  // Das „Speichern unter“-Fenster darf der Browser nur direkt nach einem Klick öffnen – deshalb eigene Knöpfe
+  const e = $("#formStatus"); clearTimeout(formMeldT); e.hidden = false; e.textContent = "Fertig – jetzt speichern: ";
+  const knopf = (t, fn) => { const b = document.createElement("button"); b.type = "button"; b.textContent = t; b.style.marginLeft = "6px"; b.onclick = fn; e.appendChild(b); return b; };
+  const klick = (data, ext, typ, mime) => async ev => {
+    try{ const n = await speichern(data, ext, typ, mime); if(n){ ev.target.textContent = "✓ " + n; ev.target.disabled = true; } }
+    catch(x){ formMeldung("Speichern fehlgeschlagen: " + (x.message || x), 7000); }
+  };
+  if(r.pdf){ const pb = bytes(r.pdf);
+    knopf("PDF speichern …", klick(pb, ".pdf", "PDF-Dokument", "application/pdf"));
+    knopf("Unterschreiben / E-Mail", async () => { await addDoc(basis + ".pdf", pb.slice(), null, null); renderAll(); $("#formDlg").close(); });
+  }
+  if(r.xlsx) knopf("Excel speichern …", klick(bytes(r.xlsx), ".xlsx", "Excel-Arbeitsmappe", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"));
 }
 
 $("#formBtn").onclick = () => { formLaden(); formRender(); $("#formDlg").showModal(); };
