@@ -1,2 +1,2 @@
-14
-Kleine Korrekturen: Speichern als PDF klappt jetzt auch bei Formularen mit Punkt im Namen (z. B. Prüfung elektr. Geräte), Geräteliste speichern löst beim Schließen keine unnötige Nachfrage mehr aus.
+15
+Neu: Typenschild per Handy (QR-Code), gemeinsame Geräteliste für alle (eingelesene Typenschilder werden automatisch gespeichert), neue Vorlagen kommen automatisch als neue Register, T-Doc-Ersatzteile aus mehreren Fenstern sammeln.
