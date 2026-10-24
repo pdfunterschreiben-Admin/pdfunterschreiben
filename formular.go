@@ -59,28 +59,26 @@ try {
   $wb = $xl.Workbooks.Open($env:PU_IN, 0, $false)
   try {
     $ws = $wb.Worksheets.Item([string]$cfg.blatt)
-    # nur das gewünschte Formular behalten
-    foreach ($s in @($wb.Worksheets)) { if ($s.Name -ne $ws.Name) { $s.Visible = -1 } }
-    foreach ($s in @($wb.Worksheets)) { if ($s.Name -ne $ws.Name) { $s.Delete() } }
-    # Knöpfe der Excel-Vorlage entfernen (Ankreuzkästchen bleiben)
-    foreach ($sh in @($ws.Shapes)) {
-      $typ = -1; try { $typ = $sh.FormControlType } catch {}
-      if ($typ -eq 0 -or $sh.Name -like 'TS_QR*') { $sh.Delete() }
-    }
     foreach ($p in $cfg.werte.PSObject.Properties) {
       $c = $ws.Range($p.Name)
       $v = [string]$p.Value
       if ($v -match '^\d{4}-\d{2}-\d{2}$') { $c.Value2 = [double]([datetime]::ParseExact($v, 'yyyy-MM-dd', $null)).ToOADate() }
-      elseif ($v -match '^-?\d+([.,]\d+)?$' -and $v.Length -lt 9 -and -not $v.StartsWith('0')) { $c.Value2 = [double]($v -replace ',', '.') }
-      else { $c.NumberFormat = '@'; $c.Value2 = $v }
+      else { $c.NumberFormat = '@'; $c.Value2 = $v }   # genau so, wie es eingetippt wurde
     }
     foreach ($p in $cfg.kreuze.PSObject.Properties) {
       try { $ws.CheckBoxes([string]$p.Name).Value = $(if ($p.Value) { 1 } else { -4146 }) } catch {}
     }
     $ws.Activate()
     $ws.Range('A1').Select()
-    if ($cfg.pdf) { $ws.ExportAsFixedFormat(0, $env:PU_PDF) }
-    if ($cfg.xlsx) { $wb.SaveAs($env:PU_XLSX, 51) }
+    # Excel: die ganze Allgemeine Vorlage mit allen Registern, nur dieses Formular ausgefüllt
+    if ($cfg.xlsx) { $wb.SaveAs($env:PU_XLSX, 52) }
+    if ($cfg.pdf) {
+      foreach ($sh in @($ws.Shapes)) {
+        $typ = -1; try { $typ = $sh.FormControlType } catch {}
+        if ($typ -eq 0 -or $sh.Name -like 'TS_QR*') { $sh.Delete() }
+      }
+      $ws.ExportAsFixedFormat(0, $env:PU_PDF)
+    }
   } finally { $wb.Close($false) }
 } finally {
   if ($xl) { $xl.Quit(); [void][System.Runtime.InteropServices.Marshal]::ReleaseComObject($xl) }
@@ -129,7 +127,7 @@ func (a *app) handleFormular(w http.ResponseWriter, r *http.Request) {
 	cfg, _ := json.Marshal(map[string]any{"blatt": req.Blatt, "werte": req.Werte, "kreuze": req.Kreuze, "xlsx": req.XLSX, "pdf": req.PDF})
 	cfgPath := filepath.Join(dir, "auftrag.json")
 	_ = os.WriteFile(cfgPath, cfg, 0o600)
-	xlsx, pdf := filepath.Join(dir, "formular.xlsx"), filepath.Join(dir, "formular.pdf")
+	xlsx, pdf := filepath.Join(dir, "formular.xlsm"), filepath.Join(dir, "formular.pdf")
 
 	cmd := hidden("powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", formularScript)
 	cmd.Env = append(os.Environ(), "PU_IN="+in, "PU_CFG="+cfgPath, "PU_XLSX="+xlsx, "PU_PDF="+pdf)

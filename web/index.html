@@ -2581,6 +2581,13 @@ async function geraetSuchen(f, w, nr){
 }
 
 /* ---- T-Doc-Ersatzteile aus der Zwischenablage ---- */
+// „MOTOR, VOLLST.“ → „Motor vollständig“: nur die Bezeichnung, ohne Zusatzangaben, gut lesbar
+const TEIL_ABK = {"VOLLST": "vollständig", "KPL": "komplett", "LI": "links", "RE": "rechts", "HYDR": "hydraulisch", "ELEKTR": "elektrisch"};
+function teilName(t){
+  t = String(t || "").replace(/\s+[–-]\s+.*$/, "").replace(/\s*\(.*$/, "").trim();
+  if(t === t.toUpperCase()) t = t.toLowerCase().replace(/(^|[\s\/-])([a-zäöü])/g, (m, a, b) => a + b.toUpperCase());
+  return t.split(/,\s*|\s+/).filter(Boolean).map((w, i) => { const k = w.replace(/\.$/, "").toUpperCase(); return TEIL_ABK[k] || (i ? w.replace(/^[A-ZÄÖÜ]/, c => TEIL_ABK[k] ? c : c) : w); }).join(" ").replace(/^./, c => c.toUpperCase());
+}
 function tdocWerkzeug(f, w){
   const r = document.createElement("div"); r.className = "form-tools";
   const b = document.createElement("button"); b.type = "button"; b.textContent = "Ersatzteile aus T-Doc einfügen";
@@ -2595,7 +2602,7 @@ function tdocWerkzeug(f, w){
     for(const z of t.split("\n").slice(1)){
       const [mg, nr, nm, bm] = z.split("\t"); if(!nr || da.has(nr.trim())) continue;
       const frei = tab.r.find(r => !w["A" + r] && !w["D" + r] && !w["J" + r]); if(!frei){ formMeldung("Die Ersatzteil-Tabelle ist voll."); break; }
-      w["A" + frei] = mg || "1"; w["D" + frei] = nr.trim(); w["J" + frei] = [nm, bm].filter(Boolean).join(" – "); da.add(nr.trim()); n++;
+      w["A" + frei] = mg || "1"; w["D" + frei] = nr.trim(); w["J" + frei] = teilName(nm || bm); da.add(nr.trim()); n++;
     }
     formMerken(); formRender(); formMeldung(n ? `${n} Ersatzteil(e) eingefügt.` : "Diese Teile stehen schon in der Tabelle.");
     try{ await navigator.clipboard.writeText("TDOC-EINGEFUEGT"); }catch(e){}
@@ -2645,7 +2652,7 @@ async function formSpeichern(){
     knopf("PDF speichern …", klick(pb, ".pdf", "PDF-Dokument", "application/pdf"));
     knopf("Unterschreiben / E-Mail", async () => { await addDoc(basis + ".pdf", pb.slice(), null, null); renderAll(); $("#formDlg").close(); });
   }
-  if(r.xlsx) knopf("Excel speichern …", klick(bytes(r.xlsx), ".xlsx", "Excel-Arbeitsmappe", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"));
+  if(r.xlsx) knopf("Excel speichern …", klick(bytes(r.xlsx), ".xlsm", "Excel-Arbeitsmappe mit Makros", "application/vnd.ms-excel.sheet.macroEnabled.12"));
 }
 
 $("#formBtn").onclick = () => { formLaden(); formRender(); $("#formDlg").showModal(); };
