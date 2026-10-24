@@ -83,6 +83,15 @@ try {
     }
     $ws.Activate()
     $ws.Range('A1').Select()
+    # Vorlagen aus dem Drive-Ordner: genau eine Seite (Breite und Höhe)
+    if ($cfg.einseite) {
+      $ps = $ws.PageSetup
+      try { $ps.PrintArea = $ws.UsedRange.Address() } catch {}
+      $ps.Zoom = $false
+      $ps.FitToPagesWide = 1
+      $ps.FitToPagesTall = 1
+      try { $ps.CenterHorizontally = $true } catch {}
+    }
     # Knöpfe der Excel-Vorlage (Typenschild einlesen, Ersatzteile einfügen …) aus allen Registern entfernen
     foreach ($s in @($wb.Worksheets)) {
       foreach ($sh in @($s.Shapes)) {
@@ -152,7 +161,7 @@ func (a *app) handleFormular(w http.ResponseWriter, r *http.Request) {
 		fehler("Die Vorlage konnte nicht bereitgelegt werden.")
 		return
 	}
-	cfg, _ := json.Marshal(map[string]any{"blatt": req.Blatt, "nach": req.Nach, "anzahl": min(req.Anzahl, 200), "werte": req.Werte, "kreuze": req.Kreuze, "xlsx": req.XLSX, "pdf": req.PDF})
+	cfg, _ := json.Marshal(map[string]any{"blatt": req.Blatt, "nach": req.Nach, "anzahl": min(req.Anzahl, 200), "einseite": req.Quelle != "", "werte": req.Werte, "kreuze": req.Kreuze, "xlsx": req.XLSX, "pdf": req.PDF})
 	cfgPath := filepath.Join(dir, "auftrag.json")
 	_ = os.WriteFile(cfgPath, cfg, 0o600)
 	xlsx, pdf := filepath.Join(dir, "formular.xlsx"), filepath.Join(dir, "formular.pdf")
