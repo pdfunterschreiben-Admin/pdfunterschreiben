@@ -237,6 +237,37 @@ dialog{border-radius:16px}
 .banner button{color:var(--brand)}
 .geraete-tab tbody tr{cursor:pointer}.geraete-tab tbody tr:hover td{background:var(--brand-soft)}
 .geraete-tab td{padding:6px 6px;border-bottom:1px solid var(--line);white-space:nowrap}.geraete-tab td:first-child,.geraete-tab td:nth-child(2){width:auto}
+
+/* ---------- Facelift 2: moderner, Fenster mit Steuerknöpfen ---------- */
+.aktionen{justify-content:flex-end;margin:-4px 0 12px}
+.aktionen:not(:has(button:not([hidden]))){display:none}
+.leer-hinweis{text-align:center;padding:8px}
+#drop{position:fixed;inset:12px;z-index:50;display:none;place-items:center;text-align:center;border:3px dashed var(--brand);border-radius:20px;background:color-mix(in srgb,var(--sheet) 88%,transparent);backdrop-filter:blur(3px)}
+#drop.over{display:grid}
+#drop strong{font:600 22px var(--f-display)}
+:root{--r-lg:16px}
+body{background:radial-gradient(1200px 500px at 85% -10%,color-mix(in srgb,var(--brand) 7%,transparent),transparent 70%),var(--paper)}
+header.top{backdrop-filter:saturate(1.4) blur(10px);background:color-mix(in srgb,var(--sheet) 86%,transparent)}
+.panel,.kachel{border-radius:var(--r-lg)}
+button,.btn{border-radius:9px;transition:background .12s,border-color .12s,box-shadow .12s}
+button:hover,.btn:hover{border-color:color-mix(in srgb,var(--brand) 55%,var(--line))}
+button.primary{box-shadow:0 2px 8px color-mix(in srgb,var(--brand) 30%,transparent)}
+.tabs{border-radius:10px}
+dialog{border-radius:18px;border:1px solid color-mix(in srgb,var(--line) 70%,transparent);box-shadow:0 30px 80px rgba(10,15,30,.35)}
+dialog::backdrop{background:rgba(10,15,30,.45);backdrop-filter:blur(2px)}
+.dlg-head{position:relative;gap:8px;user-select:none}
+.fenster-knoepfe{display:flex;gap:2px;margin-left:auto}
+.fenster-knoepfe button{width:34px;height:30px;padding:0;justify-content:center;border:0;background:transparent;color:var(--muted);font-size:15px;border-radius:8px}
+.fenster-knoepfe button:hover{background:color-mix(in srgb,var(--ink) 8%,transparent);color:var(--ink)}
+.fenster-knoepfe button.zu:hover{background:#e81123;color:#fff}
+dialog.fenster{resize:both;overflow:hidden;min-width:420px;min-height:200px}
+dialog.fenster>.dlg{height:100%;max-height:none}
+dialog.fenster.gross{width:calc(100vw - 16px)!important;height:calc(100vh - 16px)!important;max-width:none;max-height:none;resize:none}
+dialog.fenster.gross>.dlg{max-height:calc(100vh - 16px)}
+dialog.fenster.gross .dlg-body{max-height:none!important;flex:1}
+dialog.fenster.klein{position:fixed;inset:auto 16px 16px auto;margin:0;width:300px!important;height:auto!important;min-height:0;min-width:0;resize:none;box-shadow:0 10px 30px rgba(10,15,30,.3)}
+dialog.fenster.klein>.dlg>:not(.dlg-head){display:none!important}
+dialog.fenster.klein .dlg-head{border-bottom:0;cursor:pointer}
 </style>
 </head>
 <body>
@@ -335,18 +366,13 @@ dialog{border-radius:16px}
         <button class="kachel" id="docuBtn"><span class="k-icon" aria-hidden="true">📷</span><span><b>Dokumentation</b><small>Berichte mit Fotos per E-Mail senden</small></span></button>
         <button class="kachel" id="formBtn"><span class="k-icon" aria-hidden="true">📋</span><span><b>Formulare</b><small>Prüfprotokoll, Reparaturauftrag, Bestellungen …</small></span></button>
       </div>
-      <div class="drop" id="drop">
-        <div>
-          <strong>Oder Dateien einfach hier hineinziehen</strong>
-          <p class="hint">PDFs und Excel-Dateien, auch mehrere auf einmal. Excel-Dateien werden mit Excel in eine PDF umgewandelt.</p>
-        </div>
-        <div class="row">
-          <input type="file" id="pdfFile" accept="application/pdf,.pdf,.xlsx,.xlsm,.xls,.xlsb" multiple hidden>
-          <button id="mailAll" hidden>Per E-Mail senden</button>
-          <button class="primary" id="printAll" hidden>Drucken</button>
-          <button id="saveAll" hidden>Alle speichern</button>
-        </div>
+      <div class="aktionen row">
+        <input type="file" id="pdfFile" accept="application/pdf,.pdf,.xlsx,.xlsm,.xls,.xlsb" multiple hidden>
+        <button id="mailAll" hidden>✉️ Per E-Mail senden</button>
+        <button id="saveAll" hidden>💾 Alle speichern</button>
+        <button class="primary" id="printAll" hidden>🖨 Drucken</button>
       </div>
+      <div class="drop" id="drop" aria-hidden="true"><div><strong>Loslassen zum Öffnen</strong><p class="hint">PDFs und Excel-Dateien, auch mehrere auf einmal.</p></div></div>
       <div id="docs"></div>
     </main>
   </div>
@@ -1046,7 +1072,7 @@ async function autoPlace(doc){
 function renderAll(){
   const box = $("#docs"); box.innerHTML = "";
   if(!state.docs.length){
-    box.innerHTML = '<div class="doc empty"><b>Noch keine Berichte geöffnet</b><span>Zieh Berichte in das Feld oben oder klick auf „Berichte unterschreiben“. PDF und Excel gehen beide.</span></div>';
+    box.innerHTML = '<p class="hint leer-hinweis">Tipp: Berichte (PDF oder Excel) kannst du auch einfach ins Fenster ziehen.</p>';
   }
   state.docs.forEach(d => box.appendChild(buildDoc(d)));
   updateSaveAll();
@@ -2248,6 +2274,7 @@ async function phonePoll(){
 $("#phoneClose").onclick = () => $("#phoneDlg").close();
 // Erst beim Schließen der Dokumentation den Handy-Link beenden (Reste auf dem Server werden gelöscht)
 $("#docuDlg").addEventListener("close", () => {
+  if($("#docuDlg").dataset.wechsel) return;   // nur minimiert/wiederhergestellt
   const p = phone; phone = null; phoneStatus();
   if(p) fotoApi({event: "fotoende", token: p.token}).catch(() => {});
 });
@@ -2873,6 +2900,28 @@ $("#formNeu").onclick = () => {
   k("Alles leeren", () => formNeu(false));
   k("Abbrechen", () => { e.hidden = true; }, "ghost");
 };
+
+/* Fenster: minimieren, maximieren, schließen (für die großen Fenster) */
+for(const id of ["formDlg", "docuDlg", "helpDlg", "ideasDlg"]){
+  const d = document.getElementById(id); if(!d) continue;
+  const head = d.querySelector(".dlg-head"); if(!head) continue;
+  d.classList.add("fenster");
+  const zu = [...head.querySelectorAll("button")].find(b => /Schließen/.test(b.textContent));
+  const box = document.createElement("div"); box.className = "fenster-knoepfe";
+  const k = (t, title, fn, cls) => { const b = document.createElement("button"); b.type = "button"; b.textContent = t; b.title = title; if(cls) b.className = cls; b.onclick = e => { e.stopPropagation(); fn(); }; box.appendChild(b); return b; };
+  const wechsel = fn => { d.dataset.wechsel = "1"; fn(); setTimeout(() => delete d.dataset.wechsel, 300); };
+  let g;
+  const klein = () => wechsel(() => { d.classList.add("klein"); d.classList.remove("gross"); if(g){ g.textContent = "▢"; g.title = "Maximieren"; } d.close(); d.show(); });
+  const auf = () => wechsel(() => { d.classList.remove("klein"); d.close(); d.showModal(); });
+  k("—", "Minimieren", () => d.classList.contains("klein") ? auf() : klein());
+  g = k("▢", "Maximieren", () => { if(d.classList.contains("klein")) auf(); d.classList.toggle("gross"); g.textContent = d.classList.contains("gross") ? "❐" : "▢"; g.title = d.classList.contains("gross") ? "Verkleinern" : "Maximieren"; });
+  k("✕", "Schließen", () => { d.classList.remove("klein"); if(zu) zu.click(); else d.close(); }, "zu");
+  if(zu) zu.hidden = true;
+  head.appendChild(box);
+  head.addEventListener("dblclick", () => g.click());
+  head.addEventListener("click", () => { if(d.classList.contains("klein")) auf(); });
+  d.addEventListener("close", () => { if(!d.dataset.wechsel) d.classList.remove("klein"); });
+}
 })();
 </script>
 </body>
