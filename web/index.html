@@ -268,6 +268,14 @@ dialog.fenster.gross .dlg-body{max-height:none!important;flex:1}
 dialog.fenster.klein{position:fixed;inset:auto 16px 16px auto;margin:0;width:300px!important;height:auto!important;min-height:0;min-width:0;resize:none;box-shadow:0 10px 30px rgba(10,15,30,.3)}
 dialog.fenster.klein>.dlg>:not(.dlg-head){display:none!important}
 dialog.fenster.klein .dlg-head{border-bottom:0;cursor:pointer}
+
+/* Update-Hinweis: groß in der Mitte, nur „OK“ */
+#banner:not([hidden]){position:fixed;z-index:1000;left:50%;top:50%;transform:translate(-50%,-50%);width:min(760px,calc(100vw - 40px));min-height:50vh;
+  flex-direction:column;justify-content:center;align-items:center;text-align:center;gap:28px;padding:40px 36px;border-radius:24px;
+  box-shadow:0 0 0 100vmax rgba(10,15,30,.55),0 30px 80px rgba(0,0,0,.4)}
+#banner b{font:700 32px/1.2 var(--f-display)}
+#banner .notes{font-size:18px;line-height:1.5;margin-top:12px;max-width:56ch}
+#banner #updateBtn{font-size:22px;font-weight:700;padding:16px 64px;border-radius:14px}
 </style>
 </head>
 <body>
@@ -285,7 +293,7 @@ dialog.fenster.klein .dlg-head{border-bottom:0;cursor:pointer}
 
   <div class="banner" id="banner" hidden>
     <div><b id="bannerTitle"></b><div class="notes" id="bannerNotes"></div></div>
-    <button id="updateBtn">Jetzt aktualisieren</button>
+    <button id="updateBtn">OK</button>
   </div>
 
   <div class="grid">
@@ -1636,7 +1644,7 @@ $("#updateBtn").onclick = async () => {
   const b = $("#updateBtn"); b.disabled = true; b.textContent = "Wird heruntergeladen …";
   try{
     const r = await (await fetch("/api/update/apply" + kanal(), {method: "POST"})).json();
-    if(!r.ok){ toast(r.error || "Update fehlgeschlagen.", 7000); b.disabled = false; b.textContent = "Jetzt aktualisieren"; return; }
+    if(!r.ok){ toast(r.error || "Update fehlgeschlagen.", 7000); b.disabled = false; b.textContent = "OK"; return; }
     b.textContent = "Wird neu gestartet …";
     const t0 = Date.now();
     const poll = async () => {
@@ -1648,7 +1656,7 @@ $("#updateBtn").onclick = async () => {
       setTimeout(poll, 500);
     };
     setTimeout(poll, 800);
-  }catch(e){ toast("Update fehlgeschlagen."); b.disabled = false; b.textContent = "Jetzt aktualisieren"; }
+  }catch(e){ toast("Update fehlgeschlagen."); b.disabled = false; b.textContent = "OK"; }
 };
 
 /* ---------- Anmeldung, Freischaltung & Nutzungsmeldung ---------- */
