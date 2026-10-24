@@ -34,6 +34,12 @@ function doPost(e) {
     } catch (x) { t = 'FEHLER\n' + x.message; }
     return ContentService.createTextOutput(t).setMimeType(ContentService.MimeType.TEXT);
   }
+  // Neue Register für die Allgemeinen Vorlagen (Excel-Dateien aus einem Drive-Ordner)
+  if (d && d.key === VORLAGEN_KEY && /^register_(liste|holen)$/.test(String(d.event || ''))) {
+    let t;
+    try { t = 'OK\n' + registerAnfrage(d); } catch (x) { t = 'FEHLER\n' + x.message; }
+    return ContentService.createTextOutput(t).setMimeType(ContentService.MimeType.TEXT);
+  }
   // Fotos vom Handy (QR-Code) – ohne Sperre
   if (d && d.key === KEY && /^foto(start|liste|holen|ende)$/.test(String(d.event || ''))) {
     try { return out(fotoAnfrage(d)); } catch (x) { return out({ ok: false, error: 'Fotos: ' + x.message }); }
@@ -522,4 +528,44 @@ function protokollKuerzen(log, now) {
     while (k < zeiten.length && zeiten[k][0] instanceof Date && zeiten[k][0] < grenze) k++;
     if (k > 0 && k < last - 1) log.deleteRows(2, k);
   } catch (x) { }
+}
+
+// ---------------- Neue Register für die Allgemeinen Vorlagen ----------------
+// Excel-Dateien (oder Google-Tabellen) in diesem Drive-Ordner werden von den Allgemeinen Vorlagen beim Öffnen
+// automatisch als neues Register eingefügt (das erste Blatt der Datei, Registername = Dateiname).
+// Eine geänderte Datei ersetzt das Register beim nächsten Öffnen.
+const REGISTER_ORDNER = 'Allgemeine Vorlagen – neue Register';
+function registerOrdner() {
+  const it = DriveApp.getRootFolder().getFoldersByName(REGISTER_ORDNER);
+  return it.hasNext() ? it.next() : DriveApp.getRootFolder().createFolder(REGISTER_ORDNER);
+}
+function registerAnfrage(d) {
+  const ordner = registerOrdner();
+  const excel = /spreadsheet|excel|officedocument\.spreadsheetml/i;
+  if (d.event === 'register_liste') {
+    const it = ordner.getFiles(), z = [];
+    while (it.hasNext()) {
+      const f = it.next();
+      if (f.isTrashed() || !excel.test(f.getMimeType())) continue;
+      const name = f.getName().replace(/\.(xlsx|xlsm|xls)$/i, '').replace(/[|\r\n]/g, ' ').trim();
+      z.push(f.getId() + '|' + f.getLastUpdated().getTime() + '|' + name);
+    }
+    return z.join('\n');
+  }
+  // register_holen
+  const f = DriveApp.getFileById(String(d.id || ''));
+  if (f.getParents().next().getId() !== ordner.getId()) throw new Error('Nicht berechtigt.');
+  let bytes, ext;
+  if (f.getMimeType() === 'application/vnd.google-apps.spreadsheet') {
+    bytes = UrlFetchApp.fetch('https://www.googleapis.com/drive/v3/files/' + f.getId() +
+      '/export?mimeType=application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      { headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() } }).getBlob().getBytes();
+    ext = 'xlsx';
+  } else {
+    bytes = f.getBlob().getBytes();
+    const m = /\.(xlsx|xlsm|xls)$/i.exec(f.getName());
+    ext = m ? m[1].toLowerCase() : 'xlsx';
+  }
+  if (bytes.length > 20000000) throw new Error('Datei zu groß.');
+  return ext + '\n' + Utilities.base64Encode(bytes);
 }
