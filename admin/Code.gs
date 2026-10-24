@@ -69,6 +69,7 @@ function handle(d) {
   if (ev === 'adminlist') return adminList(ss, users, log, id, mail);
   if (ev === 'feedbackdelete') return feedbackDelete(ss, users, id, mail, d.code, d.text);
   if (ev === 'adminblock') return adminBlock(users, id, mail, d.code, d.text);
+  if (ev === 'adminuserdelete') return adminUserDelete(users, id, mail, d.code);
   if (ev === 'admindelete') return adminDelete(ss, users, id, mail, d.code, d.text);
   if (ev !== 'check') log.appendRow([now, name, mail, ev, "'" + ver, n]);
   protokollKuerzen(log, now);
@@ -291,6 +292,17 @@ function adminBlock(users, id, mail, targetId, value) {
   const block = String(value) === 'ja';
   users.getRange(row, 8).setValue(block ? 'ja' : '');
   return { ok: true, blocked: block };
+}
+
+// Anmeldung (Zeile in „Nutzer“) löschen – auf dem Rechner muss man sich danach neu anmelden
+function adminUserDelete(users, id, mail, targetId) {
+  if (!isAdmin(users, id, mail)) return { ok: false, error: 'Nur für den Administrator.' };
+  targetId = String(targetId || '');
+  if (!targetId || targetId === id) return { ok: false, error: 'Die eigene Anmeldung dieser App kann nicht gelöscht werden.' };
+  const row = findRow(users, targetId);
+  if (row < 0) return { ok: false, error: 'Anmeldung nicht gefunden.' };
+  users.deleteRow(row);
+  return { ok: true, deleted: true };
 }
 
 function sheet(ss, name, head) {

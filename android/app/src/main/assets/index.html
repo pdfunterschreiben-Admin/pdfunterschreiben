@@ -198,7 +198,7 @@ function shell(){
   $("#app").innerHTML = `<header>
       <h1>PDF Admin <span><button id="reload" aria-label="Aktualisieren">↻ Aktualisieren</button><button id="menu" aria-label="Menü">⋮</button></span></h1>
       <nav role="tablist">
-        <button role="tab" data-t="users" aria-selected="${S.tab === "users"}">Nutzer<span class="n">${S.users.length}</span></button>
+        <button role="tab" data-t="users" aria-selected="${S.tab === "users"}">Nutzer<span class="n">${personenZahl()}</span></button>
         <button role="tab" data-t="listen" aria-selected="${S.tab === "listen"}">Listen<span class="n">${S.listen.length}</span></button>
         <button role="tab" data-t="ideas" aria-selected="${S.tab === "ideas"}">Vorschläge${newIdeas ? `<span class="n">${newIdeas}</span>` : ""}</button>
         <button role="tab" data-t="log" aria-selected="${S.tab === "log"}">Protokoll</button>
@@ -240,6 +240,8 @@ function renderTab(){
   bindFolds(m);
 }
 
+const personKey = u => (u.name || u.email || "").trim().toLowerCase().replace(/\s+/g, " ");
+function personenZahl(){ return new Set(S.users.map(personKey)).size; }
 function userChip(u){
   return u.blocked ? '<span class="chip warn">gesperrt</span>' : u.verified ? '<span class="chip ok">frei</span>' : '<span class="chip">Code offen</span>';
 }
@@ -248,6 +250,7 @@ function userDetails(u){
       <div class="muted">Version ${esc(u.version)} · zuletzt aktiv ${esc(ago(u.last))} · ${u.starts} Starts</div>
       <div class="muted">Erste Anmeldung ${esc(fmt(u.first))}</div>
       ${u.id === me().id ? "" : `<div class="row" style="margin-top:8px;justify-content:flex-end">
+        <button data-deluser="${esc(u.id)}">Löschen</button>
         <button class="${u.blocked ? "" : "danger"}" data-block="${esc(u.id)}" data-v="${u.blocked ? "" : "ja"}">${u.blocked ? "Entsperren" : "Sperren"}</button></div>`}`;
 }
 function usersHtml(){
@@ -258,11 +261,11 @@ function usersHtml(){
   // gleicher Name (z. B. mehrere Rechner oder Remote-Server) -> eine aufklappbare Gruppe
   const groups = new Map();
   for(const u of list){
-    const k = (u.name || u.email || "").trim().toLowerCase().replace(/\s+/g, " ");
+    const k = personKey(u);
     if(!groups.has(k)) groups.set(k, []);
     groups.get(k).push(u);
   }
-  const personen = new Set(S.users.map(u => (u.name || u.email || "").trim().toLowerCase().replace(/\s+/g, " "))).size;
+  const personen = personenZahl();
   const html = [...groups.entries()].map(([k, us]) => {
     if(us.length === 1){
       const u = us[0];
@@ -272,14 +275,38 @@ function usersHtml(){
     const chip = gb === us.length ? '<span class="chip warn">gesperrt</span>' : gb ? `<span class="chip warn">${gb} gesperrt</span>` : us.some(u => u.verified) ? '<span class="chip ok">frei</span>' : '<span class="chip">Code offen</span>';
     return fold("gruppe:" + k, false, `<span>${esc(us[0].name)}</span><span class="chip">${us.length}×</span>${chip}`, esc(ago(us[0].last)),
       `<div class="in"><div class="muted">${us.length} Anmeldungen (z. B. verschiedene Rechner) · zusammen ${starts} Starts</div>
+      <div class="row" style="margin-top:8px;justify-content:flex-end"><button data-keepnewest="${esc(k)}">Nur die neueste behalten</button></div>
       ${us.map((u, i) => `<div class="who"><div style="display:flex;gap:8px;align-items:center"><b>Anmeldung ${i + 1}</b>${userChip(u)}</div>${userDetails(u)}</div>`).join("")}</div>`);
   }).join("");
   return `<input class="search" id="q" type="search" placeholder="Name oder E-Mail suchen" value="${esc(S.q)}">
     <p class="muted">${personen} ${personen === 1 ? "Person" : "Personen"} · ${S.users.length} Anmeldungen${blocked ? ` · ${blocked} gesperrt` : ""}</p>` +
     (list.length ? toolsHtml + html : '<p class="empty">Keine Nutzer gefunden.</p>');
 }
+async function delUsers(list){
+  let ok = true;
+  for(const u of list){
+    const r = await call("adminuserdelete", {code: u.id});
+    if(!r.ok || !r.deleted){ toast(r.error || "Löschen geht erst nach dem Server-Update."); ok = false; break; }
+    S.users = S.users.filter(x => x.id !== u.id);
+  }
+  renderTab();
+  return ok;
+}
 function bindUsers(){
   const q = $("#q");
+  document.querySelectorAll("[data-deluser]").forEach(b => b.onclick = async () => {
+    const u = S.users.find(x => x.id === b.dataset.deluser);
+    if(!confirm(`Diese Anmeldung von ${u.name} löschen?\n\nWird das Programm auf diesem Rechner noch benutzt, muss man sich dort neu anmelden (mit Freischaltcode).`)) return;
+    b.disabled = true; if(await delUsers([u])) toast("Anmeldung gelöscht.");
+  });
+  document.querySelectorAll("[data-keepnewest]").forEach(b => b.onclick = async () => {
+    // die Anmeldung dieser App bleibt immer; von den übrigen bleibt die zuletzt aktive
+    const us = S.users.filter(x => personKey(x) === b.dataset.keepnewest && x.id !== me().id).sort((a, c) => new Date(c.last) - new Date(a.last));
+    const alt = us.slice(1);
+    if(!alt.length) return;
+    if(!confirm(`${alt.length} ältere ${alt.length === 1 ? "Anmeldung" : "Anmeldungen"} von ${us[0].name} löschen? Behalten wird die zuletzt aktive (${ago(us[0].last)}).\n\nAuf Rechnern, die doch noch benutzt werden, muss man sich dann neu anmelden.`)) return;
+    b.disabled = true; if(await delUsers(alt)) toast(`${alt.length} ${alt.length === 1 ? "Anmeldung" : "Anmeldungen"} gelöscht.`);
+  });
   if(q) q.oninput = () => { S.q = q.value; const pos = q.selectionStart; renderTab(); const n = $("#q"); n.focus(); n.setSelectionRange(pos, pos); };
   document.querySelectorAll("[data-block]").forEach(b => b.onclick = async () => {
     const u = S.users.find(x => x.id === b.dataset.block), v = b.dataset.v;
