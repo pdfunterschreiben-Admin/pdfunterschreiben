@@ -265,3 +265,74 @@ func (a *app) handleFormularGeraete(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, map[string]any{"ok": true, "text": t[3:]})
 }
+
+// Neue Register aus dem Drive-Ordner (wie in den Allgemeinen Vorlagen): Liste und „In Excel öffnen“
+func (a *app) handleFormularRegister(w http.ResponseWriter, r *http.Request) {
+	if ReportURL == "" {
+		writeJSON(w, map[string]any{"ok": false, "error": "Kein Server eingerichtet."})
+		return
+	}
+	if r.Method == http.MethodGet {
+		t, err := serverText(map[string]any{"key": "allgemeine-vorlagen-v1", "event": "register_liste"}, 30*time.Second)
+		if err != nil {
+			writeJSON(w, map[string]any{"ok": false, "offline": true, "error": "Keine Verbindung zum Server."})
+			return
+		}
+		t = strings.ReplaceAll(t, "\r", "")
+		if !strings.HasPrefix(t, "OK\n") {
+			writeJSON(w, map[string]any{"ok": false, "error": strings.TrimSpace(strings.TrimPrefix(t, "FEHLER\n"))})
+			return
+		}
+		var liste []map[string]string
+		for _, z := range strings.Split(t[3:], "\n") {
+			f := strings.SplitN(z, "|", 3)
+			if len(f) == 3 && f[0] != "" {
+				liste = append(liste, map[string]string{"id": f[0], "stand": f[1], "name": strings.TrimSpace(f[2])})
+			}
+		}
+		writeJSON(w, map[string]any{"ok": true, "register": liste})
+		return
+	}
+	var req struct {
+		ID   string `json:"id"`
+		Name string `json:"name"`
+	}
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<12)).Decode(&req); err != nil || !regexp.MustCompile(`^[A-Za-z0-9_\-]{10,80}$`).MatchString(req.ID) {
+		writeJSON(w, map[string]any{"ok": false, "error": "Ungültige Anfrage."})
+		return
+	}
+	t, err := serverText(map[string]any{"key": "allgemeine-vorlagen-v1", "event": "register_holen", "id": req.ID}, 60*time.Second)
+	if err != nil {
+		writeJSON(w, map[string]any{"ok": false, "error": "Keine Verbindung zum Server."})
+		return
+	}
+	t = strings.ReplaceAll(t, "\r", "")
+	if !strings.HasPrefix(t, "OK\n") {
+		writeJSON(w, map[string]any{"ok": false, "error": strings.TrimSpace(strings.TrimPrefix(t, "FEHLER\n"))})
+		return
+	}
+	teile := strings.SplitN(t[3:], "\n", 2)
+	ext := strings.ToLower(strings.TrimSpace(teile[0]))
+	if len(teile) < 2 || (ext != "xlsx" && ext != "xlsm" && ext != "xls") {
+		writeJSON(w, map[string]any{"ok": false, "error": "Die Vorlage kam nicht richtig an."})
+		return
+	}
+	data, err := base64.StdEncoding.DecodeString(strings.ReplaceAll(teile[1], "\n", ""))
+	if err != nil || len(data) == 0 {
+		writeJSON(w, map[string]any{"ok": false, "error": "Die Vorlage kam nicht richtig an."})
+		return
+	}
+	name := regexp.MustCompile(`[\\/:*?"<>|]`).ReplaceAllString(strings.TrimSpace(req.Name), " ")
+	if name == "" {
+		name = "Vorlage"
+	}
+	ordner := filepath.Join(os.Getenv("USERPROFILE"), "Documents", "Formulare")
+	_ = os.MkdirAll(ordner, 0o755)
+	pfad := filepath.Join(ordner, name+" "+time.Now().Format("2006-01-02 15-04")+"."+ext)
+	if err := os.WriteFile(pfad, data, 0o644); err != nil {
+		writeJSON(w, map[string]any{"ok": false, "error": "Die Datei konnte nicht gespeichert werden."})
+		return
+	}
+	_ = hidden("rundll32.exe", "url.dll,FileProtocolHandler", pfad).Start()
+	writeJSON(w, map[string]any{"ok": true, "pfad": pfad})
+}

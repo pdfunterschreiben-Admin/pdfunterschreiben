@@ -146,6 +146,7 @@ func (a *app) routes() http.Handler {
 	mux.HandleFunc("/api/formular", a.handleFormular)
 	mux.HandleFunc("/api/formular/typenschild", a.handleFormularTypenschild)
 	mux.HandleFunc("/api/formular/geraete", a.handleFormularGeraete)
+	mux.HandleFunc("/api/formular/register", a.handleFormularRegister)
 	mux.HandleFunc("/api/open", func(w http.ResponseWriter, r *http.Request) {
 		// Nur feste Adressen im Standardbrowser öffnen (dort ist man bei Google angemeldet)
 		links := map[string]string{

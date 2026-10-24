@@ -2469,6 +2469,20 @@ function formRender(){
     b.onclick = () => { formState.akt = g.id; formRender(); };
     $("#formListe").appendChild(b);
   }
+  if(formState.register && formState.register.length){
+    const h = document.createElement("span"); h.className = "hint"; h.style.margin = "10px 2px 2px"; h.textContent = "Weitere Vorlagen"; $("#formListe").appendChild(h);
+    for(const g of formState.register){
+      const b = document.createElement("button"); b.type = "button"; b.textContent = g.name; b.title = "Öffnet eine frische Kopie in Excel";
+      b.onclick = async () => {
+        b.disabled = true; formMeldung("„" + g.name + "“ wird in Excel geöffnet …");
+        try{ const r = await (await fetch("/api/formular/register", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({id: g.id, name: g.name})})).json();
+          formMeldung(r.ok ? "In Excel geöffnet – gespeichert unter Dokumente\\Formulare." : (r.error || "Konnte nicht geöffnet werden."), 8000); }
+        catch(e){ formMeldung("Konnte nicht geöffnet werden."); }
+        b.disabled = false;
+      };
+      $("#formListe").appendChild(b);
+    }
+  }
   const box = $("#formInhalt"); box.innerHTML = "";
   const set = (k, v) => { w[k] = v; formMerken(); };
   for(const a of f.abschnitte){
@@ -2693,7 +2707,10 @@ async function formSpeichern(){
   if(r.xlsx) knopf("Excel speichern …", klick(bytes(r.xlsx), ".xlsx", "Excel-Arbeitsmappe", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"));
 }
 
-$("#formBtn").onclick = () => { formLaden(); formRender(); $("#formDlg").showModal(); };
+$("#formBtn").onclick = () => {
+  formLaden(); formRender(); $("#formDlg").showModal();
+  fetch("/api/formular/register").then(r => r.json()).then(r => { if(r.ok){ formState.register = r.register || []; formRender(); } }).catch(() => {});
+};
 $("#formClose").onclick = () => $("#formDlg").close();
 $("#formSpeichern").onclick = formSpeichern;
 $("#formNeu").onclick = () => {
