@@ -1,4 +1,4 @@
-param(
+﻿param(
   [string]$Image = "",
   [string]$Folder = "",
   [string]$Out = "",
@@ -233,8 +233,8 @@ function Parse-Plate($lines) {
   foreach ($l in $lines) {
     $m = M1 $l 'Ger(ä|a)te-?\s*Nr\.?\s*[:.]?\s*(\d[\d ]{4,}\d)'
     if ($m.Success) { $d['FABRNR'] = ($m.Groups[2].Value -replace '\s+', ' ').Trim(); break }
-    $m = M1 $l '(?:S/N|\bSN\b|Se[rn][il]?(?:al)?\.?\s*(?:No|Nr|#)\.?|Sen\.?\s*No\.?|Serien-?\s*Nr\.?|N\S?\s*s(é|e)rie|Fabr?\.?\s*-?\s*Nr\.?|\bSER\b\.?)\s*[:.#]?\s*([A-Z0-9][A-Z0-9\-/]{3,})'
-    if ($m.Success -and $m.Groups[2].Value -match '\d') { $d['FABRNR'] = $m.Groups[2].Value; break }
+    $m = M1 $l '(?:S/N|\bSN\b|Se[rn][il]?(?:al)?\.?\s*(?:No|Nr|#)\.?|Sen\.?\s*No\.?|Serien-?\s*Nr\.?|N\S?\s*s(é|e)rie|Fabr?\.?\s*-?\s*Nr\.?|\bSER\b\.?)\s*[:.#]?\s*([A-Z0-9][A-Z0-9\-/]*(?: \d{3,}(?![A-Za-z0-9\-/]))*)'
+    if ($m.Success -and $m.Groups[2].Value -match '\d' -and ($m.Groups[2].Value -replace '[^A-Za-z0-9]', '').Length -ge 4) { $d['FABRNR'] = $m.Groups[2].Value.Trim(); break }
   }
   if (-not $d.Contains('FABRNR')) {
     $m = M1 $t '\*\s*(\d{5,14})\s*\*'

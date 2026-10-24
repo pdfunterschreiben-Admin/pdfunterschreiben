@@ -83,8 +83,8 @@ function tsParse(lines0) {
     l = lines[i];
     m = tsM(l, 'Ger(ä|a)te-?\\s*Nr\\.?\\s*[:.]?\\s*(\\d[\\d ]{4,}\\d)');
     if (m.ok) { d.FABRNR = m.g[2].replace(/\s+/g, ' ').trim(); break; }
-    m = tsM(l, '(?:S/N|\\bSN\\b|Se[rn][il]?(?:al)?\\.?\\s*(?:No|Nr|#)\\.?|Sen\\.?\\s*No\\.?|Serien-?\\s*Nr\\.?|N\\S?\\s*s(é|e)rie|Fabr?\\.?\\s*-?\\s*Nr\\.?|\\bSER\\b\\.?)\\s*[:.#]?\\s*([A-Z0-9][A-Z0-9\\-/]{3,})');
-    if (m.ok && /\d/.test(m.g[2])) { d.FABRNR = m.g[2]; break; }
+    m = tsM(l, '(?:S/N|\\bSN\\b|Se[rn][il]?(?:al)?\\.?\\s*(?:No|Nr|#)\\.?|Sen\\.?\\s*No\\.?|Serien-?\\s*Nr\\.?|N\\S?\\s*s(é|e)rie|Fabr?\\.?\\s*-?\\s*Nr\\.?|\\bSER\\b\\.?)\\s*[:.#]?\\s*([A-Z0-9][A-Z0-9\\-/]*(?: \\d{3,}(?![A-Za-z0-9\\-/]))*)');
+    if (m.ok && /\d/.test(m.g[2]) && m.g[2].replace(/[^A-Z0-9]/gi, '').length >= 4) { d.FABRNR = m.g[2].trim(); break; }
   }
   if (!has('FABRNR')) { m = tsM(t, '\\*\\s*(\\d{5,14})\\s*\\*'); if (m.ok) d.FABRNR = m.g[1]; }
   if (!has('FABRNR')) { m = tsM(t, '\\b([A-Z]{3}-SW\\d{6,})'); if (m.ok) d.FABRNR = m.g[1]; }
