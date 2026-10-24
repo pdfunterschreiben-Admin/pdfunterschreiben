@@ -2,7 +2,7 @@
 // Läuft als Apps Script in der Google-Tabelle „PDF Unterschreiben – Nutzer“ und ist als Web-App
 // veröffentlicht (Ausführen als: Ich, Zugriff: Jeder). In KEY steht derselbe Schlüssel wie im
 // GitHub-Secret REPORT_KEY – im Repository steht hier nur ein Platzhalter.
-// Beim Einspielen wird admin/Typenschild.js unten an diese Datei angehängt (ohne die letzte module.exports-Zeile).
+// Beim Einspielen werden admin/Typenschild.js, admin/QrCode.js und admin/Vorlagen.js unten angehängt (jeweils ohne die letzte module.exports-Zeile).
 const KEY = 'HIER_SCHLUESSEL_EINTRAGEN';
 const DOMAIN = 'schlueter-gabelstapler.de';
 const ADMIN_MAILS = ['b.stockey@hotmail.de']; // Admin darf sich mit dieser Adresse anmelden
@@ -32,6 +32,12 @@ function doPost(e) {
       const mime = /^image\/(jpeg|png|gif|bmp|webp)$/.test(String(d.mime || '')) ? d.mime : 'image/jpeg';
       t = 'OK\n' + typenschildAuswerten(googleOcr(b64, mime));
     } catch (x) { t = 'FEHLER\n' + x.message; }
+    return ContentService.createTextOutput(t).setMimeType(ContentService.MimeType.TEXT);
+  }
+  // Allgemeine Vorlagen: Anmeldung, gemeinsame Geräteliste, Typenschild per Handy (Vorlagen.js)
+  if (d && d.key === VORLAGEN_KEY && /^(v_anmelden|v_code|g_holen|g_speichern|ts_start|ts_ergebnis)$/.test(String(d.event || ''))) {
+    let t;
+    try { t = 'OK\n' + vorlagenAnfrage(d); } catch (x) { t = 'FEHLER\n' + x.message; }
     return ContentService.createTextOutput(t).setMimeType(ContentService.MimeType.TEXT);
   }
   // Neue Register für die Allgemeinen Vorlagen (Excel-Dateien aus einem Drive-Ordner)
@@ -487,6 +493,14 @@ function fotoHochladen(token, name, lm, mime, b64, exif) {
 }
 
 function doGet(e) {
+  // Typenschild per Handy (Allgemeine Vorlagen)
+  const ts = String((e && e.parameter && e.parameter.ts) || '').replace(/[^a-f0-9]/g, '');
+  if (ts) {
+    const v = CacheService.getScriptCache().get('ts_' + ts);
+    const html = v === 'WARTEN' ? TS_SEITE.replace('%TOKEN%', ts) : FOTO_ABGELAUFEN.replace('„Fotos vom Handy“', '„Typenschild einlesen“');
+    return HtmlService.createHtmlOutput(html).setTitle('Typenschild fotografieren')
+      .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+  }
   const token = String((e && e.parameter && e.parameter.foto) || '');
   const ok = !!fotoSitzung(token, false);
   const html = ok ? FOTO_SEITE.replace('%TOKEN%', token) : FOTO_ABGELAUFEN;
