@@ -13,8 +13,8 @@ const LISTEN_KEY = 'geraeteliste-v1';
 // Die Excel-Vorlage „Allgemeine Vorlagen“ darf damit NUR Typenschilder lesen lassen.
 const VORLAGEN_KEY = 'allgemeine-vorlagen-v1';
 // true = die Excel-Vorlage „Allgemeine Vorlagen“ bekommt keine Server-Funktionen mehr (abgelöst durch die Service-Mappe)
-const VORLAGEN_AUS = false;
-const VORLAGEN_AUS_TEXT = 'Die Allgemeinen Vorlagen werden nicht mehr verwendet. Bitte die Service-Mappe nutzen (Formulare).';
+const VORLAGEN_AUS = true;
+const VORLAGEN_AUS_TEXT = 'Die Allgemeinen Vorlagen werden nicht mehr verwendet. Bitte die Service-Mappe nutzen (Formulare) und dort auf die neueste Version aktualisieren.';
 
 function doPost(e) {
   let d;
