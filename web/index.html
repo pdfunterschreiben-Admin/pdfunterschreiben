@@ -2804,9 +2804,23 @@ $("#formClose").onclick = () => $("#formDlg").close();
 $("#formSpeichern").onclick = () => formSpeichern(false);
 $("#formDrucken").onclick = () => formSpeichern(true);
 $("#formTdoc").onclick = () => { fetch("/api/open?ziel=tdoc", {method: "POST"}); formMeldung("Die Einrichtungsseite öffnet sich im Browser – dort den roten Knopf in die Lesezeichenleiste ziehen.", 9000); };
+// Kundendaten: bleiben auf Wunsch stehen, wenn für denselben Kunden ein weiterer Auftrag geschrieben wird
+const KUNDE_FELD = /^(Kunden-Nr\.|Kundenname|Straße \/ Hausnummer|PLZ \/ Ort|Ansprechpartner|E-Mail|Telefon|Telefax|Auftraggeber|Name|Adresse|Ort|Endkunde|Je Zeile ein Eintrag)$/;
+function formNeu(behalten){
+  const f = formDef(), alt = formWerte(), neu = formStart(f);
+  if(behalten) for(const a of f.abschnitte) for(const x of a.felder){
+    if(!KUNDE_FELD.test(x.l) || (f.id === "spesen")) continue;
+    for(const z of (Array.isArray(x.z) ? x.z : [x.z])) if(z && alt[z]) neu[z] = alt[z];
+  }
+  formState.daten[formState.akt] = neu; formMerken(); formRender();
+  formMeldung(behalten ? "Neues Formular – die Kundendaten sind stehen geblieben." : "Neues Formular – alles geleert.", 5000);
+}
 $("#formNeu").onclick = () => {
-  if(!confirm(`„${formDef().titel}“ leeren und neu anfangen?`)) return;
-  formState.daten[formState.akt] = formStart(formDef()); formMerken(); formRender();
+  const e = $("#formStatus"); clearTimeout(formMeldT); e.hidden = false; e.textContent = "Neues Formular: ";
+  const k = (t, fn, cls) => { const b = document.createElement("button"); b.type = "button"; b.textContent = t; b.style.marginLeft = "6px"; if(cls) b.className = cls; b.onclick = fn; e.appendChild(b); };
+  k("Kundendaten behalten", () => formNeu(true), "primary");
+  k("Alles leeren", () => formNeu(false));
+  k("Abbrechen", () => { e.hidden = true; }, "ghost");
 };
 })();
 </script>
