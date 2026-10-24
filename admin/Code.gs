@@ -46,6 +46,12 @@ function doPost(e) {
     try { t = 'OK\n' + registerAnfrage(d); } catch (x) { t = 'FEHLER\n' + x.message; }
     return ContentService.createTextOutput(t).setMimeType(ContentService.MimeType.TEXT);
   }
+  // Handy-Seite (GitHub Pages, ohne Google-Anmeldung): nur mit gültigem QR-Code-Token
+  if (d && /^h_(check|foto|ts)$/.test(String(d.event || ''))) {
+    let t;
+    try { t = 'OK\n' + handyAnfrage(d); } catch (x) { t = 'FEHLER\n' + x.message; }
+    return ContentService.createTextOutput(t).setMimeType(ContentService.MimeType.TEXT);
+  }
   // Fotos vom Handy (QR-Code) – ohne Sperre
   if (d && d.key === KEY && /^foto(start|liste|holen|ende)$/.test(String(d.event || ''))) {
     try { return out(fotoAnfrage(d)); } catch (x) { return out({ ok: false, error: 'Fotos: ' + x.message }); }
@@ -446,7 +452,7 @@ function fotoAnfrage(d) {
     const folder = fotoOrdner().createFolder('upload-' + token.slice(0, 8));
     PropertiesService.getScriptProperties().setProperty('foto_' + token,
       JSON.stringify({ exp: Date.now() + FOTO_MIN * 60000, folder: folder.getId() }));
-    return { ok: true, token: token, url: ScriptApp.getService().getUrl() + '?foto=' + token, minuten: FOTO_MIN };
+    return { ok: true, token: token, url: HANDY_URL + '?foto=' + token, minuten: FOTO_MIN };
   }
   const s = fotoSitzung(d.token, true);
   if (!s) return { ok: false, abgelaufen: true, error: 'Der QR-Code ist abgelaufen.' };
@@ -492,6 +498,21 @@ function fotoHochladen(token, name, lm, mime, b64, exif) {
   return true;
 }
 
+// Die Handy-Seite liegt auf GitHub Pages (docs/handy im Repository) und schickt die Fotos per doPost.
+// Über Google (doGet) gab es Fehler, wenn im Handy-Browser mehrere Google-Konten angemeldet sind.
+const HANDY_URL = 'https://pdfunterschreiben-admin.github.io/pdfunterschreiben/handy/';
+function handyAnfrage(d) {
+  const token = String(d.token || '');
+  if (d.event === 'h_check') {
+    if (d.modus === 'ts') return CacheService.getScriptCache().get('ts_' + token.replace(/[^a-f0-9]/g, '')) === 'WARTEN' ? '1' : '0';
+    return fotoSitzung(token, false) ? '1' : '0';
+  }
+  if (d.event === 'h_foto') { fotoHochladen(token, d.name, d.lm, d.mime, d.b64, d.exif); return '1'; }
+  if (d.event === 'h_ts') return tsFoto(token, d.b64, d.mime) ? '1' : '0';
+  throw new Error('Unbekannte Anfrage.');
+}
+
+// alte Handy-Seite über Google (für QR-Codes, die noch auf script.google.com zeigen)
 function doGet(e) {
   // Typenschild per Handy (Allgemeine Vorlagen)
   const ts = String((e && e.parameter && e.parameter.ts) || '').replace(/[^a-f0-9]/g, '');

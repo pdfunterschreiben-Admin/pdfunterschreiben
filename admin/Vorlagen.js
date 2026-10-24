@@ -102,7 +102,7 @@ function vorlagenAnfrage(d) {
     if (ev === 'ts_start') {
       const token = Utilities.getUuid().replace(/-/g, '').slice(0, 24);
       CacheService.getScriptCache().put('ts_' + token, 'WARTEN', 1200);
-      const url = ScriptApp.getService().getUrl() + '?ts=' + token;
+      const url = HANDY_URL + '?ts=' + token;
       return token + '\n' + url + '\n' + qrBmpBase64(url, 6);
     }
     if (ev === 'ts_ergebnis') {
@@ -118,7 +118,10 @@ function tsFoto(token, b64, mime) {
   token = String(token || '').replace(/[^a-f0-9]/g, '');
   const c = CacheService.getScriptCache(), v = c.get('ts_' + token);
   if (v === null) throw new Error('Der QR-Code ist abgelaufen. Bitte in Excel nochmal auf „Typenschild einlesen“ klicken.');
-  if (v !== 'WARTEN') throw new Error('Für diesen QR-Code wurde schon ein Foto geschickt.');
+  if (v !== 'WARTEN') {
+    if (v.indexOf('OK') === 0) return true;   // schon gelesen (z. B. zweiter Versuch nach Verbindungsabbruch)
+    throw new Error(v === 'LIEST' ? 'Das Foto wird schon gelesen – bitte kurz warten und in Excel nachsehen.' : 'Für diesen QR-Code wurde schon ein Foto geschickt.');
+  }
   b64 = String(b64 || '');
   if (b64.length < 100 || b64.length > 15000000) throw new Error('Kein gültiges Foto.');
   c.put('ts_' + token, 'LIEST', 1200);
