@@ -52,6 +52,12 @@ function doPost(e) {
     try { t = 'OK\n' + handyAnfrage(d); } catch (x) { t = 'FEHLER\n' + x.message; }
     return ContentService.createTextOutput(t).setMimeType(ContentService.MimeType.TEXT);
   }
+  // Service-Mappe: gemeinsame Geräteliste (Formulare)
+  if (d && d.key === KEY && /^g_(holen|speichern)$/.test(String(d.event || ''))) {
+    let t;
+    try { t = 'OK\n' + vorlagenAnfrage(d, true); } catch (x) { t = 'FEHLER\n' + x.message; }
+    return ContentService.createTextOutput(t).setMimeType(ContentService.MimeType.TEXT);
+  }
   // Fotos vom Handy (QR-Code) – ohne Sperre
   if (d && d.key === KEY && /^foto(start|liste|holen|ende)$/.test(String(d.event || ''))) {
     try { return out(fotoAnfrage(d)); } catch (x) { return out({ ok: false, error: 'Fotos: ' + x.message }); }

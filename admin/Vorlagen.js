@@ -29,9 +29,10 @@ function vFrei(vid) {
   return true;
 }
 
-function vorlagenAnfrage(d) {
+// programm: Anfrage kommt von der Service-Mappe (mit dem Programm-Schlüssel, Nutzer schon angemeldet)
+function vorlagenAnfrage(d, programm) {
   const ev = String(d.event || ''), vid = clean(d.vid, 64);
-  if (!/^[A-Za-z0-9\-]{16,64}$/.test(vid)) throw new Error('Ungültige Vorlagen-ID.');
+  if (!programm && !/^[A-Za-z0-9\-]{16,64}$/.test(vid)) throw new Error('Ungültige Vorlagen-ID.');
   const lock = LockService.getScriptLock();
   lock.waitLock(20000);
   try {
@@ -63,7 +64,7 @@ function vorlagenAnfrage(d) {
       s.getRange(r, 5).setValue(new Date());
       return 'FREI';
     }
-    if (!vFrei(vid)) return 'NICHT_FREI';
+    if (!programm && !vFrei(vid)) return 'NICHT_FREI';
 
     if (ev === 'g_holen') {
       const g = sheet(SpreadsheetApp.getActiveSpreadsheet(), V_GERAETE, V_GERAETE_KOPF);
@@ -81,7 +82,7 @@ function vorlagenAnfrage(d) {
     if (ev === 'g_speichern') {
       const g = sheet(SpreadsheetApp.getActiveSpreadsheet(), V_GERAETE, V_GERAETE_KOPF);
       const zeilen = Array.isArray(d.geraete) ? d.geraete.slice(0, 500) : [];
-      const s = vNutzerBlatt(), wer = s.getRange(vZeile(s, vid), 1).getValue();
+      const s = vNutzerBlatt(), wer = programm ? clean(d.name, 100) : s.getRange(vZeile(s, vid), 1).getValue();
       const last = g.getLastRow(), keys = last >= 2 ? g.getRange(2, 1, last - 1, 1).getValues().map(function (r) { return vNorm(r[0]); }) : [];
       let n = 0;
       zeilen.forEach(function (f) {

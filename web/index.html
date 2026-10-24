@@ -174,6 +174,27 @@ dialog::backdrop{background:rgba(10,15,30,.55)}
 .crop-prev{height:70px;min-width:120px;border:1px solid var(--line);border-radius:6px;background:#fff;display:grid;place-items:center;padding:6px}
 .crop-prev img{max-height:100%;max-width:220px}
 @media (prefers-reduced-motion:no-preference){.doc{animation:in .2s ease-out}@keyframes in{from{transform:translateY(4px)}to{transform:none}}}
+#formDlg{width:min(1040px,calc(100vw - 32px))}
+#formDlg .dlg-body{max-height:calc(100vh - 190px);overflow:auto}
+.form-liste{display:flex;flex-direction:column;gap:4px;min-width:200px;position:sticky;top:0}
+.form-liste button{text-align:left}
+.form-liste button[aria-current="true"]{background:var(--accent,#c8102e);color:#fff;border-color:transparent}
+.form-inhalt{flex:1;display:flex;flex-direction:column;gap:14px;min-width:0}
+.form-sek{display:flex;flex-direction:column;gap:8px;border:1px solid var(--line,#ddd);border-radius:10px;padding:12px 14px}
+.form-sek>strong{font-size:14px}
+.form-felder{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:8px 12px}
+.form-felder label,.form-voll{display:flex;flex-direction:column;gap:3px;font-size:13px}
+.form-felder input,.form-felder select,.form-voll textarea,.form-tab input{font:inherit;padding:6px 8px;border:1px solid var(--line,#ccc);border-radius:6px;background:var(--bg,#fff);color:inherit;min-width:0}
+.form-voll textarea{min-height:58px;resize:vertical}
+.form-kreuze{display:flex;flex-wrap:wrap;gap:6px 16px}
+.form-kreuze label{display:flex;gap:6px;align-items:center;font-size:13px}
+.form-tab{width:100%;border-collapse:collapse;font-size:13px}
+.form-tab th{text-align:left;font-weight:600;padding:2px 4px}
+.form-tab td{padding:2px 4px}.form-tab input{width:100%;box-sizing:border-box}
+.form-tab td:first-child{width:70px}.form-tab td:nth-child(2){width:170px}
+.form-tools{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.form-qr{display:flex;gap:12px;align-items:center}.form-qr img{width:150px;height:150px;image-rendering:pixelated}
+@media (max-width:720px){#formDlg .dlg-body{flex-direction:column}.form-liste{flex-direction:row;flex-wrap:wrap;position:static}}
 </style>
 </head>
 <body>
@@ -272,6 +293,7 @@ dialog::backdrop{background:rgba(10,15,30,.55)}
         <div class="row">
           <button id="openBtn">Dateien öffnen</button>
           <button id="docuBtn">Dokumentation</button>
+          <button id="formBtn">Formulare</button>
           <input type="file" id="pdfFile" accept="application/pdf,.pdf,.xlsx,.xlsm,.xls,.xlsb" multiple hidden>
           <button id="mailAll" hidden>Per E-Mail senden</button>
           <button class="primary" id="printAll" hidden>Drucken</button>
@@ -345,6 +367,21 @@ dialog::backdrop{background:rgba(10,15,30,.55)}
   </form>
 </dialog>
 
+<dialog id="formDlg">
+  <form method="dialog" class="dlg" id="formForm" onsubmit="return false">
+    <div class="dlg-head"><strong>Formulare</strong><button type="button" class="ghost" id="formClose">Schließen</button></div>
+    <div class="dlg-body" style="display:flex;gap:16px;align-items:flex-start">
+      <nav id="formListe" class="form-liste"></nav>
+      <div id="formInhalt" class="form-inhalt"></div>
+    </div>
+    <div class="dlg-foot row" style="gap:8px;justify-content:flex-end;flex-wrap:wrap">
+      <button type="button" class="ghost" id="formNeu">Neues Formular</button>
+      <label class="row" style="gap:4px"><input type="checkbox" id="formAlsXlsx"> Excel</label>
+      <label class="row" style="gap:4px"><input type="checkbox" id="formAlsPdf" checked> PDF</label>
+      <button type="button" class="primary" id="formSpeichern">Speichern …</button>
+    </div>
+  </form>
+</dialog>
 <dialog id="phoneDlg">
   <form method="dialog" class="dlg">
     <div class="dlg-head"><strong>Fotos vom Handy</strong><button type="button" class="ghost" id="phoneClose">Fertig</button></div>
@@ -2291,6 +2328,315 @@ function initFold(){
     if(i.updates){ $("#checkBtn").hidden = false; checkUpdates(false); }
   }catch(e){}
 })();
+/* ================= Formulare (aus den Allgemeinen Vorlagen) ================= */
+// Feldarten: text, datum, flaeche (mehrzeilig), wahl (Liste), kreuz (Ankreuzkästchen der Vorlage, name = Excel-Name),
+// x (Zelle bekommt ein „X“), xeins (nur eins aus mehreren X-Zellen), zeilen (mehrere Zellen untereinander), tabelle.
+const HEUTE = () => { const d = new Date(); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); };
+const TECHNIKER = () => (state.user && state.user.name) || "";
+const FORMULARE = [
+  {id: "pruefung", titel: "Prüfung elektr. Geräte", blatt: "Prüfung elektr. Geräte", typenschild: true, abschnitte: [
+    {titel: "Auftrag", felder: [
+      {t: "text", z: "A3", l: "Kunden-Nr."}, {t: "text", z: "H3", l: "Prüfprotokoll-Nr."}, {t: "datum", z: "O3", l: "Datum", d: HEUTE},
+      {t: "text", z: "A5", l: "Auftraggeber"}, {t: "text", z: "H5", l: "Auftrag-Nr."}]},
+    {titel: "Gerät", werkzeug: "typenschild", felder: [
+      {t: "text", z: "G10", l: "Fahrgestellnummer (Gerät)"}, {t: "text", z: "U10", l: "Servicetechniker", d: TECHNIKER, merken: true},
+      {t: "text", z: "D11", l: "Prüflingsnr."}, {t: "text", z: "L11", l: "Geräteart", d: () => "Ladegerät"},
+      {t: "text", z: "T11", l: "Hersteller", ts: "HERSTELLER"}, {t: "text", z: "F12", l: "Typenbezeichnung", ts: "TYP"},
+      {t: "text", z: "L12", l: "Fabr. Nr.", ts: "FABRNR", geraet: true}, {t: "text", z: "T12", l: "Baujahr", ts: "BAUJAHR"},
+      {t: "text", z: "E13", l: "Schutzklasse", d: () => "1", ts: "SCHUTZKLASSE"}, {t: "text", z: "J13", l: "Nennleistung", ts: "LEISTUNG"},
+      {t: "wahl", z: "K13", l: "Einheit", o: ["A", "W", "kW", "VA", "kVA"], d: () => "A", ts: "EINHEIT"},
+      {t: "text", z: "Q13", l: "Nennspannung (V)", ts: "SPANNUNG"}, {t: "text", z: "W13", l: "Nennstrom (A)", ts: "STROM"}]},
+    {titel: "Prüfung", felder: [
+      {t: "kreuz", n: "Check Box 1", l: "DIN VDE 0701-0702", d: true}, {t: "kreuz", n: "Check Box 2", l: "DGUV V3"},
+      {t: "kreuz", n: "Check Box 5", l: "Erstprüfung"}, {t: "kreuz", n: "Check Box 6", l: "Wiederholungsprüfung", d: true},
+      {t: "kreuz", n: "Check Box 7", l: "Änderung"}, {t: "kreuz", n: "Check Box 8", l: "Instandsetzung"}, {t: "kreuz", n: "Check Box 9", l: "E-Check"}]},
+    {titel: "Beschreibung", felder: [
+      {t: "flaeche", z: "B21", l: "Fehlerbeschreibung"}, {t: "flaeche", z: "O21", l: "Bemerkung"}, {t: "flaeche", z: "B26", l: "Durchgeführte Reparaturarbeiten"}]},
+    {titel: "Besichtigung", felder: [
+      ["Check Box 10", "Kennzeichnungen, die der Sicherheit dienen"], ["Check Box 11", "Anschlussleitungen u. Stecker"],
+      ["Check Box 12", "Zugentlastung, Knickschutz u. Leitungsführung"], ["Check Box 13", "Unzulässige Eingriffe o. Änderungen"],
+      ["Check Box 14", "Kühlöffnungen u. Luftfilter"], ["Check Box 15", "Sicherheitsbeeinträchtigende Verschmutzung o. Korrosion"],
+      ["Check Box 16", "Gehäuse, Schutzabdeckungen"], ["Check Box 17", "Zustand der Isolierungen"],
+      ["Check Box 18", "Anzeichen von Überlastung o. unsachgemäßem Gebrauch"], ["Check Box 19", "Zugängliche Sicherungshalter u. Sicherungseinsätze"],
+      ["Check Box 20", "Befestigungen der Leitungen u. anderer Teile"]].map(([n, l]) => ({t: "kreuz", n, l, d: true}))},
+    {titel: "Messung", felder: [
+      {t: "text", z: "A42", l: "Messpunkt"}, {t: "text", z: "E42", l: "Schutzleiterwiderstand (Ω)"}, {t: "text", z: "I42", l: "Isolationswiderstand (MΩ)"},
+      {t: "text", z: "M42", l: "Schutzleiterstrom (mA)"}, {t: "text", z: "P42", l: "Schutzleiterstrom Zange (mA)"},
+      {t: "text", z: "S42", l: "Netzspannung (V)"}, {t: "text", z: "V42", l: "Funktionsprüfung Strom (A)"}, {t: "text", z: "Y42", l: "Leistung (kW/kVA)"}]},
+    {titel: "Ergebnis", felder: [
+      {t: "kreuz", n: "Check Box 22", l: "Sicherheits- und Funktionsprüfung mängelfrei", d: true},
+      {t: "kreuz", n: "Check Box 23", l: "Aufschriften vorhanden bzw. vervollständigt", d: true},
+      {t: "kreuz", n: "Check Box 24", l: "Nennwerte stimmen mit den Herstellerdaten überein", d: true},
+      {t: "kreuz", n: "Check Box 25", l: "Gerät kann nicht mehr instandgesetzt werden"},
+      {t: "kreuz", n: "Check Box 26", l: "Erhebliche sicherheitstechnische Mängel"},
+      {t: "kreuz", n: "Check Box 27", l: "Brandgefahr"}, {t: "kreuz", n: "Check Box 28", l: "Gefahr durch elektrischen Schlag"},
+      {t: "kreuz", n: "Check Box 29", l: "Mechanische Gefahr"},
+      {t: "kreuz", n: "Check Box 30", l: "Prüfergebnis mängelfrei", d: true}, {t: "kreuz", n: "Check Box 33", l: "Prüfplakette angebracht", d: true},
+      {t: "kreuz", n: "Check Box 31", l: "Entspricht der BetrSichV", d: true}, {t: "kreuz", n: "Check Box 32", l: "Entspricht nicht der BetrSichV"}]}]},
+  {id: "reparatur", titel: "Reparaturauftrag / Kostenvoranschlag", blatt: "Rep.auftrag+Kostenvor.", abschnitte: [
+    {titel: "Auftrag", felder: [
+      {t: "x", z: "G2", l: "Reparaturauftrag"}, {t: "x", z: "I2", l: "Kostenvoranschlag"},
+      {t: "text", z: "E4", l: "Auftragsnummer"}, {t: "datum", z: "R6", l: "Datum", d: HEUTE}]},
+    {titel: "Kunde", felder: [
+      {t: "text", z: "D5", l: "Kundenname"}, {t: "text", z: "D6", l: "Straße / Hausnummer"}, {t: "text", z: "D7", l: "PLZ / Ort"},
+      {t: "text", z: "D8", l: "Ansprechpartner"}, {t: "text", z: "D9", l: "E-Mail"}, {t: "text", z: "Q9", l: "Telefon"}, {t: "text", z: "Q10", l: "Telefax"},
+      {t: "x", z: "E12", l: "vorher anrufen"}, {t: "x", z: "J12", l: "Termin absprechen"}]},
+    {titel: "Gerät", felder: [
+      {t: "text", z: "D14", l: "Servicetechniker", d: TECHNIKER, merken: true}, {t: "text", z: "D15", l: "Fabrikat"}, {t: "text", z: "D16", l: "Type"},
+      {t: "text", z: "D17", l: "Fahrgestell-Nr."}, {t: "text", z: "D18", l: "Motorart (Gas/Diesel)"}, {t: "text", z: "D19", l: "Baujahr"},
+      {t: "text", z: "D20", l: "Getriebe-Nr."}, {t: "text", z: "D21", l: "Motor-Nr."}, {t: "text", z: "D22", l: "Anbaugeräte-Nr."}, {t: "text", z: "D23", l: "Betr. Std."}]},
+    {titel: "Angaben", felder: [
+      {t: "xeins", l: "Zustand der Maschine", o: [["D25", "Stillstand"], ["H25", "bedingt einsatzbereit"], ["N25", "einsatzbereit"]]},
+      {t: "xmehr", l: "Auszuführende Arbeiten", o: [["D28", "Reparatur"], ["F28", "Wartung"], ["H28", "UVV"], ["J28", "ASU"], ["L28", "DGUV V3"], ["N28", "Gewaltschaden"], ["Q28", "Garantie"]]},
+      {t: "xeins", l: "Teile bestellt / bei", o: [["D31", "NEIN"], ["F31", "Daniel"], ["H31", "Jan"], ["J31", "Thorsten"], ["L31", "Maik"], ["N31", "Julian"], ["P31", "Lutz"]]},
+      {t: "xeins", l: "Teile-Anlieferung per", o: [["D34", "Nachtversand"], ["H34", "Paketdienst (2-3 Tage)"], ["N34", "Bereitstellung Fach/Lager"]]},
+      {t: "xeins", l: "Gerät zur Reparatur in die Werkstatt holen", o: [["H37", "Ja"], ["K37", "Nein"]]},
+      {t: "xmehr", l: "", o: [["N37", "Leihgerät erforderlich"]]}]},
+    {titel: "Auszuführende Arbeiten", felder: [{t: "zeilen", l: "Je Zeile ein Punkt", z: ["D40", "B41", "B42", "B43", "B44", "B45", "B46"]}]},
+    {titel: "Ersatzteile", werkzeug: "tdoc", felder: [
+      {t: "text", z: "A48", l: "Arbeitsstunden (V8000)"},
+      {t: "tabelle", l: "Teile", s: [["A", "Stück"], ["D", "Teile-Nr."], ["J", "Bezeichnung / Abmessungen"]],
+        r: [49, 50, 51, 52, 53, 54, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87]}]}]}
+];
+
+const formState = {akt: "pruefung", daten: {}};
+function formLaden(){ try{ formState.daten = JSON.parse(localStorage.getItem("formulare") || "{}") || {}; }catch(e){ formState.daten = {}; } }
+function formMerken(){ try{ localStorage.setItem("formulare", JSON.stringify(formState.daten)); }catch(e){} }
+const formDef = () => FORMULARE.find(f => f.id === formState.akt);
+function formWerte(){ return formState.daten[formState.akt] || (formState.daten[formState.akt] = formStart(formDef())); }
+function formStart(f){
+  const w = {};
+  const merk = (() => { try{ return JSON.parse(localStorage.getItem("formMerk") || "{}"); }catch(e){ return {}; } })();
+  for(const a of f.abschnitte) for(const x of a.felder){
+    if(x.z && typeof x.z === "string") w[x.z] = (x.merken && merk[x.l]) || (x.d ? x.d() : "");
+    if(x.t === "kreuz") w["#" + x.n] = !!x.d;
+  }
+  return w;
+}
+
+function formRender(){
+  const f = formDef(), w = formWerte();
+  $("#formListe").innerHTML = "";
+  for(const g of FORMULARE){
+    const b = document.createElement("button"); b.type = "button"; b.textContent = g.titel;
+    b.setAttribute("aria-current", g.id === f.id ? "true" : "false");
+    b.onclick = () => { formState.akt = g.id; formRender(); };
+    $("#formListe").appendChild(b);
+  }
+  const box = $("#formInhalt"); box.innerHTML = "";
+  const set = (k, v) => { w[k] = v; formMerken(); };
+  for(const a of f.abschnitte){
+    const sek = document.createElement("div"); sek.className = "form-sek";
+    const h = document.createElement("strong"); h.textContent = a.titel; sek.appendChild(h);
+    if(a.werkzeug === "typenschild") sek.appendChild(tsWerkzeug(f, w));
+    if(a.werkzeug === "tdoc") sek.appendChild(tdocWerkzeug(f, w));
+    let felder = null, kreuze = null;
+    for(const x of a.felder){
+      if(x.t === "text" || x.t === "datum" || x.t === "wahl"){
+        if(!felder){ felder = document.createElement("div"); felder.className = "form-felder"; sek.appendChild(felder); }
+        const l = document.createElement("label"); const s = document.createElement("span"); s.textContent = x.l; l.appendChild(s);
+        let i;
+        if(x.t === "wahl"){ i = document.createElement("select"); for(const o of x.o){ const op = document.createElement("option"); op.textContent = o; i.appendChild(op); } }
+        else { i = document.createElement("input"); i.type = x.t === "datum" ? "date" : "text"; }
+        i.value = w[x.z] || ""; i.dataset.zelle = x.z;
+        i.oninput = i.onchange = () => { set(x.z, i.value); if(x.merken){ try{ const m = JSON.parse(localStorage.getItem("formMerk") || "{}"); m[x.l] = i.value; localStorage.setItem("formMerk", JSON.stringify(m)); }catch(e){} } };
+        if(x.geraet) i.addEventListener("change", () => geraetSuchen(f, w, i.value));
+        l.appendChild(i); felder.appendChild(l);
+      } else if(x.t === "flaeche" || x.t === "zeilen"){
+        const l = document.createElement("label"); l.className = "form-voll"; const s = document.createElement("span"); s.textContent = x.l; l.appendChild(s);
+        const ta = document.createElement("textarea");
+        if(x.t === "flaeche"){ ta.value = w[x.z] || ""; ta.oninput = () => set(x.z, ta.value); }
+        else { ta.rows = x.z.length; ta.value = x.z.map(z => w[z] || "").join("\n").replace(/\n+$/, ""); ta.oninput = () => { const z = ta.value.split("\n"); x.z.forEach((c, k) => w[c] = k === x.z.length - 1 ? z.slice(k).join(" ") : (z[k] || "")); formMerken(); }; }
+        l.appendChild(ta); sek.appendChild(l);
+      } else if(x.t === "kreuz" || x.t === "x"){
+        if(!kreuze){ kreuze = document.createElement("div"); kreuze.className = "form-kreuze"; sek.appendChild(kreuze); }
+        const k = x.t === "kreuz" ? "#" + x.n : x.z;
+        const l = document.createElement("label"); const c = document.createElement("input"); c.type = "checkbox";
+        c.checked = x.t === "kreuz" ? !!w[k] : !!w[k]; c.onchange = () => set(k, x.t === "kreuz" ? c.checked : (c.checked ? "X" : ""));
+        l.appendChild(c); l.appendChild(document.createTextNode(x.l)); kreuze.appendChild(l);
+      } else if(x.t === "xeins" || x.t === "xmehr"){
+        kreuze = null;
+        const g = document.createElement("div"); g.className = "col"; g.style.gap = "4px";
+        if(x.l){ const s = document.createElement("span"); s.style.fontSize = "13px"; s.textContent = x.l; g.appendChild(s); }
+        const r = document.createElement("div"); r.className = "form-kreuze";
+        for(const [z, t] of x.o){
+          const l = document.createElement("label"); const c = document.createElement("input"); c.type = "checkbox"; c.checked = !!w[z];
+          c.onchange = () => { if(x.t === "xeins" && c.checked) for(const [z2] of x.o) w[z2] = ""; w[z] = c.checked ? "X" : ""; formMerken(); formRender(); };
+          l.appendChild(c); l.appendChild(document.createTextNode(t)); r.appendChild(l);
+        }
+        g.appendChild(r); sek.appendChild(g);
+      } else if(x.t === "tabelle"){
+        const tab = document.createElement("table"); tab.className = "form-tab";
+        tab.innerHTML = "<thead><tr>" + x.s.map(s => "<th>" + s[1] + "</th>").join("") + "</tr></thead>";
+        const tb = document.createElement("tbody");
+        for(const row of x.r){
+          const tr = document.createElement("tr");
+          for(const [sp] of x.s){
+            const td = document.createElement("td"); const i = document.createElement("input"); const z = sp + row;
+            i.value = w[z] || ""; i.oninput = () => set(z, i.value); td.appendChild(i); tr.appendChild(td);
+          }
+          tb.appendChild(tr);
+        }
+        tab.appendChild(tb); sek.appendChild(tab);
+      }
+    }
+    box.appendChild(sek);
+  }
+}
+
+/* ---- Typenschild ---- */
+function tsWerkzeug(f, w){
+  const d = document.createElement("div"); d.className = "col"; d.style.gap = "8px";
+  const r = document.createElement("div"); r.className = "form-tools";
+  const lab = document.createElement("label"); lab.className = "btn file-btn"; lab.textContent = "📷 Typenschild-Foto wählen …";
+  const inp = document.createElement("input"); inp.type = "file"; inp.accept = "image/*"; lab.appendChild(inp);
+  const hb = document.createElement("button"); hb.type = "button"; hb.textContent = "📱 Typenschild mit dem Handy";
+  const st = document.createElement("span"); st.className = "hint";
+  const qr = document.createElement("div"); qr.className = "form-qr"; qr.hidden = true;
+  r.append(lab, hb, st); d.append(r, qr);
+  inp.onchange = async () => { const file = inp.files[0]; inp.value = ""; if(file) await tsLesen(f, w, new Uint8Array(await file.arrayBuffer()), st); };
+  hb.onclick = () => tsHandy(f, w, st, qr, hb);
+  return d;
+}
+async function tsLesen(f, w, bytes, st){
+  st.textContent = "Typenschild wird gelesen …";
+  try{
+    const r = await (await fetch("/api/formular/typenschild", {method: "POST", body: bytes})).json();
+    if(!r.ok) throw new Error(r.error || "Keine Werte erkannt.");
+    let n = 0;
+    for(const a of f.abschnitte) for(const x of a.felder) if(x.ts){ const v = r.werte[x.ts]; if(v){ w[x.z] = v; n++; } else if(x.ts !== "SCHUTZKLASSE" && x.ts !== "EINHEIT") w[x.z] = ""; }
+    formMerken(); formRender();
+    toast(n ? `Typenschild gelesen: ${n} Werte eingetragen. Bitte kurz prüfen.` : "Auf dem Foto wurden keine Werte erkannt.", 6000);
+    if(n) geraetSpeichern(f, w);
+  }catch(e){ st.textContent = ""; toast("Typenschild: " + (e.message || e), 7000); return; }
+  st.textContent = "";
+}
+async function tsHandy(f, w, st, qr, hb){
+  const api = async (event, extra = {}) => (await fetch("/api/fotos", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({event, ...extra})})).json();
+  hb.disabled = true; st.textContent = "QR-Code wird erstellt …";
+  let s;
+  try{ s = await api("fotostart"); if(!s.ok) throw new Error(s.error); }
+  catch(e){ hb.disabled = false; st.textContent = ""; toast("Handy: " + (e.message || e), 6000); return; }
+  qr.hidden = false;
+  qr.innerHTML = '<img alt="QR-Code"><span class="hint">Mit dem Handy scannen und das Typenschild fotografieren.<br><button type="button" class="ghost">Abbrechen</button></span>';
+  qr.querySelector("img").src = "/api/fotos/qr?u=" + encodeURIComponent(s.url);
+  let aus = false; qr.querySelector("button").onclick = () => { aus = true; };
+  st.textContent = "Warte auf das Foto vom Handy …";
+  const ende = () => { qr.hidden = true; qr.innerHTML = ""; hb.disabled = false; api("fotoende", {token: s.token}).catch(() => {}); };
+  const bis = Date.now() + 20 * 60000;
+  while(!aus && Date.now() < bis && $("#formDlg").open){
+    await new Promise(r => setTimeout(r, 2500));
+    let l; try{ l = await api("fotoliste", {token: s.token}); }catch(e){ continue; }
+    if(!l.ok){ if(l.abgelaufen) break; continue; }
+    if(l.files && l.files.length){
+      const g = await api("fotoholen", {token: s.token, id: l.files[l.files.length - 1].id});
+      ende();
+      if(!g.ok){ toast("Das Foto konnte nicht geholt werden.", 6000); st.textContent = ""; return; }
+      const bin = atob(g.b64), b = new Uint8Array(bin.length); for(let i = 0; i < bin.length; i++) b[i] = bin.charCodeAt(i);
+      await tsLesen(f, w, b, st); return;
+    }
+  }
+  ende(); st.textContent = "";
+}
+
+/* ---- gemeinsame Geräteliste ---- */
+const TS_LISTE = ["FABRNR", "HERSTELLER", "TYP", "BAUJAHR", "SCHUTZKLASSE", "LEISTUNG", "EINHEIT", "SPANNUNG", "STROM"];
+function feldNachTs(f, k){ for(const a of f.abschnitte) for(const x of a.felder) if(x.ts === k) return x.z; return null; }
+async function geraetSpeichern(f, w){
+  const z = TS_LISTE.map(k => w[feldNachTs(f, k)] || "");
+  if((z[0] || "").replace(/\W/g, "").length < 4) return;
+  z.push(w.L11 || "", w.D11 || "");
+  try{ await fetch("/api/formular/geraete", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({event: "g_speichern", geraete: [z]})}); }catch(e){}
+}
+let geraeteCache = null;
+const normNr = v => String(v || "").toUpperCase().replace(/[\s\-\/.]/g, "").replace(/O/g, "0").replace(/[IL]/g, "1");
+async function geraetSuchen(f, w, nr){
+  if(normNr(nr).length < 4) return;
+  try{
+    if(!geraeteCache){ const r = await (await fetch("/api/formular/geraete", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({event: "g_holen", seit: 0})})).json();
+      if(!r.ok) return; geraeteCache = r.text.split("\n").slice(1).map(z => z.split("\t")); }
+    const g = geraeteCache.find(z => normNr(z[0]) === normNr(nr)); if(!g) return;
+    TS_LISTE.forEach((k, i) => { const z = feldNachTs(f, k); if(z && g[i] && !w[z]) w[z] = g[i]; });
+    if(g[9] && !w.L11) w.L11 = g[9]; if(g[10] && !w.D11) w.D11 = g[10];
+    formMerken(); formRender(); toast("Gerät aus der Geräteliste übernommen.");
+  }catch(e){}
+}
+
+/* ---- T-Doc-Ersatzteile aus der Zwischenablage ---- */
+function tdocWerkzeug(f, w){
+  const r = document.createElement("div"); r.className = "form-tools";
+  const b = document.createElement("button"); b.type = "button"; b.textContent = "Ersatzteile aus T-Doc einfügen";
+  const s = document.createElement("span"); s.className = "hint"; s.textContent = "Vorher in T-Doc die Teile mit dem Lesezeichen „T-Doc → Excel“ sammeln.";
+  b.onclick = async () => {
+    let t = ""; try{ t = await navigator.clipboard.readText(); }catch(e){ toast("Die Zwischenablage konnte nicht gelesen werden."); return; }
+    t = String(t).replace(/\r/g, "");
+    if(t.indexOf("TDOC-ERSATZTEILE") !== 0){ toast("In der Zwischenablage sind keine T-Doc-Ersatzteile."); return; }
+    const tab = f.abschnitte.flatMap(a => a.felder).find(x => x.t === "tabelle");
+    const da = new Set(tab.r.map(r => (w["D" + r] || "").trim()).filter(Boolean));
+    let n = 0;
+    for(const z of t.split("\n").slice(1)){
+      const [mg, nr, nm, bm] = z.split("\t"); if(!nr || da.has(nr.trim())) continue;
+      const frei = tab.r.find(r => !w["A" + r] && !w["D" + r] && !w["J" + r]); if(!frei){ toast("Die Ersatzteil-Tabelle ist voll."); break; }
+      w["A" + frei] = mg || "1"; w["D" + frei] = nr.trim(); w["J" + frei] = [nm, bm].filter(Boolean).join(" – "); da.add(nr.trim()); n++;
+    }
+    formMerken(); formRender(); toast(n ? `${n} Ersatzteil(e) eingefügt.` : "Diese Teile stehen schon in der Tabelle.");
+    try{ await navigator.clipboard.writeText("TDOC-EINGEFUEGT"); }catch(e){}
+  };
+  r.append(b, s); return r;
+}
+
+/* ---- Speichern ---- */
+async function formSpeichern(){
+  const f = formDef(), w = formWerte();
+  const xlsx = $("#formAlsXlsx").checked, pdf = $("#formAlsPdf").checked;
+  if(!xlsx && !pdf){ toast("Bitte Excel und/oder PDF auswählen."); return; }
+  const werte = {}, kreuze = {};
+  for(const [k, v] of Object.entries(w)){ if(k[0] === "#") kreuze[k.slice(1)] = !!v; else if(v !== "" && v != null) werte[k] = String(v); }
+  // leere Zellen mit Vorgabe in der Vorlage (z. B. „Ladegerät“) trotzdem überschreiben
+  for(const a of f.abschnitte) for(const x of a.felder) if(x.z && typeof x.z === "string" && !(x.z in werte) && x.d) werte[x.z] = "";
+  if(f.id === "reparatur" && werte.R6) werte.R56 = werte.R6;
+  const btn = $("#formSpeichern"); btn.disabled = true; const alt = btn.textContent; btn.textContent = "Excel füllt das Formular aus …";
+  let r;
+  try{ r = await (await fetch("/api/formular", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({blatt: f.blatt, werte, kreuze, xlsx, pdf})})).json(); }
+  catch(e){ r = {ok: false, error: "Keine Verbindung zum Programm."}; }
+  btn.disabled = false; btn.textContent = alt;
+  if(!r.ok){ toast(r.error || "Das Formular konnte nicht erstellt werden.", 9000); return; }
+  const d = w.O3 || w.R6 || HEUTE();
+  const extra = [w.D5 || w.A5, w.F12 || w.D16, w.L12 || w.D17].filter(Boolean).join(" ").replace(/[\\\/:*?"<>|]/g, " ").trim();
+  const basis = (f.blatt.replace(/\./g, "") + (extra ? " " + extra : "") + " " + d).replace(/\s+/g, " ").trim();
+  const bytes = s => { const b = atob(s), a = new Uint8Array(b.length); for(let i = 0; i < b.length; i++) a[i] = b.charCodeAt(i); return a; };
+  const speichern = async (data, ext, typ, mime) => {
+    const name = basis + ext;
+    if(window.showSaveFilePicker){
+      try{
+        const fh = await showSaveFilePicker({suggestedName: name, id: "formulare", types: [{description: typ, accept: {[mime]: [ext]}}]});
+        const wr = await fh.createWritable(); await wr.write(data); await wr.close(); return fh.name;
+      }catch(e){ if(e && e.name === "AbortError") return null; throw e; }
+    }
+    const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([data], {type: mime})); a.download = name;
+    document.body.appendChild(a); a.click(); a.remove(); return name;
+  };
+  try{
+    const gesp = [];
+    if(r.xlsx){ const n = await speichern(bytes(r.xlsx), ".xlsx", "Excel-Arbeitsmappe", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"); if(n) gesp.push(n); }
+    if(r.pdf){
+      const pb = bytes(r.pdf);
+      const n = await speichern(pb, ".pdf", "PDF-Dokument", "application/pdf"); if(n) gesp.push(n);
+      if(confirm("Das PDF jetzt hier unterschreiben bzw. per E-Mail senden?")){
+        await addDoc(basis + ".pdf", pb, null, null); renderAll(); $("#formDlg").close();
+      }
+    }
+    if(gesp.length) toast("Gespeichert: " + gesp.join(", "), 6000);
+  }catch(e){ toast("Speichern fehlgeschlagen: " + (e.message || e), 7000); }
+}
+
+$("#formBtn").onclick = () => { formLaden(); formRender(); $("#formDlg").showModal(); };
+$("#formClose").onclick = () => $("#formDlg").close();
+$("#formSpeichern").onclick = formSpeichern;
+$("#formNeu").onclick = () => {
+  if(!confirm(`„${formDef().titel}“ leeren und neu anfangen?`)) return;
+  formState.daten[formState.akt] = formStart(formDef()); formMerken(); formRender();
+};
 })();
 </script>
 </body>
