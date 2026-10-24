@@ -2777,6 +2777,13 @@ async function geraeteAnsicht(){
 }
 
 /* ---- T-Doc-Ersatzteile aus der Zwischenablage ---- */
+// Teile-Nr. wie bisher in der Excel-Vorlage: Toyota-Nummern (10/12 Zeichen) → 16070-T8B60-71, sonst „BT“ davor
+function teileNr(v){
+  const t = String(v || "").trim().toUpperCase().replace(/ /g, "");
+  if((t.length === 10 || t.length === 12) && /^[A-Z0-9]+$/.test(t)) return t.slice(0, 5) + "-" + t.slice(5, 10) + (t.length === 12 ? "-" + t.slice(10) : "");
+  if(/^.{5}-.{5}/.test(t) && !/\d-\d{3}$/.test(t)) return t;
+  return t.startsWith("BT") ? t : "BT" + t;
+}
 // „MOTOR, VOLLST.“ → „Motor vollständig“: nur die Bezeichnung, ohne Zusatzangaben, gut lesbar
 const TEIL_ABK = {"VOLLST": "vollständig", "KPL": "komplett", "LI": "links", "RE": "rechts", "HYDR": "hydraulisch", "ELEKTR": "elektrisch"};
 function teilName(t){
@@ -2797,12 +2804,13 @@ function tdocWerkzeug(f, w){
     const tab = f.abschnitte.flatMap(a => a.felder).find(x => x.t === "tabelle");
     const [SA, SN, SB] = tab.s.map(c => c[0]);
     const da = new Set(tabZeilen(tab, w).map(r => (w[SN + r] || "").trim()).filter(Boolean));
+    const schon = n => da.has(teileNr(n));
     let n = 0;
     for(const z of t.split("\n").slice(1)){
-      const [mg, nr, nm, bm] = z.split("\t"); if(!nr || da.has(nr.trim())) continue;
+      const [mg, nr, nm, bm] = z.split("\t"); if(!nr || schon(nr)) continue;
       let frei = tabZeilen(tab, w).find(r => !w[SA + r] && !w[SN + r] && !w[SB + r]);
       if(!frei){ w["#mehr"] = (w["#mehr"] || 0) + 1; frei = tabZeilen(tab, w).pop(); }
-      w[SA + frei] = mg || "1"; w[SN + frei] = nr.trim(); w[SB + frei] = teilName(nm || bm); da.add(nr.trim()); n++;
+      w[SA + frei] = mg || "1"; w[SN + frei] = teileNr(nr); w[SB + frei] = teilName(nm || bm); da.add(teileNr(nr)); n++;
     }
     formMerken(); formRender(); formMeldung(n ? `${n} Ersatzteil(e) eingefügt.` : "Diese Teile stehen schon in der Tabelle.");
     try{ await navigator.clipboard.writeText("TDOC-EINGEFUEGT"); }catch(e){}
