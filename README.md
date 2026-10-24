@@ -2,6 +2,8 @@
 
 Setzt deine Unterschrift automatisch in PDF-Berichte – über dem Feld „Unterschrift Techniker“ (Suchwort frei einstellbar).
 
+Im Ordner [`pptx/`](pptx/README.md) liegt außerdem **PDF zu PowerPoint** (PDF-Präsentation → PowerPoint, Hintergrund per Klick tauschen) – gleicher Aufbau, eigene Releases.
+
 ## Installieren
 
 1. Unter **Releases** (rechts) die neueste `PDF-Unterschreiben-Setup.exe` herunterladen.

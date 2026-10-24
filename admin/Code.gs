@@ -52,7 +52,10 @@ function doPost(e) {
 
 function handle(d) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const users = sheet(ss, 'Nutzer', ['Name', 'E-Mail', 'Rechner-ID', 'Version', 'Erste Anmeldung', 'Zuletzt aktiv',
+  // „PDF zu PowerPoint“ meldet sich mit app: 'pptx' – eigene Nutzerliste, sonst gleicher Ablauf.
+  const pptx = d.app === 'pptx';
+  const APP_NAME = pptx ? 'PDF zu PowerPoint' : 'PDF Unterschreiben & Dokumentation';
+  const users = sheet(ss, pptx ? 'Nutzer PDF zu PowerPoint' : 'Nutzer', ['Name', 'E-Mail', 'Rechner-ID', 'Version', 'Erste Anmeldung', 'Zuletzt aktiv',
     'Freigeschaltet', 'Gesperrt (ja)', 'Starts', 'Gespeichert', 'Gedruckt', 'Per E-Mail']);
   const log = sheet(ss, 'Protokoll', ['Zeit', 'Name', 'E-Mail', 'Ereignis', 'Version', 'Anzahl']);
 
@@ -63,6 +66,7 @@ function handle(d) {
   if (ADMIN_MAILS.indexOf(mail) < 0 && (!/^[a-z0-9.\-]+@/.test(mail) || !mail.endsWith('@' + DOMAIN))) return { ok: false, error: 'Nur E-Mail-Adressen von ' + DOMAIN + ' sind erlaubt.' };
 
   const now = new Date();
+  if (pptx && ['register', 'update', 'resend', 'verify', 'start', 'check'].indexOf(ev) < 0) return { ok: false, error: 'Nicht erlaubt.' };
   if (ev === 'feedbacklist') return feedbackList(ss, users, id, mail);
   if (ev === 'feedback') return feedback(ss, name, mail, ver, d.text);
   if (ev === 'feedbackreply') return feedbackReply(ss, users, id, mail, d.code, d.text);
@@ -71,7 +75,7 @@ function handle(d) {
   if (ev === 'adminblock') return adminBlock(users, id, mail, d.code, d.text);
   if (ev === 'adminuserdelete') return adminUserDelete(users, id, mail, d.code);
   if (ev === 'admindelete') return adminDelete(ss, users, id, mail, d.code, d.text);
-  if (ev !== 'check') log.appendRow([now, name, mail, ev, "'" + ver, n]);
+  if (ev !== 'check') log.appendRow([now, name, mail, ev, "'" + (pptx ? 'PPTX ' : '') + ver, n]);
   protokollKuerzen(log, now);
 
   let row = findRow(users, id);
@@ -89,11 +93,11 @@ function handle(d) {
     users.getRange(row, 7).setValue('nein');
     MailApp.sendEmail({
       to: mail,
-      subject: 'Dein Freischaltcode für PDF Unterschreiben & Dokumentation: ' + code,
-      body: 'Hallo ' + name + ',\n\ndein Freischaltcode für PDF Unterschreiben & Dokumentation lautet:\n\n    ' + code +
+      subject: 'Dein Freischaltcode für ' + APP_NAME + ': ' + code,
+      body: 'Hallo ' + name + ',\n\ndein Freischaltcode für ' + APP_NAME + ' lautet:\n\n    ' + code +
         '\n\nTrag ihn im Programm ein. Der Code ist ' + CODE_MINUTEN + ' Minuten gültig.\n\n' +
-        'Falls du dich nicht angemeldet hast, kannst du diese E-Mail ignorieren.\n\nViele Grüße\nPDF Unterschreiben & Dokumentation',
-      name: 'PDF Unterschreiben & Dokumentation'
+        'Falls du dich nicht angemeldet hast, kannst du diese E-Mail ignorieren.\n\nViele Grüße\n' + APP_NAME,
+      name: APP_NAME
     });
     return { ok: true, sent: true };
   }

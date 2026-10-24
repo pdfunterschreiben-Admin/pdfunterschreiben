@@ -1,0 +1,876 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PDF zu PowerPoint</title>
+<link rel="icon" href="/icon.png">
+<style>
+:root{
+  --paper:#f3f5f9; --sheet:#ffffff; --ink:#18233a; --muted:#5b6880; --line:#d8deea;
+  --pen:#1d3fb8; --pen-soft:#e5ebfb; --ok:#13703a; --ok-soft:#e3f4ea; --warn:#9a4a07; --warn-soft:#fbefdf;
+  --f-display:"Segoe UI Variable Display","Segoe UI",system-ui,sans-serif;
+  --f-body:"Segoe UI Variable Text","Segoe UI",system-ui,sans-serif;
+  --f-mono:"Cascadia Mono",Consolas,ui-monospace,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){:root{
+  --paper:#0f131b; --sheet:#171d29; --ink:#e5e9f2; --muted:#98a3b8; --line:#2a3345;
+  --pen:#86a6ff; --pen-soft:#1c2a4d; --ok:#5ad38c; --ok-soft:#14301f; --warn:#f0b35a; --warn-soft:#352610; color-scheme:dark}}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0}
+body{background:var(--paper);color:var(--ink);font:15px/1.5 var(--f-body);padding:20px 20px 48px}
+.wrap{max-width:1320px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+.top{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;justify-content:space-between}
+h1{font:700 30px/1.1 var(--f-display);margin:0;letter-spacing:-.01em}
+.lead{margin:6px 0 0;color:var(--muted);max-width:70ch}
+.ver{font:12.5px var(--f-mono);color:var(--muted);display:flex;gap:10px;align-items:center}
+.ver button{font:12.5px var(--f-body);padding:4px 8px}
+.banner{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;background:var(--pen);color:#fff;border-radius:10px;padding:12px 16px}
+.banner b{font:600 16px var(--f-display)}
+.banner .notes{font-size:13.5px;opacity:.9;white-space:pre-line;margin-top:2px}
+.banner button{background:#fff;color:#1d3fb8;border-color:#fff;font-weight:600}
+.grid{display:grid;grid-template-columns:340px minmax(0,1fr);gap:20px;align-items:start}
+@media (max-width:900px){.grid{grid-template-columns:minmax(0,1fr)}}
+.panel{background:var(--sheet);border:1px solid var(--line);border-radius:10px;padding:18px;display:flex;flex-direction:column;gap:14px}
+aside{display:flex;flex-direction:column;gap:20px;position:sticky;top:12px}
+@media (max-width:900px){aside{position:static}}
+.step{display:flex;align-items:baseline;gap:10px}
+.step b{font:500 12px var(--f-mono);color:var(--pen);letter-spacing:.06em}
+.step h2{font:600 18px var(--f-display);margin:0}
+.hint{font-size:13px;color:var(--muted);margin:0}
+button,.btn{font:500 14px var(--f-body);border-radius:7px;border:1px solid var(--line);background:var(--sheet);color:var(--ink);
+  padding:8px 13px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;line-height:1.2}
+button:hover,.btn:hover{border-color:var(--pen)}
+button:focus-visible,.btn:focus-within,input:focus-visible{outline:2px solid var(--pen);outline-offset:2px}
+button.primary,.btn.primary{background:var(--pen);border-color:var(--pen);color:var(--sheet)}
+button.primary:hover{filter:brightness(1.08)}
+button:disabled{opacity:.45;cursor:not-allowed}
+button.ghost{border-color:transparent;background:transparent;color:var(--muted);padding:6px 8px}
+button.ghost:hover{color:var(--ink)}
+button.wide{width:100%;justify-content:center}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.col{display:flex;flex-direction:column;gap:10px}
+label.field{display:flex;flex-direction:column;gap:5px;font-size:13px;font-weight:500}
+input[type=text]{font:15px var(--f-body);padding:8px 10px;border:1px solid var(--line);border-radius:7px;background:var(--paper);color:var(--ink);width:100%}
+.check{display:flex;gap:8px;align-items:center;font-size:14px}
+.check input{accent-color:var(--pen);width:16px;height:16px}
+.val{font:13px var(--f-mono);color:var(--muted);font-variant-numeric:tabular-nums}
+.file-btn{position:relative}
+.file-btn input{position:absolute;width:1px;height:1px;opacity:0}
+.chip{display:inline-flex;align-items:center;gap:5px;font-size:12.5px;padding:2px 9px;border-radius:99px;width:fit-content}
+.chip.ok{background:var(--ok-soft);color:var(--ok)}
+.chip.warn{background:var(--warn-soft);color:var(--warn)}
+.chip.info{background:var(--pen-soft);color:var(--pen)}
+main{display:flex;flex-direction:column;gap:14px;min-width:0}
+.drop{border:2px dashed var(--line);border-radius:10px;padding:18px;display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;background:var(--sheet)}
+.drop.over,body.over .drop{border-color:var(--pen);background:var(--pen-soft)}
+.drop strong{font:600 16px var(--f-display)}
+.empty{padding:56px 28px;text-align:center;color:var(--muted);display:flex;flex-direction:column;gap:8px;align-items:center;background:var(--sheet);border:1px solid var(--line);border-radius:10px}
+.empty b{font:600 17px var(--f-display);color:var(--ink)}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}
+.bar .name{font-weight:600;overflow-wrap:anywhere}
+.slides{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px}
+.card{background:var(--sheet);border:2px solid var(--line);border-radius:10px;padding:8px;display:flex;flex-direction:column;gap:6px;cursor:pointer;user-select:none;text-align:left}
+.card:hover{border-color:#9fb2ea}
+.card.sel{border-color:var(--pen);box-shadow:0 0 0 3px var(--pen-soft)}
+.card:focus-visible{outline:2px solid var(--pen);outline-offset:2px}
+.thumb{position:relative;width:100%;overflow:hidden;border-radius:4px;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.15);background-size:cover;background-position:center;container-type:inline-size}
+.thumb img{position:absolute;pointer-events:none;user-select:none}
+.thumb .full{inset:0;width:100%;height:100%}
+.thumb .orig{position:absolute;inset:0;display:grid;place-items:center;color:#6b7690;font-size:13px;background:repeating-linear-gradient(45deg,#eef1f7 0 10px,#e6eaf2 10px 20px)}
+.card .meta{display:flex;justify-content:space-between;align-items:center;gap:6px;font-size:13px}
+.card .meta .chip{max-width:70%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.swatches{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.swatch{width:28px;height:28px;border-radius:50%;padding:0;border:2px solid var(--sheet);box-shadow:0 0 0 1px var(--line)}
+.swatch:hover{box-shadow:0 0 0 2px var(--pen)}
+.colorrow{display:flex;gap:8px;align-items:center}
+.colorrow input[type=color]{width:46px;height:38px;padding:2px;border:1px solid var(--line);border-radius:7px;background:var(--sheet);cursor:pointer}
+.bgbtns{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.bgbtns button{justify-content:center}
+.progress{height:6px;border-radius:99px;background:var(--line);overflow:hidden}
+.progress span{display:block;height:100%;background:var(--pen);width:0;transition:width .15s}
+#toast{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;background:var(--ink);color:var(--paper);padding:10px 16px;border-radius:8px;font-size:14px;max-width:min(560px,calc(100% - 32px));box-shadow:0 6px 20px rgba(0,0,0,.2);z-index:30}
+dialog{border:0;border-radius:12px;padding:0;background:var(--sheet);color:var(--ink);width:min(460px,calc(100vw - 32px));max-height:calc(100vh - 32px);box-shadow:0 20px 60px rgba(0,0,0,.35)}
+dialog::backdrop{background:rgba(10,15,30,.55)}
+#helpDlg{width:min(680px,calc(100vw - 32px))}
+#bigDlg{width:min(1200px,calc(100vw - 32px))}
+.help h3{font:600 15px var(--f-display);margin:14px 0 4px}
+.help h3:first-child{margin-top:0}
+.help p,.help li{margin:0 0 4px;line-height:1.5}
+.help ul{margin:0 0 4px;padding-left:20px}
+.dlg{display:flex;flex-direction:column;max-height:calc(100vh - 32px)}
+.dlg-head,.dlg-foot{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--line)}
+.dlg-foot{border-bottom:0;border-top:1px solid var(--line)}
+.dlg-body{overflow:auto;padding:16px;background:var(--paper)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <div>
+      <h1>PDF zu PowerPoint</h1>
+      <p class="lead">Eine Präsentation als PDF reinziehen – sie wird zur PowerPoint-Datei mit bearbeitbarem Text. Den Hintergrund einzelner oder aller Folien kannst du per Klick austauschen.</p>
+    </div>
+    <div class="ver"><span id="verText">Version …</span><button class="ghost" id="checkBtn" hidden>Nach Updates suchen</button><button id="helpBtn">Anleitung</button></div>
+  </div>
+
+  <div class="banner" id="banner" hidden>
+    <div><b id="bannerTitle"></b><div class="notes" id="bannerNotes"></div></div>
+    <button id="updateBtn">Jetzt aktualisieren</button>
+  </div>
+
+  <div class="grid">
+    <aside>
+      <section class="panel" aria-labelledby="h-open">
+        <div class="step"><b>01</b><h2 id="h-open">Präsentation öffnen</h2></div>
+        <label class="btn file-btn primary" style="justify-content:center">PDF oder PowerPoint wählen<input type="file" id="fileIn" accept="application/pdf,.pdf,.pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation"></label>
+        <p class="hint">Oder die Datei einfach ins Fenster ziehen. Eine PowerPoint-Datei (.pptx) kannst du öffnen, um nur den Hintergrund zu ändern.</p>
+        <div id="progWrap" class="col" style="gap:6px" hidden>
+          <div class="progress"><span id="progBar"></span></div>
+          <span class="hint" id="progText"></span>
+        </div>
+        <p class="hint" id="userLine" hidden></p>
+      </section>
+
+      <section class="panel" aria-labelledby="h-bg">
+        <div class="step"><b>02</b><h2 id="h-bg">Hintergrund ändern</h2></div>
+        <span class="chip info" id="selInfo">Keine Folie ausgewählt</span>
+        <div class="colorrow">
+          <input type="color" id="colorIn" value="#1f3864" aria-label="Farbe">
+          <button id="colorApply" style="flex:1;justify-content:center">🎨 Farbe anwenden</button>
+        </div>
+        <div class="swatches" id="swatches" aria-label="Farben"></div>
+        <div class="bgbtns">
+          <label class="btn file-btn" style="justify-content:center">🖼 Bild wählen …<input type="file" id="bgImgIn" accept="image/*"></label>
+          <button id="bgWhite">⬜ Weiß</button>
+          <button id="bgOrig" style="grid-column:1/-1">↺ Original-Hintergrund</button>
+        </div>
+        <p class="hint">Gilt für die markierten Folien. Mehrere markieren mit Strg- oder Umschalt-Klick.</p>
+      </section>
+
+      <section class="panel" aria-labelledby="h-save">
+        <div class="step"><b>03</b><h2 id="h-save">Speichern</h2></div>
+        <label class="check"><input type="checkbox" id="editable" checked> Text als bearbeitbare Textfelder</label>
+        <p class="hint" id="editHint">Ohne Häkchen wird der Text als Bild übernommen – sieht exakt aus wie in der PDF, lässt sich aber nicht ändern.</p>
+        <button class="primary wide" id="saveBtn" disabled>💾 Als PowerPoint speichern</button>
+      </section>
+
+      <section class="panel" id="adminPanel" aria-labelledby="h-adm" hidden>
+        <div class="step"><b>ADMIN</b><h2 id="h-adm">Testkanal</h2></div>
+        <label class="check"><input type="checkbox" id="testChannel"> Testversionen vor allen anderen bekommen</label>
+        <p class="hint">Neue Funktionen kommen hier zuerst an. Erst wenn du sie freigibst, bekommen alle anderen das Update.</p>
+        <p class="hint">Nutzerliste und Sperren: <button class="ghost" id="openSheet" style="padding:0;font-size:13px;text-decoration:underline">Google-Tabelle öffnen</button></p>
+      </section>
+    </aside>
+
+    <main>
+      <div class="drop" id="drop">
+        <div><strong>PDF hier ablegen</strong><div class="hint">Präsentation als PDF – oder eine .pptx, um nur den Hintergrund zu tauschen</div></div>
+        <label class="btn file-btn">Datei wählen<input type="file" id="fileIn2" accept="application/pdf,.pdf,.pptx"></label>
+      </div>
+      <div id="emptyBox" class="empty"><b>Noch keine Präsentation geöffnet</b><span>Die Folien erscheinen hier. Dann Folien anklicken und links den neuen Hintergrund wählen.</span></div>
+      <div id="docBox" class="col" style="gap:12px" hidden>
+        <div class="bar">
+          <div class="col" style="gap:2px;min-width:0"><span class="name" id="docName"></span><span class="hint" id="docInfo"></span></div>
+          <div class="row"><button id="selAll">Alle auswählen</button><button class="ghost" id="selNone">Auswahl aufheben</button></div>
+        </div>
+        <div class="slides" id="slides"></div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<dialog id="helpDlg">
+  <form method="dialog" class="dlg">
+    <div class="dlg-head"><strong>Anleitung</strong><button class="ghost" value="x">Schließen</button></div>
+    <div class="dlg-body help">
+      <h3>1. Präsentation öffnen</h3>
+      <p>Die PDF-Präsentation ins Fenster ziehen oder über „PDF oder PowerPoint wählen“ öffnen. Jede Seite wird zur Folie.</p>
+      <h3>2. Hintergrund ändern</h3>
+      <ul>
+        <li>Folien anklicken (Strg-Klick für mehrere, Umschalt-Klick für einen Bereich, oder „Alle auswählen“).</li>
+        <li><b>Farbe anwenden</b> – Farbe links wählen; benutzte Farben erscheinen als Kreise zum schnellen Wiederverwenden.</li>
+        <li><b>Bild wählen</b> – eigenes Foto oder Firmenhintergrund; wird passend zugeschnitten.</li>
+        <li><b>Original-Hintergrund</b> – macht die Änderung rückgängig.</li>
+      </ul>
+      <p>Doppelklick auf eine Folie zeigt sie groß.</p>
+      <h3>3. Speichern</h3>
+      <p>„Als PowerPoint speichern“ erzeugt eine .pptx-Datei. In PowerPoint ist der Hintergrund ein echter Folienhintergrund (Rechtsklick → „Hintergrund formatieren“). Text, Logos und Formen liegen darüber und bleiben erhalten.</p>
+      <h3>Gut zu wissen</h3>
+      <ul>
+        <li>Als Hintergrund gilt alles, was fast die ganze Seite bedeckt und unter dem Text liegt. Farbige Balken und Logos bleiben stehen.</li>
+        <li>Bei eingescannten PDFs ist die ganze Seite ein Bild – ein neuer Hintergrund ersetzt dort die ganze Seite.</li>
+        <li>Fehlt eine Schriftart auf dem PC, nimmt PowerPoint eine ähnliche.</li>
+        <li>Die Originaldatei wird nie verändert.</li>
+      </ul>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="bigDlg">
+  <form method="dialog" class="dlg">
+    <div class="dlg-head"><strong id="bigTitle">Folie</strong><button class="ghost" value="x">Schließen</button></div>
+    <div class="dlg-body"><div id="bigThumb"></div></div>
+  </form>
+</dialog>
+
+<dialog id="regDlg">
+  <form method="dialog" class="dlg" id="regForm">
+    <div class="dlg-head"><strong>Einmalige Anmeldung</strong></div>
+    <div class="dlg-body col" style="gap:12px">
+      <label class="field">Vor- und Nachname
+        <input type="text" id="regName" autocomplete="name" required placeholder="Max Mustermann">
+      </label>
+      <label class="field">Arbeits-E-Mail
+        <span class="row" style="gap:0;flex-wrap:nowrap">
+          <input type="text" id="regMail" autocomplete="off" required placeholder="m.mustermann" style="border-top-right-radius:0;border-bottom-right-radius:0;min-width:0">
+          <span class="val" id="regDomain" style="border:1px solid var(--line);border-left:0;border-radius:0 7px 7px 0;padding:8px 10px;background:var(--sheet);white-space:nowrap">@schlueter-gabelstapler.de</span>
+        </span>
+      </label>
+      <span class="hint" id="regErr" style="color:var(--warn)" hidden></span>
+    </div>
+    <div class="dlg-foot">
+      <span></span>
+      <button class="primary" value="ok" id="regOk">Anmelden</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="codeDlg">
+  <form method="dialog" class="dlg" id="codeForm">
+    <div class="dlg-head"><strong>Freischaltcode eingeben</strong></div>
+    <div class="dlg-body col" style="gap:12px">
+      <span class="hint" id="codeInfo"></span>
+      <label class="field">Code aus der E-Mail
+        <input type="text" id="codeInput" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="123456" style="font:600 22px var(--f-mono);letter-spacing:.3em">
+      </label>
+      <span class="hint" id="codeErr" style="color:var(--warn)" hidden></span>
+    </div>
+    <div class="dlg-foot">
+      <div class="row"><button type="button" class="ghost" id="codeBack">E-Mail ändern</button><button type="button" class="ghost" id="codeResend">Code neu senden</button></div>
+      <button class="primary" id="codeOk">Freischalten</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="logoutDlg">
+  <form method="dialog" class="dlg">
+    <div class="dlg-head"><strong>Abmelden</strong></div>
+    <div class="dlg-body"><span class="hint">Nach dem Abmelden muss sich jemand neu anmelden, bevor das Programm wieder benutzt werden kann.</span></div>
+    <div class="dlg-foot">
+      <button class="ghost" value="cancel">Abbrechen</button>
+      <button class="primary" value="ok">Abmelden</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="blockDlg">
+  <form method="dialog" class="dlg">
+    <div class="dlg-head"><strong>Programm gesperrt</strong></div>
+    <div class="dlg-body"><span class="hint">Dein Zugang zu PDF zu PowerPoint wurde gesperrt. Bitte wende dich an den Administrator.</span></div>
+    <div class="dlg-foot"><span></span><button type="button" class="primary" id="blockRetry">Erneut prüfen</button></div>
+  </form>
+</dialog>
+
+<div id="toast" role="status" aria-live="polite" hidden></div>
+
+<script>
+/* PDFium (WebAssembly) laden – das Ergebnis steht in window.pdfiumReady bereit */
+var Module = {};
+window.pdfiumReady = new Promise((resolve, reject) => {
+  Module.onRuntimeInitialized = () => resolve(Module);
+  Module.onAbort = e => reject(new Error("PDF-Baustein konnte nicht geladen werden: " + e));
+});
+</script>
+<script src="/lib/pdfium.js"></script>
+<script src="/engine.js"></script>
+<script>
+(() => {
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+/* Verbindung zum Programm halten: schließt man das Fenster, beendet sich das Programm. */
+try { new EventSource("/api/alive"); } catch(e) {}
+
+const state = {user: null, blocked: false, testChannel: true, people: {}, recent: [], editable: true, lastStart: null};
+let saveT;
+function persistNow(){
+  clearTimeout(saveT);
+  const {user, blocked, testChannel, people, recent, editable, lastStart} = state;
+  return fetch("/api/settings", {method: "PUT", headers: {"Content-Type": "application/json"}, body: JSON.stringify({user, blocked, testChannel, people, recent, editable, lastStart})})
+    .catch(() => toast("Einstellungen konnten nicht gespeichert werden."));
+}
+function persist(){ clearTimeout(saveT); saveT = setTimeout(persistNow, 300); }
+
+let toastT;
+function toast(msg, ms = 4500){ const t = $("#toast"); t.textContent = msg; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => t.hidden = true, ms); }
+
+/* ---------- Dokument ---------- */
+// doc = {kind: "pdf"|"pptx", name, bytes, width, height, slides: [...]}
+// slide (pdf) = {n, bg: {blob,url}|null, gfx: {blob,url,box}|null, text: {blob,url}|null, blocks, setting}
+// setting = null (Original) | {type:"color", color:"RRGGBB"} | {type:"image", img: id}
+let doc = null, busy = false;
+const images = new Map();   // id -> {name, blob, url, cropped}
+let imgSeq = 0, lastClick = -1;
+const selected = new Set();
+let engine = null;
+
+async function getEngine(){
+  if(engine) return engine;
+  const M = await window.pdfiumReady;
+  engine = new PdfEngine(M);
+  return engine;
+}
+
+function rgbaToBlob(img, type, quality){
+  const c = document.createElement("canvas");
+  c.width = img.w; c.height = img.h;
+  c.getContext("2d").putImageData(new ImageData(img.data, img.w, img.h), 0, 0);
+  return new Promise(res => c.toBlob(b => res(b), type, quality));
+}
+const tick = () => new Promise(r => setTimeout(r, 0));
+
+function progress(frac, text){
+  $("#progWrap").hidden = frac === null;
+  if(frac !== null){ $("#progBar").style.width = Math.round(frac * 100) + "%"; $("#progText").textContent = text || ""; }
+}
+
+function clearDoc(){
+  if(doc && doc.slides) for(const s of doc.slides) for(const k of ["bg", "gfx", "text"]) if(s[k]) URL.revokeObjectURL(s[k].url);
+  doc = null; selected.clear(); lastClick = -1;
+}
+
+async function openFile(file){
+  if(busy) return toast("Bitte warten, bis die aktuelle Datei fertig ist.");
+  if(locked()) return checkAccess();
+  const name = file.name || "Präsentation";
+  const isPptx = /\.pptx$/i.test(name);
+  const isPdf = /\.pdf$/i.test(name) || file.type === "application/pdf";
+  if(!isPptx && !isPdf) return toast("Bitte eine PDF- oder PowerPoint-Datei (.pptx) wählen.");
+  busy = true; render();
+  try{
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    clearDoc();
+    if(isPptx){
+      const r = await (await fetch("/api/pptx/info", {method: "POST", body: bytes})).json();
+      if(!r.ok) throw new Error(r.error || "Die PowerPoint-Datei konnte nicht gelesen werden.");
+      if(!r.slides) throw new Error("Die PowerPoint-Datei enthält keine Folien.");
+      doc = {kind: "pptx", name, bytes, width: r.width, height: r.height,
+             slides: Array.from({length: r.slides}, (_, i) => ({n: i + 1, setting: null}))};
+    } else {
+      progress(0, "PDF wird geöffnet …");
+      const E = await getEngine();
+      const h = E.open(bytes);
+      try{
+        doc = {kind: "pdf", name, bytes, slides: [], width: 0, height: 0};
+        renderDoc();
+        for(let i = 0; i < h.pages; i++){
+          progress(i / h.pages, `Folie ${i + 1} von ${h.pages} wird zerlegt …`);
+          await tick();
+          const r = E.analyzePage(h, i, 200);
+          const s = {n: i + 1, width: r.width, height: r.height, blocks: r.blocks, setting: null, bg: null, gfx: null, text: null};
+          if(r.bg){ const b = await rgbaToBlob(r.bg, "image/jpeg", 0.92); s.bg = {blob: b, url: URL.createObjectURL(b)}; }
+          if(r.gfx){ const b = await rgbaToBlob(r.gfx, "image/png"); s.gfx = {blob: b, url: URL.createObjectURL(b), box: r.gfx.box}; }
+          if(r.text){ const b = await rgbaToBlob(r.text, "image/png"); s.text = {blob: b, url: URL.createObjectURL(b)}; }
+          if(i === 0){ doc.width = r.width; doc.height = r.height; }
+          doc.slides.push(s);
+          addCard(s);
+        }
+      } finally { E.close(h); }
+      if(!doc.slides.length) throw new Error("Die PDF hat keine Seiten.");
+    }
+    if(!selected.size) selected.add(0);
+    toast(`${doc.slides.length} Folie${doc.slides.length === 1 ? "" : "n"} bereit.`);
+  }catch(e){
+    console.error(e);
+    clearDoc();
+    toast(e.message || "Die Datei konnte nicht geöffnet werden.", 7000);
+  }finally{
+    busy = false; progress(null); renderDoc(); render();
+  }
+}
+
+/* ---------- Anzeige ---------- */
+function settingLabel(st){
+  if(!st) return {txt: "Original", cls: "info"};
+  if(st.type === "color") return st.color === "FFFFFF" ? {txt: "Weiß", cls: "ok"} : {txt: "Farbe #" + st.color, cls: "ok"};
+  const im = images.get(st.img);
+  return {txt: "Bild: " + (im ? im.name : ""), cls: "ok"};
+}
+
+function thumbHTML(s){
+  const w = doc.width || 960, h = doc.height || 540;
+  const st = s.setting;
+  let style = `aspect-ratio:${w}/${h};`, inner = "";
+  if(st && st.type === "color") style += `background:#${st.color};`;
+  else if(st && st.type === "image"){ const im = images.get(st.img); if(im) style += `background-image:url('${im.url}');`; }
+  else if(doc.kind === "pdf" && s.bg) inner += `<img class="full" src="${s.bg.url}" alt="">`;
+  else if(doc.kind === "pptx") inner += `<div class="orig">Original-Hintergrund</div>`;
+  if(doc.kind === "pdf"){
+    if(s.gfx){
+      const [x, y, gw, gh] = s.gfx.box;
+      inner += `<img src="${s.gfx.url}" alt="" style="left:${x / w * 100}%;top:${y / h * 100}%;width:${gw / w * 100}%;height:${gh / h * 100}%">`;
+    }
+    if(s.text) inner += `<img class="full" src="${s.text.url}" alt="">`;
+  }
+  return `<div class="thumb" style="${style}">${inner}</div>`;
+}
+
+function cardHTML(s, i){
+  const l = settingLabel(s.setting);
+  return thumbHTML(s) + `<div class="meta"><span>Folie ${s.n}</span><span class="chip ${l.cls}" title="${esc(l.txt)}">${esc(l.txt)}</span></div>`;
+}
+
+function addCard(s){
+  const i = s.n - 1;
+  const el = document.createElement("div");
+  el.className = "card" + (selected.has(i) ? " sel" : "");
+  el.tabIndex = 0; el.dataset.i = i;
+  el.setAttribute("role", "option");
+  el.innerHTML = cardHTML(s, i);
+  $("#slides").appendChild(el);
+}
+
+function refreshCards(list){
+  for(const i of list){
+    const el = $(`#slides .card[data-i="${i}"]`);
+    if(el) el.innerHTML = cardHTML(doc.slides[i], i);
+  }
+}
+
+function renderDoc(){
+  $("#slides").innerHTML = "";
+  $("#emptyBox").hidden = !!doc;
+  $("#docBox").hidden = !doc;
+  if(!doc) return render();
+  $("#docName").textContent = doc.name;
+  $("#docInfo").textContent = doc.kind === "pptx"
+    ? `PowerPoint-Datei · ${doc.slides.length} Folien · nur der Hintergrund wird geändert`
+    : `PDF · ${doc.slides.length} Folien`;
+  doc.slides.forEach(addCard);
+  render();
+}
+
+function render(){
+  document.querySelectorAll("#slides .card").forEach(el => el.classList.toggle("sel", selected.has(+el.dataset.i)));
+  const n = selected.size;
+  $("#selInfo").textContent = !doc ? "Noch keine Präsentation geöffnet" : n === 0 ? "Keine Folie ausgewählt" : n === doc.slides.length && n > 1 ? `Alle ${n} Folien ausgewählt` : n === 1 ? `Folie ${[...selected][0] + 1} ausgewählt` : `${n} Folien ausgewählt`;
+  const can = !!doc && !busy && n > 0;
+  for(const id of ["#colorApply", "#bgWhite", "#bgOrig"]) $(id).disabled = !can;
+  $("#bgImgIn").disabled = !can;
+  $("#bgImgIn").parentElement.style.opacity = can ? "" : ".45";
+  $("#saveBtn").disabled = !doc || busy;
+  $("#editable").disabled = !doc || doc.kind !== "pdf";
+  $("#editable").checked = state.editable;
+  $("#editHint").hidden = !!doc && doc.kind === "pptx";
+  renderSwatches();
+}
+
+function renderSwatches(){
+  const presets = ["FFFFFF", "000000", "1F3864", "F2F2F2"];
+  const list = [...state.recent, ...presets.filter(p => !state.recent.includes(p))].slice(0, 12);
+  $("#swatches").innerHTML = list.map(c => `<button class="swatch" data-c="${c}" style="background:#${c}" title="#${c}" aria-label="Farbe #${c}"></button>`).join("");
+}
+
+/* ---------- Auswahl ---------- */
+$("#slides").addEventListener("click", e => {
+  const card = e.target.closest(".card"); if(!card) return;
+  const i = +card.dataset.i;
+  if(e.shiftKey && lastClick >= 0){
+    const [a, b] = [Math.min(lastClick, i), Math.max(lastClick, i)];
+    if(!(e.ctrlKey || e.metaKey)) selected.clear();
+    for(let k = a; k <= b; k++) selected.add(k);
+  } else if(e.ctrlKey || e.metaKey){
+    selected.has(i) ? selected.delete(i) : selected.add(i);
+    lastClick = i;
+  } else {
+    selected.clear(); selected.add(i); lastClick = i;
+  }
+  render();
+});
+$("#slides").addEventListener("keydown", e => {
+  const card = e.target.closest(".card"); if(!card) return;
+  if(e.key === " " || e.key === "Enter"){ e.preventDefault(); card.click(); }
+});
+$("#slides").addEventListener("dblclick", e => {
+  const card = e.target.closest(".card"); if(!card) return;
+  const s = doc.slides[+card.dataset.i];
+  $("#bigTitle").textContent = `Folie ${s.n}`;
+  $("#bigThumb").innerHTML = thumbHTML(s);
+  $("#bigDlg").showModal();
+});
+$("#selAll").onclick = () => { if(doc) doc.slides.forEach((_, i) => selected.add(i)); render(); };
+$("#selNone").onclick = () => { selected.clear(); render(); };
+document.addEventListener("keydown", e => {
+  if((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "a" && doc && !e.target.closest("input,textarea,dialog")){
+    e.preventDefault(); $("#selAll").click();
+  }
+});
+
+/* ---------- Hintergrund ---------- */
+function applySetting(st, what){
+  if(!doc || !selected.size) return toast("Bitte zuerst eine oder mehrere Folien anklicken.");
+  const list = [...selected].sort((a, b) => a - b);
+  for(const i of list) doc.slides[i].setting = st ? {...st} : null;
+  refreshCards(list);
+  render();
+  toast(`${what} für ${list.length === doc.slides.length && list.length > 1 ? "alle Folien" : list.length === 1 ? "Folie " + (list[0] + 1) : list.length + " Folien"} – zum Übernehmen speichern.`);
+}
+function useColor(hex){
+  hex = hex.replace("#", "").toUpperCase();
+  state.recent = [hex, ...state.recent.filter(c => c !== hex)].slice(0, 8);
+  persist();
+  applySetting({type: "color", color: hex}, hex === "FFFFFF" ? "Weißer Hintergrund" : "Farbe #" + hex);
+}
+$("#colorApply").onclick = () => useColor($("#colorIn").value);
+$("#swatches").addEventListener("click", e => {
+  const b = e.target.closest(".swatch"); if(!b) return;
+  $("#colorIn").value = "#" + b.dataset.c.toLowerCase();
+  useColor(b.dataset.c);
+});
+$("#bgWhite").onclick = () => applySetting({type: "color", color: "FFFFFF"}, "Weißer Hintergrund");
+$("#bgOrig").onclick = () => applySetting(null, "Original-Hintergrund");
+$("#bgImgIn").addEventListener("change", async e => {
+  const f = e.target.files[0]; e.target.value = "";
+  if(!f) return;
+  if(!selected.size) return toast("Bitte zuerst eine oder mehrere Folien anklicken.");
+  try{
+    const cropped = await coverCrop(f, doc.width || 960, doc.height || 540);
+    const id = "b" + (++imgSeq);
+    images.set(id, {name: f.name, blob: cropped, url: URL.createObjectURL(cropped)});
+    applySetting({type: "image", img: id}, "Hintergrundbild");
+  }catch(err){ toast("Das Bild konnte nicht gelesen werden."); }
+});
+
+// Bild so zuschneiden, dass es die Folie komplett füllt (wie „Ausfüllen“), Transparenz → weiß
+async function coverCrop(file, w, h){
+  const bmp = await createImageBitmap(file);
+  const target = w / h;
+  let sx = 0, sy = 0, sw = bmp.width, sh = bmp.height;
+  if(sw / sh > target){ const nw = sh * target; sx = (sw - nw) / 2; sw = nw; }
+  else { const nh = sw / target; sy = (sh - nh) / 2; sh = nh; }
+  const outW = Math.min(2560, Math.round(sw)), outH = Math.round(outW / target);
+  const c = document.createElement("canvas"); c.width = outW; c.height = outH;
+  const g = c.getContext("2d");
+  g.fillStyle = "#fff"; g.fillRect(0, 0, outW, outH);
+  g.imageSmoothingQuality = "high";
+  g.drawImage(bmp, sx, sy, sw, sh, 0, 0, outW, outH);
+  bmp.close && bmp.close();
+  return new Promise((res, rej) => c.toBlob(b => b ? res(b) : rej(new Error("Bild")), "image/jpeg", 0.92));
+}
+
+/* ---------- Speichern ---------- */
+$("#editable").onchange = e => { state.editable = e.target.checked; persist(); };
+
+async function buildFile(){
+  const fd = new FormData();
+  const usedImg = new Set();
+  const bgOf = (st, s) => {
+    if(st && st.type === "color") return {type: "color", color: st.color};
+    if(st && st.type === "image"){ usedImg.add(st.img); return {type: "image", file: st.img + ".jpg"}; }
+    if(s && s.bg) return {type: "image", file: `s${s.n}_hg.jpg`};
+    return {type: "color", color: "FFFFFF"};
+  };
+  if(doc.kind === "pptx"){
+    const backgrounds = {};
+    doc.slides.forEach((s, i) => { if(s.setting) backgrounds[String(i)] = bgOf(s.setting); });
+    if(!Object.keys(backgrounds).length) throw new Error("Es wurde noch kein Hintergrund geändert.");
+    fd.append("f", new Blob([doc.bytes]), "quelle.pptx");
+    for(const id of usedImg) fd.append("f", images.get(id).blob, id + ".jpg");
+    fd.append("model", JSON.stringify({backgrounds}));
+    return fetch("/api/pptx/recolor", {method: "POST", body: fd});
+  }
+  const editable = state.editable;
+  const slides = doc.slides.map(s => {
+    const out = {bg: bgOf(s.setting, s), pics: [], texts: []};
+    if(!s.setting && s.bg) fd.append("f", s.bg.blob, `s${s.n}_hg.jpg`);
+    // Seiten mit anderer Größe als die erste auf die Foliengröße umrechnen
+    const fx = doc.width / s.width, fy = doc.height / s.height;
+    if(s.gfx){
+      const [x, y, w, h] = s.gfx.box;
+      out.pics.push({file: `s${s.n}_grafik.png`, name: "Grafik", x: x * fx, y: y * fy, w: w * fx, h: h * fy});
+      fd.append("f", s.gfx.blob, `s${s.n}_grafik.png`);
+    }
+    const same = Math.abs(fx - 1) < 0.01 && Math.abs(fy - 1) < 0.01;
+    if(editable && same && s.blocks.length) out.texts = s.blocks;
+    else if(s.text){
+      out.pics.push({file: `s${s.n}_text.png`, name: "Text (Bild)", x: 0, y: 0, w: doc.width, h: doc.height});
+      fd.append("f", s.text.blob, `s${s.n}_text.png`);
+    }
+    return out;
+  });
+  for(const id of usedImg) fd.append("f", images.get(id).blob, id + ".jpg");
+  fd.append("model", JSON.stringify({width: doc.width, height: doc.height, slides}));
+  return fetch("/api/pptx/build", {method: "POST", body: fd});
+}
+
+async function saveBlob(blob, name){
+  const types = [{description: "PowerPoint-Präsentation", accept: {"application/vnd.openxmlformats-officedocument.presentationml.presentation": [".pptx"]}}];
+  if(window.showSaveFilePicker){
+    let fh;
+    try{ fh = await showSaveFilePicker({suggestedName: name, types}); }
+    catch(e){ if(e.name === "AbortError") return false; fh = null; }
+    if(fh){
+      const w = await fh.createWritable();
+      await w.write(blob); await w.close();
+      return fh.name;
+    }
+  }
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 30000);
+  return name;
+}
+
+$("#saveBtn").onclick = async () => {
+  if(!doc || busy) return;
+  if(locked()) return checkAccess();
+  busy = true; render();
+  const btn = $("#saveBtn"), label = btn.textContent;
+  btn.textContent = "Wird erstellt …";
+  try{
+    const r = await buildFile();
+    if(!r.ok) throw new Error((await r.text()).trim() || "Die PowerPoint-Datei konnte nicht erstellt werden.");
+    const blob = await r.blob();
+    const base = doc.name.replace(/\.(pdf|pptx)$/i, "");
+    const saved = await saveBlob(blob, base + (doc.kind === "pptx" ? "_neu" : "") + ".pptx");
+    if(saved) toast(`Gespeichert: ${saved}`);
+  }catch(e){
+    console.error(e);
+    toast(e.message || "Speichern fehlgeschlagen.", 7000);
+  }finally{
+    btn.textContent = label; busy = false; render();
+  }
+};
+
+/* ---------- Dateien wählen / reinziehen ---------- */
+for(const id of ["#fileIn", "#fileIn2"]) $(id).addEventListener("change", e => { const f = e.target.files[0]; e.target.value = ""; if(f) openFile(f); });
+let dragDepth = 0;
+addEventListener("dragenter", e => { if(e.dataTransfer && [...e.dataTransfer.types].includes("Files")){ dragDepth++; document.body.classList.add("over"); } });
+addEventListener("dragleave", () => { dragDepth = Math.max(0, dragDepth - 1); if(!dragDepth) document.body.classList.remove("over"); });
+addEventListener("dragover", e => e.preventDefault());
+addEventListener("drop", e => {
+  e.preventDefault(); dragDepth = 0; document.body.classList.remove("over");
+  const f = e.dataTransfer && e.dataTransfer.files[0];
+  if(f) openFile(f);
+});
+
+$("#helpBtn").onclick = () => $("#helpDlg").showModal();
+
+/* ---------- Updates ---------- */
+// Admins bekommen auf Wunsch Testversionen, bevor sie für alle freigegeben werden.
+const ADMINS = ["b.stockey@hotmail.de"];
+const isAdmin = () => !!(state.user && state.user.verified && ADMINS.includes(state.user.email)
+  && state.user.name.trim().toLowerCase() === "benjamin stockey");
+const kanal = () => (isAdmin() && state.testChannel !== false) ? "?kanal=test" : "";
+async function checkUpdates(manual){
+  try{
+    const r = await (await fetch("/api/update/check" + kanal())).json();
+    if(r.ok && r.available){
+      const t = /-test/.test(r.latest);
+      $("#bannerTitle").textContent = t ? `Testversion ${r.latest} zum Ausprobieren` : `Neue Version ${r.latest} ist da`;
+      $("#bannerNotes").textContent = r.notes || "";
+      $("#banner").hidden = false;
+    } else if(manual){
+      toast(r.ok ? `Du hast die neueste Version (${r.current}).` : "Keine Verbindung zum Update-Server. Bitte Internet prüfen.");
+    }
+  }catch(e){ if(manual) toast("Keine Verbindung zum Update-Server."); }
+}
+$("#checkBtn").onclick = () => checkUpdates(true);
+$("#updateBtn").onclick = async () => {
+  const b = $("#updateBtn"); b.disabled = true; b.textContent = "Wird heruntergeladen …";
+  try{
+    const r = await (await fetch("/api/update/apply" + kanal(), {method: "POST"})).json();
+    if(!r.ok){ toast(r.error || "Update fehlgeschlagen.", 7000); b.disabled = false; b.textContent = "Jetzt aktualisieren"; return; }
+    b.textContent = "Wird neu gestartet …";
+    const t0 = Date.now();
+    const poll = async () => {
+      try{
+        const i = await (await fetch("/api/info", {cache: "no-store"})).json();
+        if(i.version === r.version){ location.reload(); return; }
+      }catch(e){}
+      if(Date.now() - t0 > 30000){ b.textContent = "Bitte Programm neu öffnen"; return; }
+      setTimeout(poll, 500);
+    };
+    setTimeout(poll, 800);
+  }catch(e){ toast("Update fehlgeschlagen."); b.disabled = false; b.textContent = "Jetzt aktualisieren"; }
+};
+
+/* ---------- Anmeldung, Freischaltung ---------- */
+// Wie bei PDF Unterschreiben: einmalig Name + Arbeits-E-Mail, Freischaltcode per E-Mail.
+// Erfasst wird nur, WER das Programm nutzt – nicht, welche Dateien umgewandelt werden.
+const MAIL_DOMAIN = "schlueter-gabelstapler.de";
+let reportOn = false;
+async function call(event, extra = {}){
+  try{
+    return await (await fetch("/api/report", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({event, ...extra})})).json();
+  }catch(e){ return {ok: false, offline: true, error: "Keine Verbindung zum Programm."}; }
+}
+function mailFromName(n){
+  const w = n.trim().toLowerCase()
+    .replace(/ä/g, "ae").replace(/ö/g, "oe").replace(/ü/g, "ue").replace(/ß/g, "ss")
+    .normalize("NFD").replace(/[̀-ͯ]/g, "")
+    .split(/\s+/).map(x => x.replace(/[^a-z0-9-]/g, "")).filter(Boolean);
+  if(w.length < 2) return w.join("");
+  return w[0][0] + "." + w.slice(1).join("-");
+}
+const locked = () => reportOn && (!state.user || !state.user.verified || state.blocked);
+["regDlg", "codeDlg", "blockDlg"].forEach(id => $("#" + id).addEventListener("cancel", e => { if(locked()) e.preventDefault(); }));
+let mailEdited = false;
+$("#regName").addEventListener("input", () => { if(!mailEdited) $("#regMail").value = mailFromName($("#regName").value); });
+// Eine vollständige Adresse (mit @) ist nur für Admins erlaubt – sonst wird die Firmen-Domain angehängt.
+const ADMIN_MAILS = ["b.stockey@hotmail.de"];
+$("#regMail").addEventListener("input", () => {
+  mailEdited = true;
+  const v = $("#regMail").value.trim().toLowerCase();
+  if(v.endsWith("@" + MAIL_DOMAIN)) $("#regMail").value = v.slice(0, -(MAIL_DOMAIN.length + 1));
+  $("#regDomain").hidden = $("#regMail").value.includes("@");
+});
+const regErr = m => { $("#regErr").textContent = m; $("#regErr").hidden = !m; };
+const codeErr = m => { $("#codeErr").textContent = m; $("#codeErr").hidden = !m; };
+$("#regForm").addEventListener("submit", async e => {
+  e.preventDefault();
+  const name = $("#regName").value.trim().replace(/\s+/g, " ");
+  const local = $("#regMail").value.trim().toLowerCase();
+  if(name.split(" ").length < 2) return regErr("Bitte Vor- und Nachnamen eintragen.");
+  let email;
+  if(local.includes("@")){
+    if(!ADMIN_MAILS.includes(local)) return regErr("Bitte nur den Teil vor dem @ eintragen – es gilt immer die Arbeits-E-Mail @" + MAIL_DOMAIN + ".");
+    email = local;
+  } else {
+    if(!/^[a-z0-9]+([.-][a-z0-9]+)*\.[a-z0-9]+([.-][a-z0-9]+)*$/.test(local)) return regErr("Die E-Mail hat die Form v.nachname@" + MAIL_DOMAIN + ".");
+    email = `${local}@${MAIL_DOMAIN}`;
+  }
+  // Jede Person behält ihre eigene ID – auch wenn sich mehrere Personen an einem Rechner abwechseln.
+  const people = state.people = state.people || {};
+  const prev = state.user;
+  if(prev && prev.email) people[prev.email] = {id: prev.id, name: prev.name};
+  const known = people[email];
+  const id = (prev && prev.email === email && prev.id) || (known && known.id) || (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(36).slice(2));
+  const same = prev && prev.verified && prev.email === email;
+  if(!prev || prev.email !== email) state.blocked = false;
+  state.user = {id, name, email, verified: same || !reportOn};
+  state.lastStart = new Date().toISOString().slice(0, 10);
+  await persistNow(); renderUser();
+  if(!reportOn || same){ $("#regDlg").close(); if(same) call("update"); return; }
+  $("#regOk").disabled = true; regErr("");
+  // Schon einmal an diesem Rechner freigeschaltet? Dann ohne neuen Code zurückwechseln.
+  const r = await call(known ? "update" : "register");
+  $("#regOk").disabled = false;
+  if(r.ok && r.verified){
+    state.user.verified = true; state.blocked = !!r.blocked; await persistNow(); renderUser();
+    $("#regDlg").close(); if(state.blocked) $("#blockDlg").showModal(); else toast(`Angemeldet als ${name}.`); return;
+  }
+  if(!r.ok) return regErr(r.error || "Anmeldung fehlgeschlagen.");
+  $("#regDlg").close(); openCode(false);
+});
+function openRegistration(){
+  regErr("");
+  $("#regName").value = state.user ? state.user.name : "";
+  $("#regMail").value = state.user ? (state.user.email.endsWith("@" + MAIL_DOMAIN) ? state.user.email.split("@")[0] : state.user.email) : "";
+  $("#regDomain").hidden = $("#regMail").value.includes("@");
+  mailEdited = !!state.user;
+  if(!$("#regDlg").open) $("#regDlg").showModal();
+}
+async function openCode(send){
+  codeErr(""); $("#codeInput").value = "";
+  $("#codeInfo").textContent = `Wir haben einen 6-stelligen Code an ${state.user.email} geschickt. Er ist 30 Minuten gültig. Schau auch im Spam-Ordner nach.`;
+  if(!$("#codeDlg").open) $("#codeDlg").showModal();
+  if(send){
+    const r = await call("resend");
+    if(!r.ok) codeErr(r.error || "Der Code konnte nicht gesendet werden.");
+  }
+}
+$("#codeBack").onclick = () => { $("#codeDlg").close(); openRegistration(); };
+$("#codeResend").onclick = async () => {
+  $("#codeResend").disabled = true; codeErr("");
+  const r = await call("resend");
+  $("#codeResend").disabled = false;
+  codeErr(r.ok ? "" : (r.error || "Der Code konnte nicht gesendet werden."));
+  if(r.ok) toast("Neuer Code ist unterwegs.");
+};
+$("#codeForm").addEventListener("submit", async e => {
+  e.preventDefault();
+  const code = $("#codeInput").value.replace(/\D/g, "");
+  if(code.length !== 6) return codeErr("Der Code hat 6 Ziffern.");
+  $("#codeOk").disabled = true;
+  const r = await call("verify", {code});
+  $("#codeOk").disabled = false;
+  if(!r.ok || !r.verified) return codeErr(r.error || "Der Code stimmt nicht.");
+  state.user.verified = true; state.blocked = !!r.blocked;
+  await persistNow(); renderUser();
+  $("#codeDlg").close();
+  if(state.blocked) $("#blockDlg").showModal(); else toast("Freigeschaltet – viel Spaß mit dem Programm!");
+});
+$("#blockRetry").onclick = async () => {
+  const r = await call("check");
+  if(r.ok && !r.blocked){ state.blocked = false; persist(); $("#blockDlg").close(); toast("Zugang ist wieder freigegeben."); }
+  else toast(r.ok ? "Der Zugang ist weiterhin gesperrt." : (r.error || "Keine Verbindung."));
+};
+function renderAdmin(){
+  $("#adminPanel").hidden = !isAdmin();
+  $("#testChannel").checked = state.testChannel !== false;
+  const v = $("#verText").dataset.v;
+  if(v) $("#verText").innerHTML = `Version ${esc(v)}` + (/-test/.test(v) ? ' <span class="chip warn">Testversion</span>' : "");
+}
+$("#openSheet").onclick = () => fetch("/api/open?ziel=tabelle", {method: "POST"}).catch(() => {});
+$("#testChannel").onchange = e => { state.testChannel = e.target.checked; persist(); $("#banner").hidden = true; checkUpdates(true); };
+function renderUser(){
+  renderAdmin();
+  const el = $("#userLine");
+  if(!state.user){ el.hidden = true; return; }
+  el.hidden = false;
+  el.innerHTML = `Angemeldet als ${esc(state.user.name)} (${esc(state.user.email)}) · <button class="ghost" id="userChange" style="padding:0;font-size:13px;text-decoration:underline">ändern</button> · <button class="ghost" id="userLogout" style="padding:0;font-size:13px;text-decoration:underline">abmelden</button>`;
+  $("#userChange").onclick = openRegistration;
+  $("#userLogout").onclick = () => $("#logoutDlg").showModal();
+}
+$("#logoutDlg").addEventListener("close", async () => {
+  if($("#logoutDlg").returnValue !== "ok") return;
+  if(state.user && state.user.email) (state.people = state.people || {})[state.user.email] = {id: state.user.id, name: state.user.name};
+  state.user = null; state.blocked = false; state.lastStart = null;
+  await persistNow(); renderUser();
+  toast("Abgemeldet.");
+  if(reportOn) openRegistration();
+});
+// Sperre wird bei jedem Start und danach alle 10 Minuten geprüft. Ohne Internet gilt der letzte bekannte Stand.
+let accessTimer = null;
+async function checkAccess(){
+  if(!reportOn) return;
+  if(!state.user) return openRegistration();
+  if(!state.user.verified) return openCode(true);
+  if(state.blocked) $("#blockDlg").showModal();
+  await refreshBlock("start");
+  if(!accessTimer) accessTimer = setInterval(() => refreshBlock("check"), 10 * 60 * 1000);
+}
+async function refreshBlock(event){
+  if(!state.user || !state.user.verified) return;
+  const r = await call(event);
+  if(!r.ok) return;
+  const was = !!state.blocked; state.blocked = !!r.blocked;
+  if(was !== state.blocked) persist();
+  if(state.blocked && !$("#blockDlg").open) $("#blockDlg").showModal();
+  if(!state.blocked && $("#blockDlg").open){ $("#blockDlg").close(); toast("Zugang ist wieder freigegeben."); }
+}
+
+/* ---------- Start ---------- */
+(async () => {
+  try{
+    const s = await (await fetch("/api/settings", {cache: "no-store"})).json();
+    for(const k of ["user", "blocked", "testChannel", "people", "recent", "editable", "lastStart"]) if(s[k] !== undefined && s[k] !== null) state[k] = s[k];
+  }catch(e){}
+  renderDoc(); renderUser();
+  window.pdfiumReady.catch(e => toast(e.message, 10000));
+  try{
+    const i = await (await fetch("/api/info", {cache: "no-store"})).json();
+    $("#verText").dataset.v = i.version;
+    reportOn = !!i.report; renderAdmin(); checkAccess();
+    if(i.updates){ $("#checkBtn").hidden = false; checkUpdates(false); }
+  }catch(e){}
+})();
+})();
+</script>
+</body>
+</html>

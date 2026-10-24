@@ -1,0 +1,127 @@
+# PDF zu PowerPoint – gleiche zwei Kanäle wie PDF Unterschreiben, aber eigene Release-Namen:
+#  - pptx/TESTVERSION höher als pptx/VERSION → Testversion (z. B. 1.0.0-test.7) ins Vorab-Release
+#    „pptx-adminkanal“. Die bekommen nur Admins, die im Programm „Testversionen“ eingeschaltet haben.
+#  - pptx/VERSION neu                         → fertige Version für alle: Release „pptx-vX.Y.Z“ und
+#    „pptx-stabil“ (dort fragt das Programm nach Updates).
+# Kein Release wird als „latest“ markiert – das bleibt PDF Unterschreiben vorbehalten.
+name: Release PDF zu PowerPoint
+
+on:
+  push:
+    branches: [main]
+    paths: ["pptx/**", ".github/workflows/pptx-release.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-pptx
+  cancel-in-progress: false
+
+env:
+  PDFIUM_URL: https://github.com/bblanchon/pdfium-binaries/releases/download/chromium/8111/pdfium-wasm.tgz
+  PDFIUM_SHA256: ed8ee2e70c628a4bd261fade8e381079aca250aeb5b1f3192c59682f8441fdcd
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: pptx
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Kanal bestimmen
+        id: ver
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          STABLE="$(tr -d '[:space:]' < VERSION)"
+          TEST="$(tr -d '[:space:]' < TESTVERSION 2>/dev/null || true)"
+          higher() { [ "$1" != "$2" ] && [ "$(printf '%s\n%s\n' "$1" "$2" | sort -V | tail -n1)" = "$1" ]; }
+          if [ "$STABLE" != "0.0.0" ] && ! gh release view "pptx-v$STABLE" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Fertige Version $STABLE wird veröffentlicht."
+            echo "kind=stable" >> "$GITHUB_OUTPUT"
+            echo "VERSION=$STABLE" >> "$GITHUB_ENV"
+            echo "TAG=pptx-stabil" >> "$GITHUB_ENV"
+          elif [ -n "$TEST" ] && higher "$TEST" "$STABLE"; then
+            V="$TEST-test.${GITHUB_RUN_NUMBER}"
+            echo "Testversion $V wird veröffentlicht."
+            echo "kind=test" >> "$GITHUB_OUTPUT"
+            echo "VERSION=$V" >> "$GITHUB_ENV"
+            echo "TAG=pptx-adminkanal" >> "$GITHUB_ENV"
+          else
+            echo "Nichts zu tun."
+            echo "kind=none" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-go@v5
+        if: steps.ver.outputs.kind != 'none'
+        with:
+          go-version: "1.24"
+          cache: false
+
+      - name: PDFium (WebAssembly) mitliefern
+        if: steps.ver.outputs.kind != 'none'
+        run: |
+          curl -fsSL -o /tmp/pdfium-wasm.tgz "$PDFIUM_URL"
+          echo "$PDFIUM_SHA256  /tmp/pdfium-wasm.tgz" | sha256sum -c -
+          mkdir -p /tmp/pdfium web/lib
+          tar xzf /tmp/pdfium-wasm.tgz -C /tmp/pdfium
+          cp /tmp/pdfium/lib/pdfium.js /tmp/pdfium/lib/pdfium.wasm web/lib/
+          cp /tmp/pdfium/LICENSE web/lib/PDFIUM-LICENSE.txt
+
+      - name: Programmsymbol in die exe einbauen
+        if: steps.ver.outputs.kind != 'none'
+        run: go run github.com/tc-hib/go-winres@v0.3.3 simply --icon assets/logo_256.png --arch amd64 --product-name "PDF zu PowerPoint" --file-description "PDF zu PowerPoint"
+
+      - name: Bauen
+        if: steps.ver.outputs.kind != 'none'
+        env:
+          REPORT_URL: ${{ secrets.REPORT_URL }}
+          REPORT_KEY: ${{ secrets.REPORT_KEY }}
+        run: |
+          RU="$(printf '%s' "$REPORT_URL" | tr -d '[:space:]')"
+          RK="$(printf '%s' "$REPORT_KEY" | tr -d '[:space:]')"
+          echo "Anmeldeserver gesetzt: $([ -n "$RU" ] && echo ja || echo nein), Schlüssel-Länge: ${#RK}"
+          GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -trimpath \
+            -ldflags "-s -w -H=windowsgui -X main.Version=$VERSION -X main.RepoOwner=${{ github.repository_owner }} -X main.RepoName=${{ github.event.repository.name }} -X 'main.ReportURL=$RU' -X 'main.ReportKey=$RK'" \
+            -o PDF-zu-PowerPoint-Setup.exe .
+
+      - name: version.json schreiben
+        if: steps.ver.outputs.kind != 'none'
+        run: |
+          # Kollegen sehen nur „Neue Version … ist da“ – der Änderungstext steht nur in Admin-Testversionen
+          if [ "${{ steps.ver.outputs.kind }}" = "test" ]; then NOTES="$(git log -1 --format=%s "$GITHUB_SHA")"; else NOTES=""; fi
+          SHA="$(sha256sum PDF-zu-PowerPoint-Setup.exe | cut -d' ' -f1)"
+          URL="https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/PDF-zu-PowerPoint-Setup.exe"
+          jq -n --arg v "$VERSION" --arg n "$NOTES" --arg u "$URL" --arg s "$SHA" \
+            '{version:$v, notes:$n, url:$u, sha256:$s}' > version.json
+          cat version.json
+
+      - name: Fertige Version veröffentlichen
+        if: steps.ver.outputs.kind == 'stable'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Archiv dieser Version
+          gh release create "pptx-v$VERSION" PDF-zu-PowerPoint-Setup.exe --target "$GITHUB_SHA" --latest=false \
+            -R "$GITHUB_REPOSITORY" --title "PDF zu PowerPoint $VERSION" --notes "$(git log -1 --format=%s "$GITHUB_SHA")"
+          # Fester Name, unter dem das Programm nach Updates sucht
+          gh release delete pptx-stabil -R "$GITHUB_REPOSITORY" --yes --cleanup-tag 2>/dev/null || true
+          git push origin ":refs/tags/pptx-stabil" 2>/dev/null || true
+          gh release create pptx-stabil PDF-zu-PowerPoint-Setup.exe version.json --target "$GITHUB_SHA" --latest=false \
+            -R "$GITHUB_REPOSITORY" --title "PDF zu PowerPoint (aktuelle Version $VERSION)" \
+            --notes "Zum Installieren PDF-zu-PowerPoint-Setup.exe herunterladen und doppelklicken."
+
+      - name: Testversion veröffentlichen
+        if: steps.ver.outputs.kind == 'test'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete pptx-adminkanal -R "$GITHUB_REPOSITORY" --yes --cleanup-tag 2>/dev/null || true
+          git push origin ":refs/tags/pptx-adminkanal" 2>/dev/null || true
+          gh release create pptx-adminkanal PDF-zu-PowerPoint-Setup.exe version.json --target "$GITHUB_SHA" \
+            --prerelease --latest=false -R "$GITHUB_REPOSITORY" \
+            --title "PDF zu PowerPoint – Testversion $VERSION (nur Admin)" --notes "$(git log -1 --format=%s "$GITHUB_SHA")"

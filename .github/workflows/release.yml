@@ -8,7 +8,7 @@ name: Release
 on:
   push:
     branches: [main]
-    paths-ignore: ["android/**", ".github/workflows/android.yml", "vorlagen/**"]
+    paths-ignore: ["android/**", ".github/workflows/android.yml", "vorlagen/**", "pptx/**", ".github/workflows/pptx-release.yml"]
   workflow_dispatch:
 
 permissions:
