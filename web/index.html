@@ -2652,7 +2652,7 @@ async function formSpeichern(){
     knopf("PDF speichern …", klick(pb, ".pdf", "PDF-Dokument", "application/pdf"));
     knopf("Unterschreiben / E-Mail", async () => { await addDoc(basis + ".pdf", pb.slice(), null, null); renderAll(); $("#formDlg").close(); });
   }
-  if(r.xlsx) knopf("Excel speichern …", klick(bytes(r.xlsx), ".xlsm", "Excel-Arbeitsmappe mit Makros", "application/vnd.ms-excel.sheet.macroEnabled.12"));
+  if(r.xlsx) knopf("Excel speichern …", klick(bytes(r.xlsx), ".xlsx", "Excel-Arbeitsmappe", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"));
 }
 
 $("#formBtn").onclick = () => { formLaden(); formRender(); $("#formDlg").showModal(); };

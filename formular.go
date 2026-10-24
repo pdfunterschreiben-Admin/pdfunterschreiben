@@ -70,15 +70,18 @@ try {
     }
     $ws.Activate()
     $ws.Range('A1').Select()
-    # Excel: die ganze Allgemeine Vorlage mit allen Registern, nur dieses Formular ausgefüllt
-    if ($cfg.xlsx) { $wb.SaveAs($env:PU_XLSX, 52) }
-    if ($cfg.pdf) {
-      foreach ($sh in @($ws.Shapes)) {
+    # Knöpfe der Excel-Vorlage (Typenschild einlesen, Ersatzteile einfügen …) aus allen Registern entfernen
+    foreach ($s in @($wb.Worksheets)) {
+      foreach ($sh in @($s.Shapes)) {
         $typ = -1; try { $typ = $sh.FormControlType } catch {}
         if ($typ -eq 0 -or $sh.Name -like 'TS_QR*') { $sh.Delete() }
       }
-      $ws.ExportAsFixedFormat(0, $env:PU_PDF)
     }
+    $ws.Activate()
+    $ws.Range('A1').Select()
+    if ($cfg.pdf) { $ws.ExportAsFixedFormat(0, $env:PU_PDF) }
+    # Excel: die ganze Allgemeine Vorlage mit allen Registern (ohne Makros und Knöpfe), nur dieses Formular ausgefüllt
+    if ($cfg.xlsx) { $wb.SaveAs($env:PU_XLSX, 51) }
   } finally { $wb.Close($false) }
 } finally {
   if ($xl) { $xl.Quit(); [void][System.Runtime.InteropServices.Marshal]::ReleaseComObject($xl) }
@@ -127,7 +130,7 @@ func (a *app) handleFormular(w http.ResponseWriter, r *http.Request) {
 	cfg, _ := json.Marshal(map[string]any{"blatt": req.Blatt, "werte": req.Werte, "kreuze": req.Kreuze, "xlsx": req.XLSX, "pdf": req.PDF})
 	cfgPath := filepath.Join(dir, "auftrag.json")
 	_ = os.WriteFile(cfgPath, cfg, 0o600)
-	xlsx, pdf := filepath.Join(dir, "formular.xlsm"), filepath.Join(dir, "formular.pdf")
+	xlsx, pdf := filepath.Join(dir, "formular.xlsx"), filepath.Join(dir, "formular.pdf")
 
 	cmd := hidden("powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", formularScript)
 	cmd.Env = append(os.Environ(), "PU_IN="+in, "PU_CFG="+cfgPath, "PU_XLSX="+xlsx, "PU_PDF="+pdf)
