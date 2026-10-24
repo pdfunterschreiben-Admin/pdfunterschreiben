@@ -2561,7 +2561,7 @@ function formRender(){
         const tab = document.createElement("table"); tab.className = "form-tab";
         tab.innerHTML = "<thead><tr>" + x.s.map(s => "<th>" + s[1] + "</th>").join("") + "</tr></thead>";
         const tb = document.createElement("tbody");
-        for(const row of x.r){
+        for(const row of tabZeilen(x, w)){
           const tr = document.createElement("tr");
           for(const [sp] of x.s){
             const td = document.createElement("td"); const i = document.createElement("input"); const z = sp + row;
@@ -2570,12 +2570,17 @@ function formRender(){
           tb.appendChild(tr);
         }
         tab.appendChild(tb); sek.appendChild(tab);
+        const plus = document.createElement("button"); plus.type = "button"; plus.textContent = "+ Weitere Zeile"; plus.style.alignSelf = "flex-start";
+        plus.onclick = () => { w["#mehr"] = (w["#mehr"] || 0) + 1; formMerken(); formRender(); };
+        sek.appendChild(plus);
       }
     }
     box.appendChild(sek);
   }
 }
 
+// Tabellenzeilen der Vorlage plus zusätzlich angelegte (werden in Excel unter der letzten Zeile eingefügt)
+function tabZeilen(x, w){ const z = x.r.slice(), l = x.r[x.r.length - 1]; for(let i = 1; i <= (w["#mehr"] || 0); i++) z.push(l + i); return z; }
 /* ---- Typenschild ---- */
 function tsWerkzeug(f, w){
   const d = document.createElement("div"); d.className = "col"; d.style.gap = "8px";
@@ -2672,11 +2677,12 @@ function tdocWerkzeug(f, w){
     if(t.indexOf("TDOC-ERSATZTEILE") !== 0){ formMeldung("In der Zwischenablage sind keine T-Doc-Ersatzteile."); return; }
     const tab = f.abschnitte.flatMap(a => a.felder).find(x => x.t === "tabelle");
     const [SA, SN, SB] = tab.s.map(c => c[0]);
-    const da = new Set(tab.r.map(r => (w[SN + r] || "").trim()).filter(Boolean));
+    const da = new Set(tabZeilen(tab, w).map(r => (w[SN + r] || "").trim()).filter(Boolean));
     let n = 0;
     for(const z of t.split("\n").slice(1)){
       const [mg, nr, nm, bm] = z.split("\t"); if(!nr || da.has(nr.trim())) continue;
-      const frei = tab.r.find(r => !w[SA + r] && !w[SN + r] && !w[SB + r]); if(!frei){ formMeldung("Die Ersatzteil-Tabelle ist voll."); break; }
+      let frei = tabZeilen(tab, w).find(r => !w[SA + r] && !w[SN + r] && !w[SB + r]);
+      if(!frei){ w["#mehr"] = (w["#mehr"] || 0) + 1; frei = tabZeilen(tab, w).pop(); }
       w[SA + frei] = mg || "1"; w[SN + frei] = nr.trim(); w[SB + frei] = teilName(nm || bm); da.add(nr.trim()); n++;
     }
     formMerken(); formRender(); formMeldung(n ? `${n} Ersatzteil(e) eingefügt.` : "Diese Teile stehen schon in der Tabelle.");
@@ -2686,12 +2692,20 @@ function tdocWerkzeug(f, w){
 }
 
 /* ---- Speichern ---- */
+// zusätzliche Zeilen nur bis zur letzten benutzten mitschicken
+function zusatz(f, w, werte){
+  const tab = f.abschnitte.flatMap(a => a.felder).find(x => x.t === "tabelle"); if(!tab || !w["#mehr"]) return {};
+  const l = tab.r[tab.r.length - 1]; let n = 0;
+  for(let i = 1; i <= w["#mehr"]; i++) if(tab.s.some(([sp]) => werte[sp + (l + i)])) n = i;
+  for(const k of Object.keys(werte)){ const m = /^([A-Z]+)(\d+)$/.exec(k); if(m && +m[2] > l + n && +m[2] <= l + w["#mehr"]) delete werte[k]; }
+  return n ? {nach: l, anzahl: n} : {};
+}
 async function formSpeichern(){
   const f = formDef(), w = formWerte();
   const xlsx = $("#formAlsXlsx").checked, pdf = $("#formAlsPdf").checked;
   if(!xlsx && !pdf){ formMeldung("Bitte Excel und/oder PDF auswählen."); return; }
   const werte = {}, kreuze = {};
-  for(const [k, v] of Object.entries(w)){ if(k[0] === "#") kreuze[k.slice(1)] = !!v; else if(v !== "" && v != null) werte[k] = String(v); }
+  for(const [k, v] of Object.entries(w)){ if(k === "#mehr") continue; if(k[0] === "#") kreuze[k.slice(1)] = !!v; else if(v !== "" && v != null) werte[k] = String(v); }
   for(const a of f.abschnitte) for(const x of a.felder){
     if(x.t === "datum" && !x.echt && werte[x.z]){ const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(werte[x.z]); if(m) werte[x.z] = m[3] + "." + m[2] + "." + m[1]; }
     if(x.stueck && werte[x.z]) werte[x.z] = werte[x.z] + " Stück";
@@ -2703,7 +2717,7 @@ async function formSpeichern(){
   if(f.id === "reparatur" && werte.R6) werte.R56 = werte.R6;
   const btn = $("#formSpeichern"); btn.disabled = true; const alt = btn.textContent; btn.textContent = "Bitte warten …"; formMeldung("Excel füllt das Formular aus – das dauert ein paar Sekunden …", 60000);
   let r;
-  try{ r = await (await fetch("/api/formular", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({blatt: f.blatt || "", quelle: f.quelle ? ((formState.register || []).find(g => g.name === f.quelle) || {}).id || "-" : "", werte, kreuze, xlsx, pdf})})).json(); }
+  try{ r = await (await fetch("/api/formular", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({...zusatz(f, w, werte), blatt: f.blatt || "", quelle: f.quelle ? ((formState.register || []).find(g => g.name === f.quelle) || {}).id || "-" : "", werte, kreuze, xlsx, pdf})})).json(); }
   catch(e){ r = {ok: false, error: "Keine Verbindung zum Programm."}; }
   btn.disabled = false; btn.textContent = alt;
   if(!r.ok){ formMeldung(r.error || "Das Formular konnte nicht erstellt werden.", 9000); return; }

@@ -60,6 +60,18 @@ try {
   $wb = $xl.Workbooks.Open($env:PU_IN, 0, $false)
   try {
     if ($cfg.blatt) { $ws = $wb.Worksheets.Item([string]$cfg.blatt) } else { $ws = $wb.Worksheets.Item(1) }
+    # zusätzliche Tabellenzeilen: letzte Zeile der Tabelle samt Format kopieren und darunter einfügen
+    $nach = [int]$cfg.nach; $anzahl = [int]$cfg.anzahl
+    if ($nach -gt 0 -and $anzahl -gt 0) {
+      $pa = [string]$ws.PageSetup.PrintArea
+      for ($i = 1; $i -le $anzahl; $i++) {
+        [void]$ws.Rows($nach).Copy()
+        [void]$ws.Rows($nach + $i).Insert(-4121)
+      }
+      $xl.CutCopyMode = $false
+      [void]$ws.Range($ws.Rows($nach + 1), $ws.Rows($nach + $anzahl)).ClearContents()
+      if ($pa -match '^(.*\$)(\d+)$' -and [int]$matches[2] -ge $nach) { $ws.PageSetup.PrintArea = $matches[1] + ([int]$matches[2] + $anzahl) }
+    }
     foreach ($p in $cfg.werte.PSObject.Properties) {
       $c = $ws.Range($p.Name)
       $v = [string]$p.Value
@@ -102,6 +114,8 @@ func (a *app) handleFormular(w http.ResponseWriter, r *http.Request) {
 		Kreuze map[string]bool   `json:"kreuze"`
 		XLSX   bool              `json:"xlsx"`
 		PDF    bool              `json:"pdf"`
+		Nach   int               `json:"nach"`   // zusätzliche Tabellenzeilen unter dieser Zeile einfügen
+		Anzahl int               `json:"anzahl"`
 		Quelle string            `json:"quelle"` // Vorlage aus dem Drive-Ordner statt der Allgemeinen Vorlagen
 	}
 	if err := json.NewDecoder(io.LimitReader(r.Body, 4<<20)).Decode(&req); err != nil {
@@ -138,7 +152,7 @@ func (a *app) handleFormular(w http.ResponseWriter, r *http.Request) {
 		fehler("Die Vorlage konnte nicht bereitgelegt werden.")
 		return
 	}
-	cfg, _ := json.Marshal(map[string]any{"blatt": req.Blatt, "werte": req.Werte, "kreuze": req.Kreuze, "xlsx": req.XLSX, "pdf": req.PDF})
+	cfg, _ := json.Marshal(map[string]any{"blatt": req.Blatt, "nach": req.Nach, "anzahl": min(req.Anzahl, 200), "werte": req.Werte, "kreuze": req.Kreuze, "xlsx": req.XLSX, "pdf": req.PDF})
 	cfgPath := filepath.Join(dir, "auftrag.json")
 	_ = os.WriteFile(cfgPath, cfg, 0o600)
 	xlsx, pdf := filepath.Join(dir, "formular.xlsx"), filepath.Join(dir, "formular.pdf")
