@@ -78,7 +78,7 @@ function handle(d) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   // „PDF zu PowerPoint“ meldet sich mit app: 'pptx' – eigene Nutzerliste, sonst gleicher Ablauf.
   const pptx = d.app === 'pptx';
-  const APP_NAME = pptx ? 'PDF zu PowerPoint' : 'PDF Unterschreiben & Dokumentation';
+  const APP_NAME = pptx ? 'PDF zu PowerPoint' : 'Service-Mappe';
   const users = sheet(ss, pptx ? 'Nutzer PDF zu PowerPoint' : 'Nutzer', ['Name', 'E-Mail', 'Rechner-ID', 'Version', 'Erste Anmeldung', 'Zuletzt aktiv',
     'Freigeschaltet', 'Gesperrt (ja)', 'Starts', 'Gespeichert', 'Gedruckt', 'Per E-Mail']);
   const log = sheet(ss, 'Protokoll', ['Zeit', 'Name', 'E-Mail', 'Ereignis', 'Version', 'Anzahl']);
@@ -156,7 +156,7 @@ function feedback(ss, name, mail, ver, text) {
   s.appendRow([new Date(), name, mail, "'" + ver, t, 'neu']);
   try {
     MailApp.sendEmail({ to: ADMIN_MAILS[0], subject: 'Neuer Verbesserungsvorschlag von ' + name,
-      body: name + ' (' + mail + ', Version ' + ver + ') schreibt:\n\n' + t, name: 'PDF Unterschreiben & Dokumentation' });
+      body: name + ' (' + mail + ', Version ' + ver + ') schreibt:\n\n' + t, name: 'Service-Mappe' });
   } catch (x) {}
   return { ok: true };
 }
@@ -200,10 +200,10 @@ function feedbackReply(ss, users, id, mail, rowNo, text) {
   const when = r[0] instanceof Date ? Utilities.formatDate(r[0], 'Europe/Berlin', 'dd.MM.yyyy') : '';
   MailApp.sendEmail({
     to: to,
-    subject: 'Antwort auf deinen Verbesserungsvorschlag für PDF Unterschreiben & Dokumentation',
+    subject: 'Antwort auf deinen Verbesserungsvorschlag für die Service-Mappe',
     body: 'Hallo ' + r[1] + ',\n\ndanke für deinen Vorschlag' + (when ? ' vom ' + when : '') + ':\n\n    „' +
-      String(r[4]).replace(/\n/g, '\n    ') + '“\n\n' + t + '\n\nViele Grüße\nPDF Unterschreiben & Dokumentation',
-    name: 'PDF Unterschreiben & Dokumentation'
+      String(r[4]).replace(/\n/g, '\n    ') + '“\n\n' + t + '\n\nViele Grüße\nService-Mappe',
+    name: 'Service-Mappe'
   });
   const now = new Date();
   s.getRange(row, 6, 1, 3).setValues([['beantwortet', t, now]]);
@@ -537,12 +537,12 @@ function doGet(e) {
   const token = String((e && e.parameter && e.parameter.foto) || '');
   const ok = !!fotoSitzung(token, false);
   const html = ok ? FOTO_SEITE.replace('%TOKEN%', token) : FOTO_ABGELAUFEN;
-  return HtmlService.createHtmlOutput(html).setTitle('Fotos senden – PDF Unterschreiben')
+  return HtmlService.createHtmlOutput(html).setTitle('Fotos senden – Service-Mappe')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
 }
 
 const FOTO_ABGELAUFEN = '<div style="font:16px system-ui,sans-serif;padding:24px"><h2>Link abgelaufen</h2>' +
-  '<p>Bitte im Programm „PDF Unterschreiben &amp; Dokumentation“ bei der Dokumentation erneut auf „Fotos vom Handy“ tippen und den neuen QR-Code scannen.</p></div>';
+  '<p>Bitte im Programm „Service-Mappe“ bei der Dokumentation erneut auf „Fotos vom Handy“ tippen und den neuen QR-Code scannen.</p></div>';
 
 const FOTO_SEITE = '<style>body{font:16px system-ui,sans-serif;margin:0;padding:20px;color:#1a1a1a;background:#f6f6f4}' +
   'h2{margin:0 0 6px;font-size:20px}.hint{color:#666;font-size:14px;margin:0 0 18px}' +
@@ -550,7 +550,7 @@ const FOTO_SEITE = '<style>body{font:16px system-ui,sans-serif;margin:0;padding:
   'input{display:none}#liste{margin-top:18px;display:flex;flex-direction:column;gap:6px}' +
   '.z{display:flex;justify-content:space-between;background:#fff;border-radius:8px;padding:10px 12px;font-size:14px}' +
   '.ok{color:#1d7a35}.err{color:#c8102e}#fertig{margin-top:18px;font-weight:600;color:#1d7a35}</style>' +
-  '<h2>Fotos an PDF Unterschreiben senden</h2>' +
+  '<h2>Fotos an die Service-Mappe senden</h2>' +
   '<p class="hint">Fotos aus der Galerie auswählen (Typenschild zuerst). Sie werden für die Übertragung verkleinert und erscheinen gleich im Programm am PC.</p>' +
   '<label class="btn">Fotos auswählen<input type="file" id="f" accept="image/*" multiple></label>' +
   '<div id="liste"></div><div id="fertig"></div>' +

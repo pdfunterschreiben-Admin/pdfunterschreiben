@@ -64,19 +64,31 @@ func startMenuLink() string {
 	return filepath.Join(os.Getenv("APPDATA"), `Microsoft\Windows\Start Menu\Programs`, DisplayName+".lnk")
 }
 
-func oldStartMenuLink() string {
-	return filepath.Join(os.Getenv("APPDATA"), `Microsoft\Windows\Start Menu\Programs`, AppName+".lnk")
+// frühere sichtbare Programmnamen (Verknüpfungen mit diesen Namen werden ersetzt)
+var alteNamen = []string{AppName, "PDF Unterschreiben & Dokumentation"}
+
+func startMenuLinkName(n string) string {
+	return filepath.Join(os.Getenv("APPDATA"), `Microsoft\Windows\Start Menu\Programs`, n+".lnk")
 }
 
-// migrateName: Nach der Umbenennung alte Verknüpfungen („PDF Unterschreiben“) durch neue ersetzen.
+// migrateName: Nach einer Umbenennung alte Verknüpfungen durch neue mit dem aktuellen Namen ersetzen.
 func migrateName() {
-	if _, err := os.Stat(oldStartMenuLink()); err != nil {
+	alt := false
+	for _, n := range alteNamen {
+		if n == DisplayName {
+			continue
+		}
+		if _, err := os.Stat(startMenuLinkName(n)); err == nil {
+			_ = os.Remove(startMenuLinkName(n))
+			alt = true
+		}
+	}
+	if !alt {
 		return
 	}
-	_ = os.Remove(oldStartMenuLink())
 	desk := hidden("powershell.exe", "-NoProfile", "-NonInteractive", "-Command",
-		`$p = Join-Path ([Environment]::GetFolderPath('Desktop')) ($env:PU_NAME + '.lnk'); if (Test-Path $p) { Remove-Item $p -Force; '1' }`)
-	desk.Env = append(os.Environ(), "PU_NAME="+AppName)
+		`$d = [Environment]::GetFolderPath('Desktop'); $r = '0'; foreach ($n in ($env:PU_NAMEN -split '\|')) { $p = Join-Path $d ($n + '.lnk'); if (Test-Path -LiteralPath $p) { Remove-Item -LiteralPath $p -Force; $r = '1' } }; $r`)
+	desk.Env = append(os.Environ(), "PU_NAMEN="+strings.Join(alteNamen, "|"))
 	out, _ := desk.Output()
 	_ = createShortcuts(strings.TrimSpace(string(out)) == "1")
 	registerUninstall()
@@ -98,7 +110,7 @@ foreach ($p in $paths) {
   $s.TargetPath = $env:PU_TARGET
   $s.WorkingDirectory = $env:PU_DIR
   $s.IconLocation = $env:PU_ICON
-  $s.Description = 'PDFs unterschreiben und Dokumentation erstellen'
+  $s.Description = 'Berichte unterschreiben, Dokumentation und Formulare'
   $s.Save()
 }`
 	return powershell(script,
@@ -138,8 +150,10 @@ foreach ($p in $paths) { if (Test-Path $p) { $s = $w.CreateShortcut($p); $s.Icon
 
 func removeShortcuts() {
 	_ = os.Remove(startMenuLink())
-	_ = os.Remove(oldStartMenuLink())
-	for _, n := range []string{DisplayName, AppName} {
+	for _, n := range alteNamen {
+		_ = os.Remove(startMenuLinkName(n))
+	}
+	for _, n := range append([]string{DisplayName}, alteNamen...) {
 		_ = powershell(`$p = Join-Path ([Environment]::GetFolderPath('Desktop')) ($env:PU_NAME + '.lnk'); if (Test-Path $p) { Remove-Item $p -Force }`, "PU_NAME="+n)
 	}
 }

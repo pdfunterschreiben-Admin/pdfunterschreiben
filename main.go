@@ -23,7 +23,7 @@ var (
 const (
 	AppName = "PDF Unterschreiben" // interner Name: Installations- und Datenordner (nicht ändern)
 	// DisplayName ist der sichtbare Programmname (Fenster, Verknüpfungen, Apps & Features).
-	DisplayName = "PDF Unterschreiben & Dokumentation"
+	DisplayName = "Service-Mappe"
 	AppID       = "PDFUnterschreiben"
 	ExeName     = "PDF Unterschreiben.exe"
 	Publisher   = DisplayName

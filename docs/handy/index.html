@@ -26,7 +26,7 @@
 </div>
 
 <div id="fotos" hidden>
-  <h2>Fotos an PDF Unterschreiben senden</h2>
+  <h2>Fotos an die Service-Mappe senden</h2>
   <p class="hint">Fotos aus der Galerie auswählen (Typenschild zuerst). Sie werden für die Übertragung verkleinert und erscheinen gleich im Programm am PC.</p>
   <label class="btn">Fotos auswählen<input type="file" id="f" accept="image/*" multiple></label>
   <div id="liste"></div><div id="fertig" class="ok"></div>
@@ -65,7 +65,7 @@ function abgelaufen() {
   $("laden").hidden = true; $("fotos").hidden = true; $("ts").hidden = true; $("abgelaufen").hidden = false;
   $("abgText").textContent = MODUS === "ts"
     ? "Bitte in Excel erneut auf „Typenschild einlesen“ klicken und den neuen QR-Code scannen."
-    : "Bitte im Programm „PDF Unterschreiben & Dokumentation“ bei der Dokumentation erneut auf „Fotos vom Handy“ tippen und den neuen QR-Code scannen.";
+    : "Bitte im Programm „Service-Mappe“ bei der Dokumentation erneut auf „Fotos vom Handy“ tippen und den neuen QR-Code scannen.";
 }
 
 function start(versuch) {
@@ -74,7 +74,7 @@ function start(versuch) {
     if (r !== "1") { abgelaufen(); return; }
     $("laden").hidden = true;
     $(MODUS === "ts" ? "ts" : "fotos").hidden = false;
-    document.title = MODUS === "ts" ? "Typenschild fotografieren" : "Fotos senden – PDF Unterschreiben";
+    document.title = MODUS === "ts" ? "Typenschild fotografieren" : "Fotos senden – Service-Mappe";
   }).catch(function (e) {
     if (versuch < 3) { setTimeout(function () { start(versuch + 1); }, 1500 * versuch); return; }
     $("laden").className = "err"; $("laden").textContent = "Keine Verbindung zum Server: " + e.message + ". Bitte Seite neu laden.";
@@ -121,7 +121,7 @@ function exifZeit(buf) {
   return 0;
 }
 
-// ---- Fotos vom Handy (PDF Unterschreiben) ----
+// ---- Fotos vom Handy (Service-Mappe) ----
 var q = [], aktiv = 0, n = 0, MAX = 3;
 $("f").onchange = function (e) {
   for (var i = 0; i < e.target.files.length; i++) {
