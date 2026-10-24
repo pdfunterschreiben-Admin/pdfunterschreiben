@@ -506,7 +506,7 @@ function fotoHochladen(token, name, lm, mime, b64, exif) {
 
 // Die Handy-Seite liegt auf GitHub Pages (docs/handy im Repository) und schickt die Fotos per doPost.
 // Über Google (doGet) gab es Fehler, wenn im Handy-Browser mehrere Google-Konten angemeldet sind.
-const HANDY_URL = 'https://pdfunterschreiben-admin.github.io/pdfunterschreiben/handy/';
+const HANDY_URL = 'https://pdfunterschreiben-admin.github.io/service-mappe/handy/';
 // Programme vor 1.17.0 zeigen nur QR-Codes für script.google.com an
 function neueVersion(v, ab) {
   const a = String(v || '0').split('.').map(Number), b = ab.split('.').map(Number);
