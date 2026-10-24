@@ -195,6 +195,16 @@ dialog::backdrop{background:rgba(10,15,30,.55)}
 .form-tools{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .form-qr{display:flex;gap:12px;align-items:center}.form-qr img{width:150px;height:150px;image-rendering:pixelated}
 @media (max-width:720px){#formDlg .dlg-body{flex-direction:column}.form-liste{flex-direction:row;flex-wrap:wrap;position:static}}
+.form-status{flex:1;min-width:200px;font-size:13px;white-space:pre-line;color:var(--ink,#222);background:#fff6d6;border-radius:8px;padding:6px 10px}
+.form-kreuze{display:grid!important;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:6px!important}
+.form-kreuze label{display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid var(--line,#ddd);border-radius:8px;background:var(--bg,#fff);cursor:pointer;line-height:1.25}
+.form-kreuze label:has(input:checked){background:color-mix(in srgb,var(--accent,#c8102e) 4%,var(--bg,#fff))}
+.form-kreuze input{width:16px;height:16px;margin:0;flex:none;accent-color:var(--accent,#c8102e)}
+.form-gruppe{display:flex;flex-direction:column;gap:5px}
+.form-gruppe>span{font-size:13px;font-weight:600}
+.form-chips{display:flex;flex-wrap:wrap;gap:6px}
+.form-chips button{padding:6px 12px;border-radius:999px;font-size:13px}
+.form-chips button[aria-pressed="true"]{background:var(--accent,#c8102e);color:#fff;border-color:transparent}
 </style>
 </head>
 <body>
@@ -375,6 +385,7 @@ dialog::backdrop{background:rgba(10,15,30,.55)}
       <div id="formInhalt" class="form-inhalt"></div>
     </div>
     <div class="dlg-foot row" style="gap:8px;justify-content:flex-end;flex-wrap:wrap">
+      <span id="formStatus" class="form-status" hidden></span>
       <button type="button" class="ghost" id="formNeu">Neues Formular</button>
       <label class="row" style="gap:4px"><input type="checkbox" id="formAlsXlsx"> Excel</label>
       <label class="row" style="gap:4px"><input type="checkbox" id="formAlsPdf" checked> PDF</label>
@@ -2328,6 +2339,12 @@ function initFold(){
     if(i.updates){ $("#checkBtn").hidden = false; checkUpdates(false); }
   }catch(e){}
 })();
+/* Meldungen im Formular-Fenster anzeigen (die normale Meldung liegt hinter dem Fenster) */
+let formMeldT;
+function formMeldung(m, ms = 6000){
+  if(!$("#formDlg").open){ toast(m, ms); return; }
+  const e = $("#formStatus"); e.textContent = m; e.hidden = false; clearTimeout(formMeldT); formMeldT = setTimeout(() => e.hidden = true, Math.max(ms, 6000));
+}
 /* ================= Formulare (aus den Allgemeinen Vorlagen) ================= */
 // Feldarten: text, datum, flaeche (mehrzeilig), wahl (Liste), kreuz (Ankreuzkästchen der Vorlage, name = Excel-Name),
 // x (Zelle bekommt ein „X“), xeins (nur eins aus mehreren X-Zellen), zeilen (mehrere Zellen untereinander), tabelle.
@@ -2456,13 +2473,14 @@ function formRender(){
         l.appendChild(c); l.appendChild(document.createTextNode(x.l)); kreuze.appendChild(l);
       } else if(x.t === "xeins" || x.t === "xmehr"){
         kreuze = null;
-        const g = document.createElement("div"); g.className = "col"; g.style.gap = "4px";
-        if(x.l){ const s = document.createElement("span"); s.style.fontSize = "13px"; s.textContent = x.l; g.appendChild(s); }
-        const r = document.createElement("div"); r.className = "form-kreuze";
+        const g = document.createElement("div"); g.className = "form-gruppe";
+        if(x.l){ const sp = document.createElement("span"); sp.textContent = x.l + (x.t === "xeins" ? "" : " (mehrere möglich)"); g.appendChild(sp); }
+        const r = document.createElement("div"); r.className = "form-chips";
         for(const [z, t] of x.o){
-          const l = document.createElement("label"); const c = document.createElement("input"); c.type = "checkbox"; c.checked = !!w[z];
-          c.onchange = () => { if(x.t === "xeins" && c.checked) for(const [z2] of x.o) w[z2] = ""; w[z] = c.checked ? "X" : ""; formMerken(); formRender(); };
-          l.appendChild(c); l.appendChild(document.createTextNode(t)); r.appendChild(l);
+          const b = document.createElement("button"); b.type = "button"; b.textContent = t; b.setAttribute("aria-pressed", w[z] ? "true" : "false");
+          b.onclick = () => { const an = !w[z]; if(x.t === "xeins") for(const [z2] of x.o) w[z2] = ""; w[z] = an ? "X" : ""; formMerken();
+            for(const k of r.children) k.setAttribute("aria-pressed", w[x.o[[...r.children].indexOf(k)][0]] ? "true" : "false"); };
+          r.appendChild(b);
         }
         g.appendChild(r); sek.appendChild(g);
       } else if(x.t === "tabelle"){
@@ -2506,9 +2524,9 @@ async function tsLesen(f, w, bytes, st){
     let n = 0;
     for(const a of f.abschnitte) for(const x of a.felder) if(x.ts){ const v = r.werte[x.ts]; if(v){ w[x.z] = v; n++; } else if(x.ts !== "SCHUTZKLASSE" && x.ts !== "EINHEIT") w[x.z] = ""; }
     formMerken(); formRender();
-    toast(n ? `Typenschild gelesen: ${n} Werte eingetragen. Bitte kurz prüfen.` : "Auf dem Foto wurden keine Werte erkannt.", 6000);
+    formMeldung(n ? `Typenschild gelesen: ${n} Werte eingetragen. Bitte kurz prüfen.` : "Auf dem Foto wurden keine Werte erkannt.", 6000);
     if(n) geraetSpeichern(f, w);
-  }catch(e){ st.textContent = ""; toast("Typenschild: " + (e.message || e), 7000); return; }
+  }catch(e){ st.textContent = ""; formMeldung("Typenschild: " + (e.message || e), 7000); return; }
   st.textContent = "";
 }
 async function tsHandy(f, w, st, qr, hb){
@@ -2516,7 +2534,7 @@ async function tsHandy(f, w, st, qr, hb){
   hb.disabled = true; st.textContent = "QR-Code wird erstellt …";
   let s;
   try{ s = await api("fotostart"); if(!s.ok) throw new Error(s.error); }
-  catch(e){ hb.disabled = false; st.textContent = ""; toast("Handy: " + (e.message || e), 6000); return; }
+  catch(e){ hb.disabled = false; st.textContent = ""; formMeldung("Handy: " + (e.message || e), 6000); return; }
   qr.hidden = false;
   qr.innerHTML = '<img alt="QR-Code"><span class="hint">Mit dem Handy scannen und das Typenschild fotografieren.<br><button type="button" class="ghost">Abbrechen</button></span>';
   qr.querySelector("img").src = "/api/fotos/qr?u=" + encodeURIComponent(s.url);
@@ -2531,7 +2549,7 @@ async function tsHandy(f, w, st, qr, hb){
     if(l.files && l.files.length){
       const g = await api("fotoholen", {token: s.token, id: l.files[l.files.length - 1].id});
       ende();
-      if(!g.ok){ toast("Das Foto konnte nicht geholt werden.", 6000); st.textContent = ""; return; }
+      if(!g.ok){ formMeldung("Das Foto konnte nicht geholt werden.", 6000); st.textContent = ""; return; }
       const bin = atob(g.b64), b = new Uint8Array(bin.length); for(let i = 0; i < bin.length; i++) b[i] = bin.charCodeAt(i);
       await tsLesen(f, w, b, st); return;
     }
@@ -2558,7 +2576,7 @@ async function geraetSuchen(f, w, nr){
     const g = geraeteCache.find(z => normNr(z[0]) === normNr(nr)); if(!g) return;
     TS_LISTE.forEach((k, i) => { const z = feldNachTs(f, k); if(z && g[i] && !w[z]) w[z] = g[i]; });
     if(g[9] && !w.L11) w.L11 = g[9]; if(g[10] && !w.D11) w.D11 = g[10];
-    formMerken(); formRender(); toast("Gerät aus der Geräteliste übernommen.");
+    formMerken(); formRender(); formMeldung("Gerät aus der Geräteliste übernommen.");
   }catch(e){}
 }
 
@@ -2568,18 +2586,18 @@ function tdocWerkzeug(f, w){
   const b = document.createElement("button"); b.type = "button"; b.textContent = "Ersatzteile aus T-Doc einfügen";
   const s = document.createElement("span"); s.className = "hint"; s.textContent = "Vorher in T-Doc die Teile mit dem Lesezeichen „T-Doc → Excel“ sammeln.";
   b.onclick = async () => {
-    let t = ""; try{ t = await navigator.clipboard.readText(); }catch(e){ toast("Die Zwischenablage konnte nicht gelesen werden."); return; }
+    let t = ""; try{ t = await navigator.clipboard.readText(); }catch(e){ formMeldung("Die Zwischenablage konnte nicht gelesen werden."); return; }
     t = String(t).replace(/\r/g, "");
-    if(t.indexOf("TDOC-ERSATZTEILE") !== 0){ toast("In der Zwischenablage sind keine T-Doc-Ersatzteile."); return; }
+    if(t.indexOf("TDOC-ERSATZTEILE") !== 0){ formMeldung("In der Zwischenablage sind keine T-Doc-Ersatzteile."); return; }
     const tab = f.abschnitte.flatMap(a => a.felder).find(x => x.t === "tabelle");
     const da = new Set(tab.r.map(r => (w["D" + r] || "").trim()).filter(Boolean));
     let n = 0;
     for(const z of t.split("\n").slice(1)){
       const [mg, nr, nm, bm] = z.split("\t"); if(!nr || da.has(nr.trim())) continue;
-      const frei = tab.r.find(r => !w["A" + r] && !w["D" + r] && !w["J" + r]); if(!frei){ toast("Die Ersatzteil-Tabelle ist voll."); break; }
+      const frei = tab.r.find(r => !w["A" + r] && !w["D" + r] && !w["J" + r]); if(!frei){ formMeldung("Die Ersatzteil-Tabelle ist voll."); break; }
       w["A" + frei] = mg || "1"; w["D" + frei] = nr.trim(); w["J" + frei] = [nm, bm].filter(Boolean).join(" – "); da.add(nr.trim()); n++;
     }
-    formMerken(); formRender(); toast(n ? `${n} Ersatzteil(e) eingefügt.` : "Diese Teile stehen schon in der Tabelle.");
+    formMerken(); formRender(); formMeldung(n ? `${n} Ersatzteil(e) eingefügt.` : "Diese Teile stehen schon in der Tabelle.");
     try{ await navigator.clipboard.writeText("TDOC-EINGEFUEGT"); }catch(e){}
   };
   r.append(b, s); return r;
@@ -2589,18 +2607,18 @@ function tdocWerkzeug(f, w){
 async function formSpeichern(){
   const f = formDef(), w = formWerte();
   const xlsx = $("#formAlsXlsx").checked, pdf = $("#formAlsPdf").checked;
-  if(!xlsx && !pdf){ toast("Bitte Excel und/oder PDF auswählen."); return; }
+  if(!xlsx && !pdf){ formMeldung("Bitte Excel und/oder PDF auswählen."); return; }
   const werte = {}, kreuze = {};
   for(const [k, v] of Object.entries(w)){ if(k[0] === "#") kreuze[k.slice(1)] = !!v; else if(v !== "" && v != null) werte[k] = String(v); }
   // leere Zellen mit Vorgabe in der Vorlage (z. B. „Ladegerät“) trotzdem überschreiben
   for(const a of f.abschnitte) for(const x of a.felder) if(x.z && typeof x.z === "string" && !(x.z in werte) && x.d) werte[x.z] = "";
   if(f.id === "reparatur" && werte.R6) werte.R56 = werte.R6;
-  const btn = $("#formSpeichern"); btn.disabled = true; const alt = btn.textContent; btn.textContent = "Excel füllt das Formular aus …";
+  const btn = $("#formSpeichern"); btn.disabled = true; const alt = btn.textContent; btn.textContent = "Bitte warten …"; formMeldung("Excel füllt das Formular aus – das dauert ein paar Sekunden …", 60000);
   let r;
   try{ r = await (await fetch("/api/formular", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({blatt: f.blatt, werte, kreuze, xlsx, pdf})})).json(); }
   catch(e){ r = {ok: false, error: "Keine Verbindung zum Programm."}; }
   btn.disabled = false; btn.textContent = alt;
-  if(!r.ok){ toast(r.error || "Das Formular konnte nicht erstellt werden.", 9000); return; }
+  if(!r.ok){ formMeldung(r.error || "Das Formular konnte nicht erstellt werden.", 9000); return; }
   const d = w.O3 || w.R6 || HEUTE();
   const extra = [w.D5 || w.A5, w.F12 || w.D16, w.L12 || w.D17].filter(Boolean).join(" ").replace(/[\\\/:*?"<>|]/g, " ").trim();
   const basis = (f.blatt.replace(/\./g, "") + (extra ? " " + extra : "") + " " + d).replace(/\s+/g, " ").trim();
@@ -2626,8 +2644,8 @@ async function formSpeichern(){
         await addDoc(basis + ".pdf", pb, null, null); renderAll(); $("#formDlg").close();
       }
     }
-    if(gesp.length) toast("Gespeichert: " + gesp.join(", "), 6000);
-  }catch(e){ toast("Speichern fehlgeschlagen: " + (e.message || e), 7000); }
+    if(gesp.length) formMeldung("Gespeichert: " + gesp.join(", "), 6000);
+  }catch(e){ formMeldung("Speichern fehlgeschlagen: " + (e.message || e), 7000); }
 }
 
 $("#formBtn").onclick = () => { formLaden(); formRender(); $("#formDlg").showModal(); };
