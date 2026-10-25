@@ -2456,6 +2456,8 @@ const FORMULARE = [
       {t: "text", z: "A42", l: "Messpunkt"}, {t: "text", z: "E42", l: "Schutzleiterwiderstand (Ω)"}, {t: "text", z: "I42", l: "Isolationswiderstand (MΩ)"},
       {t: "text", z: "M42", l: "Schutzleiterstrom (mA)"}, {t: "text", z: "P42", l: "Schutzleiterstrom Zange (mA)"},
       {t: "text", z: "S42", l: "Netzspannung (V)"}, {t: "text", z: "V42", l: "Funktionsprüfung Strom (A)"}, {t: "text", z: "Y42", l: "Leistung (kW/kVA)"}]},
+    {titel: "Verwendete Messgeräte (werden für dich gespeichert)", felder: [1, 2, 3].flatMap(i => [
+      ["H", "Fabrikat"], ["N", "Typ"], ["R", "Nr."], ["Y", "Kalibrierung"]].map(([c, l]) => ({t: "text", z: c + (50 + i), l: "Messgerät " + i + " " + l, merken: true, d: () => ""})))},
     {titel: "Ergebnis", felder: [
       {t: "kreuz", n: "Check Box 22", l: "Sicherheits- und Funktionsprüfung mängelfrei", d: true},
       {t: "kreuz", n: "Check Box 23", l: "Aufschriften vorhanden bzw. vervollständigt", d: true},
@@ -2548,7 +2550,8 @@ function formLaden(){
 let formSichT = 0, formSichOffen = false;
 function formSichern(){
   formSichOffen = false; clearTimeout(formSichT);
-  const body = JSON.stringify({zeit: Date.now(), daten: formState.daten});
+  let merk = {}; try{ merk = JSON.parse(localStorage.getItem("formMerk") || "{}"); }catch(e){}
+  const body = JSON.stringify({zeit: Date.now(), daten: formState.daten, merk});
   try{ fetch("/api/formular/sicherung", {method: "POST", headers: {"Content-Type": "application/json"}, body, keepalive: body.length < 60000}).catch(() => { formSichOffen = true; }); }catch(e){}
 }
 function formMerken(){
@@ -2563,6 +2566,7 @@ async function formSicherungHolen(){
     const s = await (await fetch("/api/formular/sicherung", {cache: "no-store"})).json();
     let lokal = 0; try{ lokal = +localStorage.getItem("formulareZeit") || 0; }catch(e){}
     const leer = !Object.values(formState.daten).some(w => w && Object.values(w).some(v => v !== "" && v != null && v !== 0));
+    if(s && s.merk && typeof s.merk === "object"){ try{ const m = JSON.parse(localStorage.getItem("formMerk") || "{}"); let neu = false; for(const [k, v] of Object.entries(s.merk)) if(!(k in m)){ m[k] = v; neu = true; } if(neu) localStorage.setItem("formMerk", JSON.stringify(m)); }catch(e){} }
     if(s && s.daten && typeof s.daten === "object" && (s.zeit > lokal || leer) && Object.keys(s.daten).length){
       formState.daten = s.daten;
       try{ localStorage.setItem("formulare", JSON.stringify(s.daten)); localStorage.setItem("formulareZeit", String(s.zeit || Date.now())); }catch(e){}
@@ -2571,7 +2575,13 @@ async function formSicherungHolen(){
   }catch(e){}
 }
 const formDef = () => FORMULARE.find(f => f.id === formState.akt);
-function formWerte(){ return formState.daten[formState.akt] || (formState.daten[formState.akt] = formStart(formDef())); }
+function formWerte(){
+  const w = formState.daten[formState.akt] || (formState.daten[formState.akt] = formStart(formDef()));
+  // gespeicherte Werte (z. B. eigene Messgeräte) auch in schon angefangene Formulare übernehmen
+  let merk = {}; try{ merk = JSON.parse(localStorage.getItem("formMerk") || "{}"); }catch(e){}
+  for(const a of formDef().abschnitte) for(const x of a.felder) if(x.merken && typeof x.z === "string" && !(x.z in w)) w[x.z] = merk[x.l] || "";
+  return w;
+}
 function formStart(f){
   const w = {};
   const merk = (() => { try{ return JSON.parse(localStorage.getItem("formMerk") || "{}"); }catch(e){ return {}; } })();
@@ -2625,7 +2635,7 @@ function formRender(){
         if(x.t === "wahl"){ i = document.createElement("select"); for(const o of x.o){ const op = document.createElement("option"); op.textContent = o; i.appendChild(op); } }
         else { i = document.createElement("input"); i.type = x.t === "datum" ? "date" : "text"; }
         i.value = w[x.z] || ""; i.dataset.zelle = x.z;
-        i.oninput = i.onchange = () => { set(x.z, i.value); if(x.merken){ try{ const m = JSON.parse(localStorage.getItem("formMerk") || "{}"); m[x.l] = i.value; localStorage.setItem("formMerk", JSON.stringify(m)); }catch(e){} } };
+        i.oninput = i.onchange = () => { set(x.z, i.value); if(x.merken){ try{ const m = JSON.parse(localStorage.getItem("formMerk") || "{}"); m[x.l] = i.value; localStorage.setItem("formMerk", JSON.stringify(m)); }catch(e){} formMerken(); } };
         if(x.geraet) i.addEventListener("change", () => geraetSuchen(f, w, i.value));
         l.appendChild(i); felder.appendChild(l);
       } else if(x.t === "flaeche" || x.t === "zeilen"){
