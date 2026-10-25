@@ -276,6 +276,7 @@ dialog.fenster.klein .dlg-head{border-bottom:0;cursor:pointer}
 #banner b{font:700 32px/1.2 var(--f-display)}
 #banner .notes{font-size:18px;line-height:1.5;margin-top:12px;max-width:56ch}
 #banner #updateBtn{font-size:22px;font-weight:700;padding:16px 64px;border-radius:14px}
+.form-tab.gleich{table-layout:fixed;width:100%}.form-tab.gleich th,.form-tab.gleich td{width:25%!important}
 </style>
 </head>
 <body>
@@ -2456,8 +2457,8 @@ const FORMULARE = [
       {t: "text", z: "A42", l: "Messpunkt"}, {t: "text", z: "E42", l: "Schutzleiterwiderstand (Ω)"}, {t: "text", z: "I42", l: "Isolationswiderstand (MΩ)"},
       {t: "text", z: "M42", l: "Schutzleiterstrom (mA)"}, {t: "text", z: "P42", l: "Schutzleiterstrom Zange (mA)"},
       {t: "text", z: "S42", l: "Netzspannung (V)"}, {t: "text", z: "V42", l: "Funktionsprüfung Strom (A)"}, {t: "text", z: "Y42", l: "Leistung (kW/kVA)"}]},
-    {titel: "Verwendete Messgeräte (werden für dich gespeichert)", felder: [1, 2, 3].flatMap(i => [
-      ["H", "Fabrikat"], ["N", "Typ"], ["R", "Nr."], ["Y", "Kalibrierung"]].map(([c, l]) => ({t: "text", z: c + (50 + i), l: "Messgerät " + i + " " + l, merken: true, d: () => ""})))},
+    {titel: "Verwendete Messgeräte (werden für dich gespeichert)", felder: [{t: "tabelle", l: "Messgeräte", merken: true, fest: true,
+      s: [["H", "Fabrikat"], ["N", "Typ"], ["R", "Nr."], ["Y", "Kalibrierung"]], r: [51, 52, 53]}]},
     {titel: "Ergebnis", felder: [
       {t: "kreuz", n: "Check Box 22", l: "Sicherheits- und Funktionsprüfung mängelfrei", d: true},
       {t: "kreuz", n: "Check Box 23", l: "Aufschriften vorhanden bzw. vervollständigt", d: true},
@@ -2575,11 +2576,14 @@ async function formSicherungHolen(){
   }catch(e){}
 }
 const formDef = () => FORMULARE.find(f => f.id === formState.akt);
+// gemerkte Zellen eines Feldes: [[Zelle, Schlüssel]]
+function merkZellen(x){ if(!x.merken) return []; if(typeof x.z === "string") return [[x.z, x.l]]; if(x.t === "tabelle") return x.r.flatMap(r => x.s.map(([c]) => [c + r, x.l + " " + c + r])); return []; }
+function merkSetzen(k, v){ try{ const m = JSON.parse(localStorage.getItem("formMerk") || "{}"); m[k] = v; localStorage.setItem("formMerk", JSON.stringify(m)); }catch(e){} }
 function formWerte(){
   const w = formState.daten[formState.akt] || (formState.daten[formState.akt] = formStart(formDef()));
   // gespeicherte Werte (z. B. eigene Messgeräte) auch in schon angefangene Formulare übernehmen
   let merk = {}; try{ merk = JSON.parse(localStorage.getItem("formMerk") || "{}"); }catch(e){}
-  for(const a of formDef().abschnitte) for(const x of a.felder) if(x.merken && typeof x.z === "string" && !(x.z in w)) w[x.z] = merk[x.l] || "";
+  for(const a of formDef().abschnitte) for(const x of a.felder) for(const [z, k] of merkZellen(x)) if(!(z in w)) w[z] = merk[k] || "";
   return w;
 }
 function formStart(f){
@@ -2588,6 +2592,7 @@ function formStart(f){
   for(const a of f.abschnitte) for(const x of a.felder){
     if(x.z && typeof x.z === "string") w[x.z] = (x.merken && merk[x.l]) || (x.d ? x.d() : "");
     if(x.t === "kreuz") w["#" + x.n] = !!x.d;
+    if(x.t === "tabelle") for(const [z, k] of merkZellen(x)) w[z] = merk[k] || "";
   }
   return w;
 }
@@ -2674,18 +2679,19 @@ function formRender(){
         }
         g.appendChild(r); sek.appendChild(g);
       } else if(x.t === "tabelle"){
-        const tab = document.createElement("table"); tab.className = "form-tab";
+        const tab = document.createElement("table"); tab.className = "form-tab" + (x.fest ? " gleich" : "");
         tab.innerHTML = "<thead><tr>" + x.s.map(s => "<th>" + s[1] + "</th>").join("") + "</tr></thead>";
         const tb = document.createElement("tbody");
-        for(const row of tabZeilen(x, w)){
+        for(const row of (x.fest ? x.r : tabZeilen(x, w))){
           const tr = document.createElement("tr");
           for(const [sp] of x.s){
             const td = document.createElement("td"); const i = document.createElement("input"); const z = sp + row;
-            i.value = w[z] || ""; i.oninput = () => set(z, i.value); td.appendChild(i); tr.appendChild(td);
+            i.value = w[z] || ""; i.oninput = () => { if(x.merken) merkSetzen(x.l + " " + z, i.value); set(z, i.value); }; td.appendChild(i); tr.appendChild(td);
           }
           tb.appendChild(tr);
         }
         tab.appendChild(tb); sek.appendChild(tab);
+        if(x.fest) continue;
         const plus = document.createElement("button"); plus.type = "button"; plus.textContent = "+ Weitere Zeile"; plus.style.alignSelf = "flex-start";
         plus.onclick = () => { w["#mehr"] = (w["#mehr"] || 0) + 1; formMerken(); formRender(); };
         sek.appendChild(plus);
@@ -2885,6 +2891,7 @@ async function formSpeichern(drucken){
   // leere Zellen mit Vorgabe in der Vorlage (z. B. „Ladegerät“) trotzdem überschreiben
   for(const a of f.abschnitte) for(const x of a.felder) if(x.z && typeof x.z === "string" && !(x.z in werte) && x.d) werte[x.z] = "";
   if(f.id === "reparatur" && werte.R6) werte.R56 = werte.R6;
+  for(const a of f.abschnitte) for(const x of a.felder) for(const [z] of merkZellen(x)) if(!(z in werte)) werte[z] = "";
   if(f.id === "pruefung") werte.K13 = "A";   // Nennleistung immer in Ampere
   const btn = $("#formSpeichern"); btn.disabled = true; const alt = btn.textContent; btn.textContent = "Bitte warten …"; formMeldung(drucken ? "Excel füllt das Formular aus und druckt …" : "Excel füllt das Formular aus – das dauert ein paar Sekunden …", 60000);
   let r;
