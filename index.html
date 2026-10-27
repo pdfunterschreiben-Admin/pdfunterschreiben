@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#b8501f">
+<title>Gewürzregal</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- Update-Hinweis -->
+<div class="update" id="update" hidden>
+  <span id="update-text">Neue Version verfügbar</span>
+  <button id="update-btn" type="button">Jetzt installieren</button>
+</div>
+
+<!-- Login -->
+<main class="screen" id="login" hidden>
+  <div class="wrap center">
+    <h1>Gewürzregal</h1>
+    <p class="sub">Bitte mit dem gemeinsamen Zugang anmelden.</p>
+    <form id="login-form" class="card">
+      <label for="l-mail">Benutzer</label>
+      <input id="l-mail" type="text" autocomplete="username" autocapitalize="none" required>
+      <label for="l-pass">Passwort</label>
+      <input id="l-pass" type="password" autocomplete="current-password" required>
+      <button class="btn" type="submit" id="l-btn">Anmelden</button>
+      <p class="err" id="l-err"></p>
+    </form>
+    <p class="ver" id="ver1"></p>
+  </div>
+</main>
+
+<!-- Liste -->
+<main class="screen" id="app" hidden>
+  <div class="wrap">
+    <header class="top">
+      <div>
+        <h1>Gewürzregal</h1>
+        <p class="sum" id="sum">Lade Liste …</p>
+      </div>
+      <button class="link" id="logout" type="button">Abmelden</button>
+    </header>
+    <input id="q" type="search" placeholder="Suchen …" aria-label="Liste durchsuchen">
+    <div class="filters" id="filters">
+      <button type="button" data-f="all" class="on">Alle</button>
+      <button type="button" data-f="soon">Läuft bald ab</button>
+      <button type="button" data-f="zero">Aufgebraucht</button>
+    </div>
+    <ul id="list"></ul>
+    <p class="empty" id="empty" hidden>Noch nichts im Regal. Tippe unten auf <b>Scannen</b>.</p>
+    <p class="ver" id="ver2"></p>
+  </div>
+  <div class="dock"><div class="in">
+    <button class="scan" id="scan" type="button">▮▯▮▮▯▮ Scannen</button>
+    <button class="ghost" id="manual" type="button">Von Hand</button>
+  </div></div>
+</main>
+
+<!-- Kamera -->
+<div class="camera" id="camera" hidden>
+  <video id="video" playsinline muted></video>
+  <div class="frame"></div>
+  <p class="hint" id="cam-hint">Strichcode in den Rahmen halten</p>
+  <button class="ghost close" id="cam-close" type="button">Abbrechen</button>
+</div>
+
+<!-- Eintrag bearbeiten -->
+<div class="overlay" id="sheet" hidden>
+  <form class="card sheet" id="sheet-form">
+    <p class="status" id="status"></p>
+    <label for="f-code">Strichcode (EAN)</label>
+    <input id="f-code" inputmode="numeric">
+    <label for="f-name">Was ist das?</label>
+    <input id="f-name" placeholder="z. B. Maggi Würze 250 ml" required>
+    <label for="f-mhd">Mindesthaltbarkeit (MHD)</label>
+    <input id="f-mhd" type="date">
+    <label for="f-qty">Stückzahl</label>
+    <div class="qty big">
+      <button type="button" id="f-minus" aria-label="Weniger">−</button>
+      <input id="f-qty" type="number" min="0" value="1" inputmode="numeric">
+      <button type="button" id="f-plus" aria-label="Mehr">+</button>
+    </div>
+    <div class="row">
+      <button class="btn" type="submit">Speichern</button>
+      <button class="ghost" type="button" id="f-cancel">Abbrechen</button>
+    </div>
+  </form>
+</div>
+
+<script src="lib/zxing.min.js"></script>
+<script src="config.js"></script>
+<script src="version.js"></script>
+<script src="secret.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
