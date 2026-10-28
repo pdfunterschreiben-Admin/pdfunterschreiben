@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#b8501f">
-<title>Gewürzregal</title>
+<title>Bestandsaufnahme</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -18,7 +18,7 @@
 <!-- Login -->
 <main class="screen" id="login" hidden>
   <div class="wrap center">
-    <h1>Gewürzregal</h1>
+    <h1>Bestandsaufnahme</h1>
     <p class="sub">Bitte mit dem gemeinsamen Zugang anmelden.</p>
     <form id="login-form" class="card">
       <label for="l-mail">Benutzer</label>
@@ -37,7 +37,7 @@
   <div class="wrap">
     <header class="top">
       <div>
-        <h1>Gewürzregal</h1>
+        <h1>Bestandsaufnahme</h1>
         <p class="sum" id="sum">Lade Liste …</p>
       </div>
       <button class="link" id="logout" type="button">Abmelden</button>
@@ -48,8 +48,8 @@
       <button type="button" data-f="soon">Läuft bald ab</button>
       <button type="button" data-f="zero">Aufgebraucht</button>
     </div>
-    <ul id="list"></ul>
-    <p class="empty" id="empty" hidden>Noch nichts im Regal. Tippe unten auf <b>Scannen</b>.</p>
+    <div id="list"></div>
+    <p class="empty" id="empty" hidden>Noch nichts im Bestand. Tippe unten auf <b>Scannen</b>.</p>
     <p class="ver" id="ver2"></p>
   </div>
   <div class="dock"><div class="in">
@@ -74,6 +74,8 @@
     <input id="f-code" inputmode="numeric">
     <label for="f-name">Was ist das?</label>
     <input id="f-name" placeholder="z. B. Maggi Würze 250 ml" required>
+    <label for="f-cat">Ordner</label>
+    <select id="f-cat"></select>
     <label for="f-mhd">Mindesthaltbarkeit (MHD)</label>
     <input id="f-mhd" type="date">
     <label for="f-qty">Stückzahl</label>

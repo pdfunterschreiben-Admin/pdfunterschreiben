@@ -26,8 +26,6 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - uses: android-actions/setup-android@v3
-
       - name: Pakete installieren
         run: npm install
 
@@ -86,12 +84,12 @@ jobs:
           cd android
           chmod +x gradlew
           ./gradlew assembleRelease --no-daemon
-          cp app/build/outputs/apk/release/app-release.apk ../Gewuerzregal.apk
+          cp app/build/outputs/apk/release/app-release.apk ../Bestandsaufnahme.apk
 
       - name: Als Release veröffentlichen
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ inputs.version }}
-          name: Gewürzregal ${{ inputs.version }}
-          files: Gewuerzregal.apk
+          name: Bestandsaufnahme ${{ inputs.version }}
+          files: Bestandsaufnahme.apk
           make_latest: true

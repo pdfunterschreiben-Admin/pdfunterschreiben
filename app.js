@@ -137,7 +137,6 @@
   }
   document.addEventListener("visibilitychange", () => { if (!document.hidden && token) sync(); });
   window.addEventListener("online", () => token && sync());
-  if (token) start(); else logout();
 
   // ---------- MHD-Hilfen ----------
   const DAY = 86400000;
@@ -162,12 +161,60 @@
   });
   $("q").oninput = render;
 
+  // ---------- Ordner / Kategorien ----------
+  const CATS = ["Gewürze", "Aufschnitt", "Käse", "Fleisch", "TK-Produkte", "Milchprodukte", "Konserven", "Getränke", "Backwaren", "Sonstiges"];
+  // Reihenfolge wichtig: das Spezifischere zuerst (TK vor Fleisch, Aufschnitt vor Fleisch)
+  const TAG_RULES = [
+    ["TK-Produkte", /frozen/],
+    ["Gewürze", /spice|herb|condiment|seasoning|bouillon|broth|stock-cube|soup-seasoning|seasoning-sauce|salts?$|peppers?$|curry|paprika|gewurz/],
+    ["Aufschnitt", /sausage|cold-cut|(:|-)hams?\b|salami|charcuterie|cooked-meat|prepared-meat|cured-meat|wurst|aufschnitt|mortadella|bologna/],
+    ["Käse", /chees|kase|fromage/],
+    ["Fleisch", /meat|beef|pork|poultry|chicken|turkey|veal|lamb|minced|fleisch/],
+    ["Milchprodukte", /dair|milk|yogh?urt|butter|cream|quark|desserts-lactes/],
+    ["Getränke", /beverage|drink|juice|water|soda|coffee|tea|beer|wine/],
+    ["Konserven", /canned|preserve|tinned/],
+    ["Backwaren", /bread|bakery|baked|toast|roll|cereal/]
+  ];
+  const NAME_RULES = [
+    ["TK-Produkte", /\btk\b|tiefkühl|tiefgekühlt|frozen|iglo|frosta|pizza/i],
+    ["Gewürze", /gewürz|maggi|würze|brühe|bouillon|fond|knorr|fix für|pfeffer|paprika|curry|oregano|basilikum|thymian|rosmarin|zimt|muskat|kümmel|chili|kräuter|salz|ostmann|fuchs|kotanyi|wiberg|knoblauch(pulver|granulat)/i],
+    ["Aufschnitt", /wurst|salami|schinken|aufschnitt|mortadella|lyoner|leberwurst|mettwurst|bierschinken|kassler|cervelat|bacon|speck/i],
+    ["Käse", /käse|gouda|emmentaler|edamer|mozzarella|cheddar|camembert|brie|feta|parmesan|leerdammer|tilsiter|bergkäse/i],
+    ["Fleisch", /fleisch|hack|schnitzel|steak|filet|hähnchen|huhn|pute|rind|schwein|gulasch|braten|kotelett|nacken/i],
+    ["Milchprodukte", /milch|joghurt|jogurt|quark|sahne|butter|schmand|skyr|pudding/i],
+    ["Getränke", /saft|wasser|cola|limo|bier|wein|kaffee|tee\b|schorle/i],
+    ["Konserven", /dose|konserve|eintopf|ravioli|mais|bohnen|erbsen|tomaten (gehackt|passiert)/i],
+    ["Backwaren", /brot|brötchen|toast|knäcke|zwieback|kuchen|keks/i]
+  ];
+  function catFromTags(tags) {
+    const t = (tags || []).join(" ").toLowerCase();
+    for (const [c, re] of TAG_RULES) if (t && re.test(t)) return c;
+    return "";
+  }
+  function catFromName(name) {
+    for (const [c, re] of NAME_RULES) if (re.test(name || "")) return c;
+    return "";
+  }
+  const catOf = (it) => CATS.includes(it.cat) ? it.cat : (catFromName(it.name) || "Sonstiges");
+
+  const OPEN_KEY = "gr-open";
+  let openCats = ls.get(OPEN_KEY, null);
+  function isOpen(c) { return openCats ? openCats.includes(c) : true; }
+  function setOpen(c, on) {
+    const cur = new Set(openCats || CATS);
+    on ? cur.add(c) : cur.delete(c);
+    openCats = [...cur]; ls.set(OPEN_KEY, openCats);
+  }
+
+  // Auswahlfeld im Formular füllen
+  $("f-cat").innerHTML = CATS.map((c) => `<option>${c}</option>`).join("");
+
   function render() {
     const q = $("q").value.trim().toLowerCase();
     const total = items.reduce((s, i) => s + (i.qty || 0), 0);
     const soon = items.filter((i) => i.qty > 0 && daysLeft(i.mhd) !== null && daysLeft(i.mhd) <= 30).length;
     $("sum").textContent = items.length
-      ? `${items.length} Sorten · ${total} Stück` + (soon ? ` · ${soon} läuft bald ab` : "")
+      ? `${items.length} ${items.length === 1 ? "Sorte" : "Sorten"} · ${total} Stück` + (soon ? ` · ${soon} läuft bald ab` : "")
       : "";
     const st = $("sum").dataset.state;
     if (st === "offline") $("sum").textContent += " · offline";
@@ -182,7 +229,27 @@
 
     const ul = $("list");
     ul.innerHTML = "";
-    for (const it of shown) {
+    const groups = new Map(CATS.map((c) => [c, []]));
+    for (const it of shown) groups.get(catOf(it)).push(it);
+    const forceOpen = !!q || filter !== "all";
+    for (const [cat, list] of groups) {
+      if (!list.length) continue;
+      const det = document.createElement("details");
+      det.className = "folder";
+      det.open = forceOpen || isOpen(cat);
+      const sum = document.createElement("summary");
+      const pcs = list.reduce((s, i) => s + (i.qty || 0), 0);
+      const warn = list.filter((i) => i.qty > 0 && daysLeft(i.mhd) !== null && daysLeft(i.mhd) <= 30).length;
+      sum.innerHTML = '<span class="fname"></span><span class="fcount"></span>';
+      sum.querySelector(".fname").textContent = cat;
+      sum.querySelector(".fcount").textContent = `${list.length} ${list.length === 1 ? "Sorte" : "Sorten"} · ${pcs} Stk.` + (warn ? ` · ${warn} MHD` : "");
+      if (warn) sum.classList.add("warn");
+      det.appendChild(sum);
+      det.addEventListener("toggle", () => { if (!forceOpen) setOpen(cat, det.open); });
+      const inner = document.createElement("ul");
+      det.appendChild(inner);
+      ul.appendChild(det);
+      for (const it of list) {
       const li = document.createElement("li");
       if (!it.qty) li.className = "zero";
       li.innerHTML = '<div class="info"><span class="name"></span><span class="meta"></span>' +
@@ -203,24 +270,35 @@
       minus.onclick = () => { if (it.qty > 0) change({ t: "inc", id: it.id, d: -1 }); };
       plus.onclick = () => change({ t: "inc", id: it.id, d: 1 });
       li.querySelector(".edit").onclick = () => openSheet({ item: it });
-      ul.appendChild(li);
+      inner.appendChild(li);
+      }
     }
   }
 
   // ---------- Eintrag-Formular ----------
   let editing = null;
-  function openSheet({ item, code = "", name = "", mhd = "", msg = "", ok = false }) {
+  function openSheet({ item, code = "", name = "", mhd = "", cat = "", msg = "", ok = false }) {
     editing = item || (code && items.find((i) => i.code === code)) || null;
     $("f-code").value = editing ? (editing.code || "") : code;
     $("f-name").value = editing ? editing.name : name;
     $("f-mhd").value = mhd || (editing && editing.mhd) || "";
+    $("f-cat").value = editing ? catOf(editing) : (cat || "Sonstiges");
+    catTouched = false;
     $("f-qty").value = editing ? (item ? editing.qty : (editing.qty || 0) + 1) : 1;
-    $("status").textContent = msg || (editing && !item ? "Schon im Regal – Stückzahl um 1 erhöht." : "");
+    $("status").textContent = msg || (editing && !item ? "Schon im Bestand – Stückzahl um 1 erhöht." : "");
     $("status").className = "status" + (ok || (editing && !item) ? " ok" : "");
     $("f-del").hidden = !editing;
     resetDel();
     $("sheet").hidden = false;
   }
+  let catTouched = false;
+  $("f-cat").onchange = () => { catTouched = true; };
+  // Beim Tippen des Namens Ordner mitraten, solange man ihn nicht selbst gewählt hat
+  $("f-name").addEventListener("input", () => {
+    if (editing || catTouched) return;
+    const c = catFromName($("f-name").value);
+    if (c) $("f-cat").value = c;
+  });
   let delTimer = null;
   function resetDel() {
     clearTimeout(delTimer);
@@ -255,6 +333,7 @@
       name: $("f-name").value.trim() || "Unbekanntes Produkt",
       qty: Math.max(0, parseInt($("f-qty").value, 10) || 0),
       mhd: $("f-mhd").value || "",
+      cat: $("f-cat").value || "Sonstiges",
       updated: new Date().toISOString()
     };
     const id = editing ? editing.id : (code || "m" + Date.now());
@@ -340,35 +419,38 @@
     const known = items.find((i) => i.code === code);
     const mhdMsg = mhd ? " MHD aus dem Code gelesen." : "";
     if (known) {
-      openSheet({ code, mhd, msg: "Schon im Regal – Stückzahl um 1 erhöht." + mhdMsg, ok: true });
+      openSheet({ code, mhd, msg: "Schon im Bestand – Stückzahl um 1 erhöht." + mhdMsg, ok: true });
       return;
     }
     openSheet({ code, mhd, msg: "Produkt wird gesucht …" });
-    const name = await lookup(code);
+    const { name, cat } = await lookup(code);
     if (!$("sheet").hidden && $("f-code").value === code && !$("f-name").value) {
       $("f-name").value = name;
-      $("status").textContent = (name ? "Gefunden – bitte prüfen." : "Nicht gefunden – bitte Namen eintragen.") + mhdMsg;
+      const c = cat || catFromName(name);
+      if (c && !catTouched) $("f-cat").value = c;
+      $("status").textContent = (name ? `Gefunden – Ordner „${$("f-cat").value}“. Bitte prüfen.` : "Nicht gefunden – bitte Namen und Ordner eintragen.") + mhdMsg;
       $("status").className = "status" + (name ? " ok" : "");
     }
   }
 
   // Produktname aus der freien Datenbank Open Food Facts
   async function lookup(code) {
-    if (!/^\d{8,14}$/.test(code)) return "";
+    const none = { name: "", cat: "" };
+    if (!/^\d{8,14}$/.test(code)) return none;
     try {
       const ctl = new AbortController();
       const t = setTimeout(() => ctl.abort(), 7000);
-      const r = await fetch(`https://world.openfoodfacts.org/api/v2/product/${code}.json?fields=product_name_de,product_name,brands,quantity`, { signal: ctl.signal });
+      const r = await fetch(`https://world.openfoodfacts.org/api/v2/product/${code}.json?fields=product_name_de,product_name,brands,quantity,categories_tags`, { signal: ctl.signal });
       clearTimeout(t);
       const j = await r.json();
-      if (j.status !== 1 || !j.product) return "";
+      if (j.status !== 1 || !j.product) return none;
       const p = j.product;
       const brand = (p.brands || "").split(",")[0].trim();
       let n = (p.product_name_de || p.product_name || "").trim();
       if (brand && !n.toLowerCase().includes(brand.toLowerCase())) n = brand + " " + n;
       if (p.quantity) n += " " + p.quantity;
-      return n.trim();
-    } catch (e) { return ""; }
+      return { name: n.trim(), cat: catFromTags(p.categories_tags) };
+    } catch (e) { return none; }
   }
 
   // ---------- Update-Funktion ----------
@@ -391,6 +473,8 @@
       $("update-btn").onclick = () => { window.location.href = apk.browser_download_url; };
     } catch (e) {}
   }
+  // Start erst, wenn alles oben definiert ist
+  if (token) start(); else logout();
   checkUpdate();
   document.addEventListener("visibilitychange", () => { if (!document.hidden) checkUpdate(); });
 })();
