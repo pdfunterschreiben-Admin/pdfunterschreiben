@@ -74,3 +74,7 @@ select{font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--
 .folder summary.warn .fcount{color:#9a6a00}
 .folder ul{border-top:1px solid var(--line);padding:0 16px}
 .folder li:last-child{border-bottom:0}
+h2{font-family:Georgia,"Noto Serif",serif;font-size:1.3rem;margin:0}
+#l-pass2-wrap{display:flex;flex-direction:column;gap:8px}
+#l-switch{align-self:center;margin-top:4px}
+.hh{margin:2px 0 0;font-weight:700;color:var(--accent)}

@@ -1,64 +1,89 @@
-/* Gewürzregal – Vorratsliste mit Strichcode-Scanner
-   Daten: Firebase Firestore, Sammlung "vorrat" (für alle mit dem gemeinsamen Zugang gleich) */
+/* Bestandsaufnahme – Vorratsliste mit Strichcode-Scanner
+   Mehrere Haushalte: jeder Haushalt hat eine eigene, mit seinem Passwort
+   verschlüsselte Datei haushalte/<id>.json im privaten Daten-Repository. */
 (function () {
   "use strict";
   const $ = (id) => document.getElementById(id);
   const VERSION = window.APP_VERSION || "0.0.0";
   $("ver1").textContent = $("ver2").textContent = "Version " + VERSION;
 
-  // ---------- Speicher: Datei vorrat.json im privaten GitHub-Repository ----------
-  if (!window.APP_SECRET || String(window.DATA_REPO || "").includes("KONTO")) {
+  if (!window.APP_SECRET || !window.APP_SECRET.k || String(window.DATA_REPO || "").includes("KONTO")) {
     document.body.innerHTML = '<div class="wrap center"><h1>Einrichtung fehlt</h1><p class="sub">Diese App wurde ohne Zugang gebaut. Bitte über GitHub (Actions) bauen, siehe ANLEITUNG.md.</p></div>';
     return;
   }
-  const LS = { token: "gr-token", cache: "gr-cache", queue: "gr-queue" };
   const ls = {
     get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
     set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
     del(k) { try { localStorage.removeItem(k); } catch (e) {} }
   };
-  const API = `https://api.github.com/repos/${DATA_REPO}/contents/vorrat.json`;
-  let token = ls.get(LS.token, null);
-  let data = ls.get(LS.cache, { items: {} });
-  let sha = null;
-  let queue = ls.get(LS.queue, []);
+  const enc = new TextEncoder(), dec = new TextDecoder();
+  const b64dec = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
+  function b64enc(bytes) {
+    bytes = new Uint8Array(bytes);
+    let bin = ""; for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    return btoa(bin);
+  }
+  const utf8ToB64 = (str) => b64enc(enc.encode(str));
+  const b64ToUtf8 = (b) => dec.decode(b64dec(b.replace(/\n/g, "")));
+  const hex = (buf) => [...new Uint8Array(buf)].map((x) => x.toString(16).padStart(2, "0")).join("");
+  const normName = (n) => n.trim().toLowerCase().replace(/\s+/g, " ");
+
+  // ---------- Schlüssel ----------
+  let token = null;
+  async function appToken() {
+    if (token) return token;
+    const S = window.APP_SECRET;
+    const key = await crypto.subtle.importKey("raw", b64dec(S.k), "AES-GCM", false, ["decrypt"]);
+    token = dec.decode(await crypto.subtle.decrypt({ name: "AES-GCM", iv: b64dec(S.iv) }, key, b64dec(S.data)));
+    return token;
+  }
+  async function householdId(name) {
+    return hex(await crypto.subtle.digest("SHA-256", enc.encode("bestand:" + normName(name)))).slice(0, 40);
+  }
+  async function deriveKey(name, pass, salt) {
+    const base = await crypto.subtle.importKey("raw", enc.encode(normName(name) + ":" + pass), "PBKDF2", false, ["deriveKey"]);
+    const k = await crypto.subtle.deriveKey({ name: "PBKDF2", salt, iterations: 200000, hash: "SHA-256" },
+      base, { name: "AES-GCM", length: 256 }, true, ["encrypt", "decrypt"]);
+    return b64enc(await crypto.subtle.exportKey("raw", k));
+  }
+  const aesKey = (raw) => crypto.subtle.importKey("raw", b64dec(raw), "AES-GCM", false, ["encrypt", "decrypt"]);
+  async function seal(obj) {
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const ct = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, await aesKey(hh.key), enc.encode(JSON.stringify(obj)));
+    return { v: 1, salt: hh.salt, iv: b64enc(iv), data: b64enc(ct) };
+  }
+  async function open(file, rawKey) {
+    const pt = await crypto.subtle.decrypt({ name: "AES-GCM", iv: b64dec(file.iv) }, await aesKey(rawKey), b64dec(file.data));
+    return JSON.parse(dec.decode(pt));
+  }
+
+  // ---------- GitHub-Speicher ----------
+  const fileUrl = (id) => `https://api.github.com/repos/${DATA_REPO}/contents/haushalte/${id}.json`;
+  async function gh(id, method, body) {
+    const r = await fetch(fileUrl(id) + (method === "GET" ? "?t=" + Date.now() : ""), {
+      method, cache: "no-store",
+      headers: { Authorization: "Bearer " + (await appToken()), Accept: "application/vnd.github+json" },
+      body: body ? JSON.stringify(body) : undefined
+    });
+    if (r.status === 401) throw Object.assign(new Error("auth"), { auth: true });
+    return r;
+  }
+  async function readFile(id) {
+    const r = await gh(id, "GET");
+    if (r.status === 404) return null;
+    if (!r.ok) throw new Error("http " + r.status);
+    const j = await r.json();
+    return { sha: j.sha, file: JSON.parse(b64ToUtf8(j.content)) };
+  }
+
+  // ---------- Sitzung (angemeldeter Haushalt) ----------
+  let hh = ls.get("gr-hh", null); // { id, name, key, salt }
+  const K = () => ({ cache: "gr-cache-" + hh.id, queue: "gr-queue-" + hh.id });
+  let data = { items: {} }, queue = [], sha = null;
   let items = [];
   let filter = "all";
   let syncing = false;
 
-  const b64dec = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
-  function utf8ToB64(str) {
-    const bytes = new TextEncoder().encode(str);
-    let bin = ""; for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
-    return btoa(bin);
-  }
-  const b64ToUtf8 = (b) => new TextDecoder().decode(b64dec(b.replace(/\n/g, "")));
-
-  async function unlock(user, pass) {
-    const S = window.APP_SECRET, enc = new TextEncoder();
-    const base = await crypto.subtle.importKey("raw", enc.encode(user.trim().toLowerCase() + ":" + pass), "PBKDF2", false, ["deriveKey"]);
-    const key = await crypto.subtle.deriveKey({ name: "PBKDF2", salt: b64dec(S.salt), iterations: 200000, hash: "SHA-256" },
-      base, { name: "AES-GCM", length: 256 }, false, ["decrypt"]);
-    const pt = await crypto.subtle.decrypt({ name: "AES-GCM", iv: b64dec(S.iv) }, key, b64dec(S.data));
-    return new TextDecoder().decode(pt);
-  }
-
-  function gh(method, body) {
-    return fetch(API + (method === "GET" ? "?t=" + Date.now() : ""), {
-      method, cache: "no-store",
-      headers: { Authorization: "Bearer " + token, Accept: "application/vnd.github+json" },
-      body: body ? JSON.stringify(body) : undefined
-    });
-  }
-  async function pull() {
-    const r = await gh("GET");
-    if (r.status === 404) { sha = null; return { items: {} }; }
-    if (r.status === 401 || r.status === 403) throw Object.assign(new Error("auth"), { auth: true });
-    if (!r.ok) throw new Error("http " + r.status);
-    const j = await r.json();
-    sha = j.sha;
-    return JSON.parse(b64ToUtf8(j.content) || '{"items":{}}');
-  }
   function apply(d, op) {
     const it = d.items[op.id];
     if (op.t === "inc") { if (it) it.qty = Math.max(0, (it.qty || 0) + op.d); }
@@ -67,7 +92,7 @@
     return d;
   }
   function showLocal() {
-    let view = JSON.parse(JSON.stringify(data));
+    const view = JSON.parse(JSON.stringify(data));
     queue.forEach((op) => apply(view, op));
     items = Object.entries(view.items).map(([id, v]) => Object.assign({ id }, v));
     render();
@@ -75,68 +100,138 @@
   function setStatus(t) { $("sum").dataset.state = t || ""; render(); }
 
   async function sync() {
-    if (syncing || !token) return;
+    if (syncing || !hh) return;
     syncing = true;
+    const me = hh.id;
     try {
       for (let tries = 0; tries < 5; tries++) {
-        const remote = await pull();
+        const got = await readFile(me);
+        if (!hh || hh.id !== me) return;
+        const remote = got ? await open(got.file, hh.key) : { items: {} };
+        sha = got ? got.sha : null;
         if (!queue.length) { data = remote; break; }
         const merged = queue.reduce((d, op) => apply(d, op), JSON.parse(JSON.stringify(remote)));
-        const r = await gh("PUT", {
-          message: "Liste geändert",
-          content: utf8ToB64(JSON.stringify(merged, null, 1)),
+        const r = await gh(me, "PUT", {
+          message: "Bestand geändert",
+          content: utf8ToB64(JSON.stringify(await seal(merged))),
           sha: sha || undefined
         });
-        if (r.ok) { data = merged; queue = []; ls.set(LS.queue, queue); break; }
+        if (r.ok) { data = merged; queue = []; ls.set(K().queue, queue); break; }
         if (r.status !== 409 && r.status !== 422) throw new Error("http " + r.status);
-        // Jemand anderes hat gleichzeitig gespeichert: neu laden und nochmal
+        // Ein anderes Handy hat gleichzeitig gespeichert: neu laden und nochmal
       }
-      ls.set(LS.cache, data);
+      ls.set(K().cache, data);
       setStatus("");
     } catch (e) {
-      if (e.auth) { logout(); $("l-err").textContent = "Zugang ist nicht mehr gültig. Bitte neue App-Version installieren."; }
+      if (e.auth) setStatus("zugang");
+      else if (e.name === "OperationError") { logout(); $("l-err").textContent = "Passwort des Haushalts wurde geändert. Bitte neu anmelden."; }
       else setStatus(navigator.onLine === false ? "offline" : "fehler");
     } finally {
       syncing = false;
-      showLocal();
-      if (queue.length && navigator.onLine !== false) setTimeout(sync, 4000);
+      if (hh) {
+        showLocal();
+        if (queue.length && navigator.onLine !== false) setTimeout(sync, 4000);
+      }
     }
   }
   function change(op) {
-    queue.push(op); ls.set(LS.queue, queue);
+    queue.push(op); ls.set(K().queue, queue);
     showLocal(); sync();
   }
 
-  // ---------- Login ----------
+  // ---------- Anmelden / Haushalt anlegen ----------
+  let mode = "login";
+  function setMode(m) {
+    mode = m;
+    const neu = m === "create";
+    $("l-title").textContent = neu ? "Neuen Haushalt anlegen" : "Anmelden";
+    $("l-hint").textContent = neu
+      ? "Name und Passwort selbst ausdenken. Alle in eurem Haushalt melden sich damit an und sehen dieselbe Liste."
+      : "Mit Haushalt und Passwort anmelden.";
+    $("l-pass2-wrap").hidden = !neu;
+    $("l-pass").autocomplete = neu ? "new-password" : "current-password";
+    $("l-btn").textContent = neu ? "Haushalt anlegen" : "Anmelden";
+    $("l-switch").textContent = neu ? "Ich habe schon einen Haushalt – anmelden" : "Neuen Haushalt anlegen";
+    $("l-err").textContent = "";
+  }
+  $("l-switch").onclick = () => setMode(mode === "login" ? "create" : "login");
+
+  // Liste aus Version 1.x (vor den Haushalten) für die Übernahme
+  function legacyData() {
+    const d = ls.get("gr-cache", null);
+    if (!d || !d.items) return null;
+    ls.get("gr-queue", []).forEach((op) => apply(d, op));
+    return Object.keys(d.items).length ? d : null;
+  }
+
   $("login-form").addEventListener("submit", async (e) => {
     e.preventDefault();
+    const name = $("l-mail").value, pass = $("l-pass").value;
     $("l-err").textContent = "";
+    if (normName(name).length < 3) { $("l-err").textContent = "Der Haushaltsname braucht mindestens 3 Zeichen."; return; }
+    if (mode === "create") {
+      if (pass.length < 6) { $("l-err").textContent = "Das Passwort braucht mindestens 6 Zeichen."; return; }
+      if (pass !== $("l-pass2").value) { $("l-err").textContent = "Die beiden Passwörter sind verschieden."; return; }
+    }
     $("l-btn").disabled = true;
+    $("l-btn").textContent = "Bitte warten …";
     try {
-      token = await unlock($("l-mail").value, $("l-pass").value);
-      ls.set(LS.token, token);
-      $("l-pass").value = "";
-      start();
+      const id = await householdId(name);
+      const got = await readFile(id);
+      if (mode === "login") {
+        if (!got) throw new Error("Diesen Haushalt gibt es nicht. Name prüfen oder neuen Haushalt anlegen.");
+        const key = await deriveKey(name, pass, b64dec(got.file.salt));
+        let d;
+        try { d = await open(got.file, key); } catch (x) { throw new Error("Passwort stimmt nicht."); }
+        begin({ id, name: name.trim(), key, salt: got.file.salt }, d);
+      } else {
+        if (got) throw new Error("Diesen Haushaltsnamen gibt es schon. Bitte einen anderen wählen.");
+        const salt = b64enc(crypto.getRandomValues(new Uint8Array(16)));
+        const key = await deriveKey(name, pass, b64dec(salt));
+        const session = { id, name: name.trim(), key, salt };
+        hh = session;
+        const start = legacyData() || { items: {} };
+        const r = await gh(id, "PUT", { message: "Haushalt angelegt", content: utf8ToB64(JSON.stringify(await seal(start))) });
+        if (!r.ok) { hh = null; throw new Error(r.status === 422 ? "Diesen Haushaltsnamen gibt es schon." : "Anlegen fehlgeschlagen (" + r.status + ")."); }
+        if (start.items && Object.keys(start.items).length) { ls.del("gr-cache"); ls.del("gr-queue"); }
+        ls.del("gr-token");
+        begin(session, start);
+      }
+      $("l-pass").value = ""; $("l-pass2").value = "";
     } catch (err) {
-      token = null;
-      $("l-err").textContent = "Benutzer oder Passwort stimmt nicht.";
+      $("l-err").textContent = err.auth ? "Die App hat keinen Zugriff mehr auf den Speicher. Bitte neue Version installieren."
+        : (err.message && !/^http|Failed to fetch|NetworkError/.test(err.message)) ? err.message
+        : "Keine Verbindung. Bitte Internet prüfen.";
     }
     $("l-btn").disabled = false;
+    $("l-btn").textContent = mode === "create" ? "Haushalt anlegen" : "Anmelden";
   });
+
+  function begin(session, d) {
+    hh = session; ls.set("gr-hh", hh);
+    data = d || ls.get(K().cache, { items: {} });
+    queue = ls.get(K().queue, []);
+    if (d) ls.set(K().cache, d);
+    start();
+  }
   function logout() {
-    token = null; ls.del(LS.token);
+    hh = null; ls.del("gr-hh");
+    data = { items: {} }; queue = []; items = [];
+    clearInterval(timer);
     $("login").hidden = false; $("app").hidden = true;
+    setMode(legacyData() ? "create" : "login");
   }
   $("logout").onclick = logout;
   let timer = null;
   function start() {
     $("login").hidden = true; $("app").hidden = false;
+    $("hh-name").textContent = hh.name;
     showLocal(); sync();
     clearInterval(timer);
-    timer = setInterval(() => { if (!document.hidden) sync(); }, 20000);
+    timer = setInterval(() => { if (!document.hidden) sync(); }, 45000);
   }
-  document.addEventListener("visibilitychange", () => { if (!document.hidden && token) sync(); });
-  window.addEventListener("online", () => token && sync());
+  document.addEventListener("visibilitychange", () => { if (!document.hidden && hh) sync(); });
+  window.addEventListener("online", () => hh && sync());
 
   // ---------- MHD-Hilfen ----------
   const DAY = 86400000;
@@ -219,6 +314,7 @@
     const st = $("sum").dataset.state;
     if (st === "offline") $("sum").textContent += " · offline";
     if (st === "fehler") $("sum").textContent += " · nicht synchron";
+    if (st === "zugang") $("sum").textContent += " · kein Speicherzugriff";
     $("empty").hidden = items.length > 0;
 
     let shown = items.filter((i) => !q || ((i.name || "") + " " + (i.code || "")).toLowerCase().includes(q));
@@ -474,7 +570,7 @@
     } catch (e) {}
   }
   // Start erst, wenn alles oben definiert ist
-  if (token) start(); else logout();
+  if (hh) begin(hh); else logout();
   checkUpdate();
   document.addEventListener("visibilitychange", () => { if (!document.hidden) checkUpdate(); });
 })();

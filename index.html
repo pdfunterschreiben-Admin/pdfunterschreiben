@@ -19,14 +19,20 @@
 <main class="screen" id="login" hidden>
   <div class="wrap center">
     <h1>Bestandsaufnahme</h1>
-    <p class="sub">Bitte mit dem gemeinsamen Zugang anmelden.</p>
     <form id="login-form" class="card">
-      <label for="l-mail">Benutzer</label>
-      <input id="l-mail" type="text" autocomplete="username" autocapitalize="none" required>
+      <h2 id="l-title">Anmelden</h2>
+      <p class="sub" id="l-hint"></p>
+      <label for="l-mail">Haushalt</label>
+      <input id="l-mail" type="text" autocomplete="username" autocapitalize="words" placeholder="z. B. Familie Stockey" required>
       <label for="l-pass">Passwort</label>
       <input id="l-pass" type="password" autocomplete="current-password" required>
+      <div id="l-pass2-wrap" hidden>
+        <label for="l-pass2">Passwort wiederholen</label>
+        <input id="l-pass2" type="password" autocomplete="new-password">
+      </div>
       <button class="btn" type="submit" id="l-btn">Anmelden</button>
       <p class="err" id="l-err"></p>
+      <button class="link" type="button" id="l-switch">Neuen Haushalt anlegen</button>
     </form>
     <p class="ver" id="ver1"></p>
   </div>
@@ -38,6 +44,7 @@
     <header class="top">
       <div>
         <h1>Bestandsaufnahme</h1>
+        <p class="hh" id="hh-name"></p>
         <p class="sum" id="sum">Lade Liste …</p>
       </div>
       <button class="link" id="logout" type="button">Abmelden</button>

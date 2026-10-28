@@ -36,10 +36,8 @@ jobs:
           cp node_modules/@zxing/library/umd/index.min.js www/lib/zxing.min.js
           echo "window.APP_VERSION = \"${{ inputs.version }}\";" > www/version.js
 
-      - name: Zugang verschlüsselt einbauen
+      - name: Speicher-Zugang verschlüsselt einbauen
         env:
-          APP_USER: ${{ secrets.APP_USER }}
-          APP_PASSWORD: ${{ secrets.APP_PASSWORD }}
           DATA_TOKEN: ${{ secrets.DATA_TOKEN }}
         run: node verschluesseln.js
 
