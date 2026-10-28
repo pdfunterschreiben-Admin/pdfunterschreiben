@@ -257,7 +257,7 @@
   $("q").oninput = render;
 
   // ---------- Ordner / Kategorien ----------
-  const CATS = ["Gewürze", "Aufschnitt", "Käse", "Fleisch", "TK-Produkte", "Milchprodukte", "Konserven", "Getränke", "Backwaren", "Sonstiges"];
+  const CATS = ["Gewürze", "Aufschnitt", "Käse", "Fleisch", "TK-Produkte", "Milchprodukte", "Konserven", "Getränke", "Alkohol", "Backwaren", "Sonstiges"];
   // Reihenfolge wichtig: das Spezifischere zuerst (TK vor Fleisch, Aufschnitt vor Fleisch)
   const TAG_RULES = [
     ["TK-Produkte", /frozen/],
@@ -266,7 +266,8 @@
     ["Käse", /chees|kase|fromage/],
     ["Fleisch", /meat|beef|pork|poultry|chicken|turkey|veal|lamb|minced|fleisch/],
     ["Milchprodukte", /dair|milk|yogh?urt|butter|cream|quark|desserts-lactes/],
-    ["Getränke", /beverage|drink|juice|water|soda|coffee|tea|beer|wine/],
+    ["Alkohol", /alcoholic|spirit|liqueur|liquor|beers?\b|wines?\b|vodka|whisk|(:|-)rums?\b|(:|-)gins?\b|korn|schnaps|brandy|cognac|champagne|sparkling-wine|prosecco|cider|aperitif|bitters/],
+    ["Getränke", /beverage|drink|juice|water|soda|coffee|tea/],
     ["Konserven", /canned|preserve|tinned/],
     ["Backwaren", /bread|bakery|baked|toast|roll|cereal/]
   ];
@@ -277,7 +278,8 @@
     ["Käse", /käse|gouda|emmentaler|edamer|mozzarella|cheddar|camembert|brie|feta|parmesan|leerdammer|tilsiter|bergkäse/i],
     ["Fleisch", /fleisch|hack|schnitzel|steak|filet|hähnchen|huhn|pute|rind|schwein|gulasch|braten|kotelett|nacken/i],
     ["Milchprodukte", /milch|joghurt|jogurt|quark|sahne|butter|schmand|skyr|pudding/i],
-    ["Getränke", /saft|wasser|cola|limo|bier|wein|kaffee|tee\b|schorle/i],
+    ["Alkohol", /\bkorn\b|doppelkorn|kornbrand|schnaps|wodka|vodka|\brum\b|whisky|whiskey|likör|\bgin\b|sekt|prosecco|champagner|bier|\bpils|pilsner|radler|hefeweizen|weißbier|wein(?!essig|stein|traube|blatt)|cognac|tequila|ouzo|grappa|jägermeister|aperol|amaretto|obstler|klarer|kräuterlikör|\d+([,.]\d+)?\s*%\s*vol/i],
+    ["Getränke", /saft|wasser|cola|limo|kaffee|tee\b|schorle/i],
     ["Konserven", /dose|konserve|eintopf|ravioli|mais|bohnen|erbsen|tomaten (gehackt|passiert)/i],
     ["Backwaren", /brot|brötchen|toast|knäcke|zwieback|kuchen|keks/i]
   ];
