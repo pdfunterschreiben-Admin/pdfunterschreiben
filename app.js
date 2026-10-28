@@ -306,6 +306,30 @@
   // Auswahlfeld im Formular füllen
   $("f-cat").innerHTML = CATS.map((c) => `<option>${c}</option>`).join("");
 
+  // ---------- Bestand / Einkaufsliste ----------
+  let view = ls.get("gr-view", "stock");
+  function setView(v) {
+    view = v; ls.set("gr-view", v);
+    document.querySelectorAll(".tabs button").forEach((b) => b.classList.toggle("on", b.dataset.v === v));
+    render();
+  }
+  document.querySelectorAll(".tabs button").forEach((b) => { b.onclick = () => setView(b.dataset.v); });
+  const toBuy = () => items.filter((i) => !i.qty);
+  $("shop-copy").onclick = async () => {
+    const groups = new Map(CATS.map((c) => [c, []]));
+    toBuy().forEach((i) => groups.get(catOf(i)).push(i.name || "Unbekanntes Produkt"));
+    let txt = "Einkaufsliste" + (hh ? " – " + hh.name : "") + "\n";
+    for (const [c, l] of groups) if (l.length) txt += "\n" + c + ":\n" + l.sort((a, b) => a.localeCompare(b, "de")).map((n) => "• " + n).join("\n") + "\n";
+    const b = $("shop-copy");
+    try { await navigator.clipboard.writeText(txt); b.textContent = "Kopiert ✓"; }
+    catch (e) {
+      const ta = document.createElement("textarea"); ta.value = txt; document.body.appendChild(ta); ta.select();
+      try { document.execCommand("copy"); b.textContent = "Kopiert ✓"; } catch (x) { b.textContent = "Kopieren ging nicht"; }
+      ta.remove();
+    }
+    setTimeout(() => { b.textContent = "Liste kopieren"; }, 2000);
+  };
+
   function render() {
     const q = $("q").value.trim().toLowerCase();
     const total = items.reduce((s, i) => s + (i.qty || 0), 0);
@@ -317,19 +341,28 @@
     if (st === "offline") $("sum").textContent += " · offline";
     if (st === "fehler") $("sum").textContent += " · nicht synchron";
     if (st === "zugang") $("sum").textContent += " · kein Speicherzugriff";
-    $("empty").hidden = items.length > 0;
+    const shop = view === "shop";
+    const nBuy = toBuy().length;
+    $("shop-n").textContent = nBuy; $("shop-n").hidden = !nBuy;
+    $("filters").hidden = shop;
+    $("shopbar").hidden = !shop;
+    $("shop-copy").hidden = !nBuy;
+    if (shop) $("sum").textContent = nBuy ? `${nBuy} ${nBuy === 1 ? "Produkt" : "Produkte"} einkaufen` : "Alles da";
+    $("empty").hidden = shop ? nBuy > 0 : items.length > 0;
+    $("empty").innerHTML = shop ? "Nichts zu kaufen. Sobald ein Produkt auf 0 Stück fällt, steht es hier."
+      : "Noch nichts im Bestand. Tippe unten auf <b>Scannen</b>.";
 
     let shown = items.filter((i) => !q || ((i.name || "") + " " + (i.code || "")).toLowerCase().includes(q));
-    if (filter === "soon") shown = shown.filter((i) => i.qty > 0 && daysLeft(i.mhd) !== null && daysLeft(i.mhd) <= 30)
+    if (shop) shown = shown.filter((i) => !i.qty).sort((a, b) => (a.name || "").localeCompare(b.name || "", "de"));
+    else if (filter === "soon") shown = shown.filter((i) => i.qty > 0 && daysLeft(i.mhd) !== null && daysLeft(i.mhd) <= 30)
       .sort((a, b) => (a.mhd || "").localeCompare(b.mhd || ""));
-    else if (filter === "zero") shown = shown.filter((i) => !i.qty);
     else shown.sort((a, b) => (a.name || "").localeCompare(b.name || "", "de"));
 
     const ul = $("list");
     ul.innerHTML = "";
     const groups = new Map(CATS.map((c) => [c, []]));
     for (const it of shown) groups.get(catOf(it)).push(it);
-    const forceOpen = !!q || filter !== "all";
+    const forceOpen = shop || !!q || filter !== "all";
     for (const [cat, list] of groups) {
       if (!list.length) continue;
       const det = document.createElement("details");
@@ -340,8 +373,8 @@
       const warn = list.filter((i) => i.qty > 0 && daysLeft(i.mhd) !== null && daysLeft(i.mhd) <= 30).length;
       sum.innerHTML = '<span class="fname"></span><span class="fcount"></span>';
       sum.querySelector(".fname").textContent = cat;
-      sum.querySelector(".fcount").textContent = `${list.length} ${list.length === 1 ? "Sorte" : "Sorten"} · ${pcs} Stk.` + (warn ? ` · ${warn} MHD` : "");
-      if (warn) sum.classList.add("warn");
+      sum.querySelector(".fcount").textContent = shop ? `${list.length} zu kaufen` : `${list.length} ${list.length === 1 ? "Sorte" : "Sorten"} · ${pcs} Stk.` + (warn ? ` · ${warn} MHD` : "");
+      if (warn && !shop) sum.classList.add("warn");
       det.appendChild(sum);
       det.addEventListener("toggle", () => { if (!forceOpen) setOpen(cat, det.open); });
       const inner = document.createElement("ul");
@@ -368,6 +401,16 @@
       minus.onclick = () => { if (it.qty > 0) change({ t: "inc", id: it.id, d: -1 }); };
       plus.onclick = () => change({ t: "inc", id: it.id, d: 1 });
       li.querySelector(".edit").onclick = () => openSheet({ item: it });
+      if (!it.qty && !shop) {
+        m.hidden = false; m.className = "mhd buy"; m.textContent = "Auf der Einkaufsliste";
+      }
+      if (shop) {
+        li.className = "buyrow";
+        const q2 = li.querySelector(".qty");
+        q2.innerHTML = '<button type="button" class="bought">✓ Gekauft</button>';
+        q2.querySelector(".bought").onclick = () => change({ t: "inc", id: it.id, d: 1 });
+        m.hidden = true;
+      }
       inner.appendChild(li);
       }
     }

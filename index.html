@@ -50,13 +50,20 @@
       </div>
       <button class="link" id="logout" type="button">Abmelden</button>
     </header>
+    <div class="tabs" role="tablist">
+      <button type="button" role="tab" data-v="stock" class="on">Bestand</button>
+      <button type="button" role="tab" data-v="shop">Einkaufsliste <span class="badge" id="shop-n" hidden></span></button>
+    </div>
     <input id="q" type="search" placeholder="Suchen …" aria-label="Liste durchsuchen">
     <div class="filters" id="filters">
       <button type="button" data-f="all" class="on">Alle</button>
       <button type="button" data-f="soon">Läuft bald ab</button>
-      <button type="button" data-f="zero">Aufgebraucht</button>
     </div>
     <div id="list"></div>
+    <div class="shopbar" id="shopbar" hidden>
+      <span id="shop-hint">Produkte mit 0 Stück landen automatisch hier.</span>
+      <button type="button" class="ghost small" id="shop-copy">Liste kopieren</button>
+    </div>
     <p class="empty" id="empty" hidden>Noch nichts im Bestand. Tippe unten auf <b>Scannen</b>.</p>
     <p class="ver" id="ver2"></p>
   </div>
