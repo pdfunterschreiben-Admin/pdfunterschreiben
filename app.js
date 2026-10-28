@@ -217,8 +217,31 @@
     $("f-qty").value = editing ? (item ? editing.qty : (editing.qty || 0) + 1) : 1;
     $("status").textContent = msg || (editing && !item ? "Schon im Regal – Stückzahl um 1 erhöht." : "");
     $("status").className = "status" + (ok || (editing && !item) ? " ok" : "");
+    $("f-del").hidden = !editing;
+    resetDel();
     $("sheet").hidden = false;
   }
+  let delTimer = null;
+  function resetDel() {
+    clearTimeout(delTimer);
+    $("f-del").dataset.armed = "";
+    $("f-del").textContent = "Aus der Liste löschen";
+    $("f-del").classList.remove("armed");
+  }
+  $("f-del").onclick = () => {
+    if (!editing) return;
+    if (!$("f-del").dataset.armed) {
+      $("f-del").dataset.armed = "1";
+      $("f-del").textContent = "Wirklich löschen? Nochmal tippen";
+      $("f-del").classList.add("armed");
+      delTimer = setTimeout(resetDel, 4000);
+      return;
+    }
+    const id = editing.id;
+    resetDel();
+    $("sheet").hidden = true;
+    change({ t: "del", id });
+  };
   $("f-minus").onclick = () => { $("f-qty").value = Math.max(0, (+$("f-qty").value || 0) - 1); };
   $("f-plus").onclick = () => { $("f-qty").value = (+$("f-qty").value || 0) + 1; };
   $("f-cancel").onclick = () => { $("sheet").hidden = true; };

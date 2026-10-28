@@ -60,3 +60,5 @@ li .mhd.over{background:#b3261e22;color:var(--err);border-color:var(--err)}
 .filters{display:flex;gap:6px;flex-wrap:wrap}
 .filters button{border:1px solid var(--line);background:var(--card);color:var(--fg);border-radius:999px;padding:6px 12px;font:inherit;font-size:.85rem}
 .filters button.on{background:var(--fg);color:var(--bg)}
+.danger{background:none;border:1px solid var(--err);color:var(--err);border-radius:12px;padding:12px;font:inherit;margin-top:4px}
+.danger.armed{background:var(--err);color:var(--card);font-weight:700}
