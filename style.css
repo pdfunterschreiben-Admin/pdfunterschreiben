@@ -78,3 +78,5 @@ h2{font-family:Georgia,"Noto Serif",serif;font-size:1.3rem;margin:0}
 #l-pass2-wrap{display:flex;flex-direction:column;gap:8px}
 #l-switch{align-self:center;margin-top:4px}
 .hh{margin:2px 0 0;font-weight:700;color:var(--accent)}
+.logo{width:88px;height:88px;align-self:center;filter:drop-shadow(0 6px 14px rgba(0,0,0,.18))}
+.center h1{text-align:center}

@@ -33,6 +33,7 @@ jobs:
         run: |
           mkdir -p www/lib
           cp index.html app.js style.css config.js www/
+          cp icon/icon.svg www/logo.svg
           cp node_modules/@zxing/library/umd/index.min.js www/lib/zxing.min.js
           echo "window.APP_VERSION = \"${{ inputs.version }}\";" > www/version.js
 
@@ -69,6 +70,22 @@ jobs:
               }
           }
           EOF
+          # App-Logo, rundes Logo, adaptives Symbol und Startbildschirm
+          sudo apt-get update -qq && sudo apt-get install -y -qq librsvg2-bin >/dev/null
+          R=android/app/src/main/res
+          for e in mdpi:48:108 hdpi:72:162 xhdpi:96:216 xxhdpi:144:324 xxxhdpi:192:432; do
+            IFS=: read d s f <<< "$e"
+            mkdir -p $R/mipmap-$d
+            rsvg-convert -w $s -h $s icon/icon.svg -o $R/mipmap-$d/ic_launcher.png
+            rsvg-convert -w $s -h $s icon/round.svg -o $R/mipmap-$d/ic_launcher_round.png
+            rsvg-convert -w $f -h $f icon/foreground.svg -o $R/mipmap-$d/ic_launcher_foreground.png
+          done
+          sed -i 's/#FFFFFF/#B8501F/I' $R/values/ic_launcher_background.xml
+          rsvg-convert -w 1024 -h 1024 icon/icon.svg -o /tmp/logo.png
+          for f in $(find $R -name splash.png); do
+            dim=$(identify -format %wx%h $f); w=${dim%x*}; h=${dim#*x}; m=$(( (w<h?w:h) * 35 / 100 ))
+            convert -size $dim xc:'#f6f3ee' \( /tmp/logo.png -resize ${m}x${m} \) -gravity center -composite $f
+          done
           npx cap sync android
           grep -n "versionCode\|versionName" android/app/build.gradle
 
