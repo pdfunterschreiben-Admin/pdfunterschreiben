@@ -490,7 +490,67 @@
   }
   $("cam-close").onclick = stopScan;
 
+  // ---------- Scanner: zuerst Google-Scanner (ML Kit, nativ), sonst Kamera im Browser ----------
+  let Native = null;
+  try {
+    if (window.Capacitor && Capacitor.isNativePlatform && Capacitor.isNativePlatform())
+      Native = Capacitor.registerPlugin("BarcodeScanner");
+  } catch (e) { Native = null; }
+  let nativeBroken = false;
+
+  function scanToast(msg) {
+    $("sum").dataset.state = ""; render();
+    $("sum").textContent = msg;
+  }
+  async function ensureModule() {
+    const { available } = await Native.isGoogleBarcodeScannerModuleAvailable();
+    if (available) return true;
+    scanToast("Scanner wird einmalig eingerichtet …");
+    await new Promise(async (resolve) => {
+      let done = false;
+      const finish = () => { if (!done) { done = true; resolve(); } };
+      try {
+        const h = await Native.addListener("googleBarcodeScannerModuleInstallProgress", (ev) => {
+          if (ev && typeof ev.progress === "number") scanToast(`Scanner wird eingerichtet … ${ev.progress} %`);
+          if (ev && (ev.progress >= 100 || ev.state === 4)) { setTimeout(finish, 500); try { h.remove(); } catch (x) {} }
+        });
+      } catch (x) {}
+      try { await Native.installGoogleBarcodeScannerModule(); } catch (x) { finish(); }
+      // Sicherheitsnetz: regelmäßig nachsehen
+      for (let i = 0; i < 60 && !done; i++) {
+        await new Promise((r) => setTimeout(r, 2000));
+        try { if ((await Native.isGoogleBarcodeScannerModuleAvailable()).available) finish(); } catch (x) {}
+      }
+      finish();
+    });
+    render();
+    return (await Native.isGoogleBarcodeScannerModuleAvailable()).available;
+  }
+
+  async function nativeScan() {
+    if (!(await ensureModule())) throw new Error("module");
+    const res = await Native.scan({ formats: ["EAN_13", "EAN_8", "UPC_A", "UPC_E", "CODE_128", "DATA_MATRIX", "QR_CODE"] });
+    const bc = res && res.barcodes && res.barcodes[0];
+    return bc ? (bc.rawValue || bc.displayValue || "") : "";
+  }
+
   $("scan").onclick = async () => {
+    if (Native && !nativeBroken) {
+      try {
+        const raw = await nativeScan();
+        if (raw) { if (navigator.vibrate) navigator.vibrate(80); handleCode(raw); }
+        return; // abgebrochen oder erkannt
+      } catch (e) {
+        const msg = String((e && (e.message || e.code)) || e);
+        if (/cancel/i.test(msg)) return;
+        nativeBroken = true; // z. B. ohne Google-Play-Dienste: Kamera-Scanner nehmen
+        render();
+      }
+    }
+    webScan();
+  };
+
+  async function webScan() {
     $("camera").hidden = false;
     $("cam-hint").textContent = "Strichcode in den Rahmen halten";
     const hints = new Map();
@@ -498,10 +558,10 @@
     hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS,
       [F.EAN_13, F.EAN_8, F.UPC_A, F.UPC_E, F.CODE_128, F.DATA_MATRIX, F.QR_CODE]);
     hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
-    reader = new ZXing.BrowserMultiFormatReader(hints, 300);
+    reader = new ZXing.BrowserMultiFormatReader(hints, 200);
     try {
       await reader.decodeFromConstraints(
-        { video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 } } },
+        { video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 }, advanced: [{ focusMode: "continuous" }] } },
         $("video"),
         (result) => {
           if (!result) return;
@@ -512,7 +572,7 @@
     } catch (err) {
       $("cam-hint").textContent = "Kamera nicht verfügbar. Bitte in den Android-Einstellungen der App die Kamera erlauben.";
     }
-  };
+  }
 
   // GS1-Codes (DataMatrix, QR, GS1-128, Digital Link) können GTIN (01) und MHD (17 / 15) enthalten.
   function parseGS1(raw) {

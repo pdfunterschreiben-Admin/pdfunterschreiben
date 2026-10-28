@@ -34,6 +34,7 @@ jobs:
           mkdir -p www/lib
           cp index.html app.js style.css config.js www/
           cp icon/icon.svg www/logo.svg
+          cp node_modules/@capacitor/core/dist/capacitor.js www/lib/capacitor.js
           cp node_modules/@zxing/library/umd/index.min.js www/lib/zxing.min.js
           echo "window.APP_VERSION = \"${{ inputs.version }}\";" > www/version.js
 
@@ -47,6 +48,9 @@ jobs:
           npx cap add android
           # Kamera-Berechtigung
           sed -i 's#</manifest>#    <uses-permission android:name="android.permission.CAMERA" />\n    <uses-feature android:name="android.hardware.camera" android:required="false" />\n</manifest>#' android/app/src/main/AndroidManifest.xml
+          # Google-Strichcode-Scanner (ML Kit) automatisch mit installieren lassen
+          sed -i 's#<application#<application#; s#</application>#    <meta-data android:name="com.google.mlkit.vision.DEPENDENCIES" android:value="barcode_ui"/>\n    </application>#' android/app/src/main/AndroidManifest.xml
+          grep -n "mlkit" android/app/src/main/AndroidManifest.xml
           # Versionsnummer
           sed -i "s/versionCode 1$/versionCode ${{ github.run_number }}/" android/app/build.gradle
           sed -i "s/versionName \"1.0\"/versionName \"${{ inputs.version }}\"/" android/app/build.gradle
