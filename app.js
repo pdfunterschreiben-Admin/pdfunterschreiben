@@ -394,6 +394,9 @@
     pizzagewürz: "pizzagewürz", pizza: "pizzagewürz", gewürzpizza: "pizzagewürz",
     kräutersalatkräuter: "salatkräuter", currygemahlen: "curry", gewürzcurry: "curry", currypulver: "curry",
     magicdustbbqrub: "magicdust", gewürzmischungbbqmagicdust: "magicdust", bbqmagicdust: "magicdust", magicdustrub: "magicdust",
+    classicpfeffer: "pfeffer", pfefferclassic: "pfeffer",
+    pfefferschwarzgemahlen: "pfefferschwarz", schwarzerpfeffer: "pfefferschwarz", schwarzerpfeffergemahlen: "pfefferschwarz",
+    muskatnussgemahlen: "muskatnuss", muskatgemahlen: "muskatnuss", muskat: "muskatnuss",
     zimt: "zimtgemahlen", gewürzzimtgemahlen: "zimtgemahlen", paprikaedelsuess: "paprikaedelsüss"
   };
   const normKey = (k) => {
