@@ -270,7 +270,7 @@
   $("q").oninput = render;
 
   // ---------- Ordner / Kategorien ----------
-  const CATS = ["Gewürze", "Aufschnitt", "Käse", "Fleisch", "TK-Produkte", "Milchprodukte", "Konserven", "Getränke", "Alkohol", "Backwaren", "Sonstiges"];
+  const CATS = ["Gewürze", "Aufschnitt", "Käse", "Fleisch", "TK-Produkte", "Milchprodukte", "Konserven", "Getränke", "Alkohol", "Backwaren", "Drogerie", "Sonstiges"];
   // Reihenfolge wichtig: das Spezifischere zuerst (TK vor Fleisch, Aufschnitt vor Fleisch)
   const TAG_RULES = [
     ["TK-Produkte", /frozen/],
@@ -282,7 +282,8 @@
     ["Alkohol", /alcoholic|spirit|liqueur|liquor|beers?\b|wines?\b|vodka|whisk|(:|-)rums?\b|(:|-)gins?\b|korn|schnaps|brandy|cognac|champagne|sparkling-wine|prosecco|cider|aperitif|bitters/],
     ["Getränke", /beverage|drink|juice|water|soda|coffee|tea/],
     ["Konserven", /canned|preserve|tinned/],
-    ["Backwaren", /bread|bakery|baked|toast|roll|cereal/]
+    ["Backwaren", /bread|bakery|baked|toast|roll|cereal/],
+    ["Drogerie", /cosmetic|hygiene|shampoo|deodorant|soap|toothpaste|non-food|beauty|hair|skin-care|body-care|shower/],
   ];
   const NAME_RULES = [
     ["TK-Produkte", /\btk\b|tiefkühl|tiefgekühlt|frozen|iglo|frosta|pizza/i],
@@ -294,7 +295,8 @@
     ["Alkohol", /\bkorn\b|doppelkorn|kornbrand|schnaps|wodka|vodka|\brum\b|whisky|whiskey|likör|\bgin\b|sekt|prosecco|champagner|bier|\bpils|pilsner|radler|hefeweizen|weißbier|wein(?!essig|stein|traube|blatt)|cognac|tequila|ouzo|grappa|jägermeister|aperol|amaretto|obstler|klarer|kräuterlikör|\d+([,.]\d+)?\s*%\s*vol/i],
     ["Getränke", /saft|wasser|cola|limo|kaffee|tee\b|schorle/i],
     ["Konserven", /dose|konserve|eintopf|ravioli|mais|bohnen|erbsen|tomaten (gehackt|passiert)/i],
-    ["Backwaren", /brot|brötchen|toast|knäcke|zwieback|kuchen|keks/i]
+    ["Backwaren", /brot|brötchen|toast|knäcke|zwieback|kuchen|keks/i],
+    ["Drogerie", /haargel|haarspray|haarwachs|shampoo|spülung|duschgel|duschbad|\bdeo\b|deodorant|deoroller|deo roller|nivea|zahnpasta|zahncreme|zahnbürste|mundspülung|seife|handcreme|bodylotion|körperlotion|rasier|wattepad|wattestäbchen|taschentücher|toilettenpapier|waschmittel|weichspüler|spülmittel|spültabs|balea|\bdove\b|\baxe\b|colgate|elmex|sensodyne|gillette|always|tempo|pflaster|sonnencreme/i],
   ];
   function catFromTags(tags) {
     const t = (tags || []).join(" ").toLowerCase();
