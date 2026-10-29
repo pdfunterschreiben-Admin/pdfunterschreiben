@@ -403,6 +403,32 @@
   }
   document.querySelectorAll(".tabs button").forEach((b) => { b.onclick = () => setView(b.dataset.v); });
   const toBuy = () => items.filter((i) => !i.qty);
+  async function copyText(txt, btn, label) {
+    try { await navigator.clipboard.writeText(txt); btn.textContent = "Kopiert ✓"; }
+    catch (e) {
+      const ta = document.createElement("textarea"); ta.value = txt; document.body.appendChild(ta); ta.select();
+      try { document.execCommand("copy"); btn.textContent = "Kopiert ✓"; } catch (x) { btn.textContent = "Kopieren ging nicht"; }
+      ta.remove();
+    }
+    setTimeout(() => { btn.textContent = label; }, 2500);
+  }
+  // Kompletter Bestand als Text (zum Weitergeben oder für den Support)
+  $("stock-copy").onclick = () => {
+    const groups = new Map(CATS.map((c) => [c, []]));
+    items.forEach((i) => groups.get(catOf(i)).push(i));
+    let txt = `Bestand ${hh ? hh.name : ""} (Version ${VERSION}, ${items.length} Einträge)\n`;
+    for (const [c, l] of groups) {
+      if (!l.length) continue;
+      txt += `\n== ${c} ==\n`;
+      l.sort(byName).forEach((i) => {
+        const codes = [i.code, ...(i.codes || [])].filter(Boolean).join("/");
+        txt += `${displayName(i)}${isAnker(i) ? " [Ankerkraut]" : ""} | ${i.qty || 0} Stk | gespeichert: ${i.name || ""}` +
+          (i.brand ? ` | Marke: ${i.brand}` : "") + (i.cat ? ` | Ordner: ${i.cat}` : "") + (codes ? ` | EAN ${codes}` : "") +
+          (i.mhd ? ` | MHD ${i.mhd}` : "") + "\n";
+      });
+    }
+    copyText(txt, $("stock-copy"), "Bestand als Text kopieren");
+  };
   $("shop-copy").onclick = async () => {
     const groups = new Map(CATS.map((c) => [c, []]));
     toBuy().forEach((i) => groups.get(catOf(i)).push(displayName(i) + (isAnker(i) ? " (Ankerkraut)" : "")));
