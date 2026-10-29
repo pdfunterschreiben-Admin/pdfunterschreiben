@@ -284,6 +284,17 @@
     ["Konserven", /canned|preserve|tinned/],
     ["Backwaren", /bread|bakery|baked|toast|roll|cereal/],
     ["Drogerie", /cosmetic|hygiene|shampoo|deodorant|soap|toothpaste|non-food|beauty|hair|skin-care|body-care|shower/],
+    ["Backzutaten", /baking|flours?\b|sugars?\b|leavening|yeast|starch|cocoa-powder/],
+    ["Süßwaren", /confectioner|chocolate|candies|candy|sweets|gummies|biscuits|cookies|sweet-snacks/],
+    ["Snacks", /salty-snacks|crisps|chips|snacks|nuts|popcorn|pretzel/],
+    ["Nudeln & Reis", /pasta|noodles|rices?\b|spaghetti|cereals-and-potatoes|grains/],
+    ["Obst & Gemüse", /fruits?\b|vegetables?\b|fresh-/],
+    ["Saucen & Dressings", /sauces?\b|dressings?|ketchup|mayonnaise|mustard|condiment/],
+    ["Brotaufstriche", /spreads|jams?\b|honey|marmalade|nut-butter/],
+    ["Frühstück", /breakfast|muesli|cornflakes|oat/],
+    ["Fisch", /fish|seafood|tuna|salmon/],
+    ["Tierbedarf", /pet-food|dog-food|cat-food/],
+    ["Haushalt", /household|cleaning|detergent|dishwash/],
   ];
   const NAME_RULES = [
     ["TK-Produkte", /\btk\b|tiefkühl|tiefgekühlt|frozen|iglo|frosta|pizza/i],
@@ -296,6 +307,17 @@
     ["Getränke", /saft|wasser|cola|limo|kaffee|tee\b|schorle/i],
     ["Konserven", /dose|konserve|eintopf|ravioli|mais|bohnen|erbsen|tomaten (gehackt|passiert)/i],
     ["Backwaren", /brot|brötchen|toast|knäcke|zwieback|kuchen|keks/i],
+    ["Backzutaten", /mehl\b|weizenmehl|zucker\b|puderzucker|backpulver|backin|\bhefe\b|trockenhefe|vanillezucker|vanillin|speisestärke|mondamin|kakaopulver|backkakao|gelatine|tortenguss|streusel/i],
+    ["Süßwaren", /schokolade|praline|gummibär|fruchtgummi|bonbon|lakritz|keks|riegel|haribo|milka|ritter sport|kinder\b|nutella/i],
+    ["Snacks", /chips|flips|erdnüss|nüsse|salzstangen|brezel|popcorn|cracker|nachos/i],
+    ["Nudeln & Reis", /nudel|spaghetti|penne|fusilli|tortellini|lasagne|reis\b|basmati|risotto|couscous|bulgur|quinoa/i],
+    ["Obst & Gemüse", /apfel|banane|birne|orange|zitrone|tomate(?!n gewürz)|gurke|kartoffel|zwiebel|möhre|karotte|salat\b|paprikaschote/i],
+    ["Saucen & Dressings", /ketchup|mayo|senf|soße|sauce|dressing|remoulade|grillsauce/i],
+    ["Brotaufstriche", /marmelade|konfitüre|honig|aufstrich|erdnussbutter|nuss-nougat/i],
+    ["Frühstück", /müsli|cornflakes|haferflocken|granola/i],
+    ["Fisch", /fisch|thunfisch|lachs|hering|forelle|sardine|garnele/i],
+    ["Tierbedarf", /hundefutter|katzenfutter|whiskas|felix|pedigree|frolic|katzenstreu/i],
+    ["Haushalt", /müllbeutel|alufolie|frischhaltefolie|backpapier|schwamm|reiniger|spülmaschinentabs|kerze|batterie/i],
     ["Drogerie", /haargel|haarspray|haarwachs|shampoo|spülung|duschgel|duschbad|\bdeo\b|deodorant|deoroller|deo roller|nivea|zahnpasta|zahncreme|zahnbürste|mundspülung|seife|handcreme|bodylotion|körperlotion|rasier|wattepad|wattestäbchen|taschentücher|toilettenpapier|waschmittel|weichspüler|spülmittel|spültabs|balea|\bdove\b|\baxe\b|colgate|elmex|sensodyne|gillette|always|tempo|pflaster|sonnencreme/i],
   ];
   function catFromTags(tags) {
@@ -307,10 +329,18 @@
     for (const [c, re] of NAME_RULES) if (re.test(name || "")) return c;
     return "";
   }
+  const BASE_ORDER = CATS.concat(["Backzutaten", "Süßwaren", "Snacks", "Nudeln & Reis", "Obst & Gemüse", "Saucen & Dressings", "Brotaufstriche", "Frühstück", "Fisch", "Tierbedarf", "Haushalt"]);
+  const KNOWN = (c) => typeof c === "string" && c.trim() && c !== "Sonstiges";
+  // Alle Ordner: feste in fester Reihenfolge, danach automatisch/selbst angelegte, „Sonstiges“ immer zuletzt
+  function allCats() {
+    const extra = new Set();
+    for (const it of items) { const c = catOf(it); if (!BASE_ORDER.includes(c)) extra.add(c); }
+    return BASE_ORDER.filter((c) => c !== "Sonstiges").concat([...extra].sort((a, b) => a.localeCompare(b, "de")), ["Sonstiges"]);
+  }
   const catOf = (it) => {
-    if (it.catFixed && CATS.includes(it.cat)) return it.cat;       // vom Nutzer bewusst gewählt
+    if (it.catFixed && KNOWN(it.cat)) return it.cat;       // vom Nutzer bewusst gewählt
     if (spiceEvidence(it)) return "Gewürze";
-    if (CATS.includes(it.cat) && it.cat !== "Sonstiges") return it.cat;
+    if (KNOWN(it.cat)) return it.cat;
     return catFromName(it.name) || "Sonstiges";
   };
 
@@ -324,7 +354,17 @@
   }
 
   // Auswahlfeld im Formular füllen
-  $("f-cat").innerHTML = CATS.map((c) => `<option>${c}</option>`).join("");
+  const NEW_CAT = "__neu__";
+  function fillCatSelect(selected) {
+    const list = allCats();
+    if (selected && !list.includes(selected)) list.splice(list.length - 1, 0, selected);
+    const sel = $("f-cat");
+    sel.innerHTML = "";
+    for (const c of list) { const o = document.createElement("option"); o.value = c; o.textContent = c; sel.appendChild(o); }
+    const o = document.createElement("option"); o.value = NEW_CAT; o.textContent = "＋ Neuer Ordner …"; sel.appendChild(o);
+    sel.value = selected || "Sonstiges";
+    $("f-newcat-wrap").hidden = true; $("f-newcat").value = "";
+  }
 
   // ---------- Gewürze: Namen ohne Hersteller, Ankerkraut extra ----------
   const SPICE_BRANDS = ["ankerkraut", "kania", "ostmann", "fuchs gewürze", "fuchs-gruppe", "fuchs gruppe", "fuchs", "kotányi", "kotanyi", "wiberg",
@@ -468,7 +508,7 @@
   }
   // Kompletter Bestand als Text (zum Weitergeben oder für den Support)
   $("stock-copy").onclick = () => {
-    const groups = new Map(CATS.map((c) => [c, []]));
+    const groups = new Map(allCats().map((c) => [c, []]));
     items.forEach((i) => groups.get(catOf(i)).push(i));
     let txt = `Bestand ${hh ? hh.name : ""} (Version ${VERSION}, ${items.length} Einträge)\n`;
     for (const [c, l] of groups) {
@@ -484,7 +524,7 @@
     copyText(txt, $("stock-copy"), "Bestand als Text kopieren");
   };
   $("shop-copy").onclick = async () => {
-    const groups = new Map(CATS.map((c) => [c, []]));
+    const groups = new Map(allCats().map((c) => [c, []]));
     toBuy().forEach((i) => groups.get(catOf(i)).push(displayName(i) + (isAnker(i) ? " (Ankerkraut)" : "")));
     let txt = "Einkaufsliste" + (hh ? " – " + hh.name : "") + "\n";
     for (const [c, l] of groups) if (l.length) txt += "\n" + c + ":\n" + l.sort((a, b) => a.localeCompare(b, "de")).map((n) => "• " + n).join("\n") + "\n";
@@ -528,7 +568,7 @@
 
     const ul = $("list");
     ul.innerHTML = "";
-    const groups = new Map(CATS.map((c) => [c, []]));
+    const groups = new Map(allCats().map((c) => [c, []]));
     for (const it of shown) groups.get(catOf(it)).push(it);
     const forceOpen = shop || !!q || filter !== "all";
     for (const [cat, list] of groups) {
@@ -610,7 +650,7 @@
     $("f-code").value = editing ? (editing.code || "") : code;
     $("f-name").value = editing ? editing.name : name;
     $("f-mhd").value = mhd || (editing && editing.mhd) || "";
-    $("f-cat").value = editing ? catOf(editing) : (cat || "Sonstiges");
+    fillCatSelect(editing ? catOf(editing) : (cat || "Sonstiges"));
     catTouched = false;
     $("f-name").dataset.brand = (editing && editing.brand) || "";
     $("f-qty").value = editing ? (item ? editing.qty : (editing.qty || 0) + 1) : 1;
@@ -627,7 +667,12 @@
     $("sheet").hidden = false;
   }
   let catTouched = false;
-  $("f-cat").onchange = () => { catTouched = true; };
+  $("f-cat").onchange = () => {
+    catTouched = true;
+    const neu = $("f-cat").value === NEW_CAT;
+    $("f-newcat-wrap").hidden = !neu;
+    if (neu) $("f-newcat").focus();
+  };
   // Beim Tippen des Namens Ordner mitraten, solange man ihn nicht selbst gewählt hat
   $("f-name").addEventListener("input", () => {
     if (editing || catTouched) return;
@@ -678,7 +723,7 @@
       name: $("f-name").value.trim() || "Unbekanntes Produkt",
       qty: Math.max(0, parseInt($("f-qty").value, 10) || 0),
       mhd: $("f-mhd").value || "",
-      cat: $("f-cat").value || "Sonstiges",
+      cat: ($("f-cat").value === NEW_CAT ? $("f-newcat").value.trim().replace(/^./, (x) => x.toUpperCase()) : $("f-cat").value) || "Sonstiges",
       catFixed: catTouched || !!(editing && editing.catFixed),
       brand: $("f-name").dataset.brand || "",
       updated: new Date().toISOString()
@@ -858,25 +903,36 @@
       return;
     }
     openSheet({ code, mhd, msg: "Produkt wird gesucht …" });
-    const { name, cat, brand } = await lookup(code);
+    const { name, cat, brand, offCat } = await lookup(code);
     $("f-name").dataset.brand = brand || "";
     if (!$("sheet").hidden && $("f-code").value === code && !$("f-name").value) {
       $("f-name").value = name;
-      const c = cat || catFromName(name);
-      if (c && !catTouched) $("f-cat").value = c;
-      $("status").textContent = (name ? `Gefunden – Ordner „${$("f-cat").value}“. Bitte prüfen.` : "Nicht gefunden – bitte Namen und Ordner eintragen.") + mhdMsg;
+      const c = cat || catFromName(name) || offCat;
+      if (c && !catTouched) fillCatSelect(c);
+      if (c && !catTouched && !allCats().includes(c)) $("status").dataset.neu = "1"; else delete $("status").dataset.neu;
+      $("status").textContent = (name ? `Gefunden – Ordner „${$("f-cat").value}“${$("status").dataset.neu ? " (wird neu angelegt)" : ""}. Bitte prüfen.` : "Nicht gefunden – bitte Namen und Ordner eintragen.") + mhdMsg;
       $("status").className = "status" + (name ? " ok" : "");
     }
   }
 
+  // Spezifischste deutsche Kategorie aus der Datenbank als Ordnername
+  function offFolder(p) {
+    const parts = String(p.categories || "").split(",").map((x) => x.trim()).filter((x) => x && !/^[a-z]{2}:/.test(x) && x.length <= 30);
+    const de = parts.filter((x) => /[äöüß]|[A-ZÄÖÜ][a-zäöüß]+/.test(x));
+    const src = de.length ? de : parts;
+    // Eine Stufe über der spezifischsten Kategorie ergibt einen sinnvollen Sammelordner
+    const pick = (src.length >= 3 ? src[src.length - 2] : src[src.length - 1]) || "";
+    return pick ? pick.charAt(0).toUpperCase() + pick.slice(1) : "";
+  }
+
   // Produktname aus der freien Datenbank Open Food Facts
   async function lookup(code) {
-    const none = { name: "", cat: "" };
+    const none = { name: "", cat: "", offCat: "" };
     if (!/^\d{8,14}$/.test(code)) return none;
     try {
       const ctl = new AbortController();
       const t = setTimeout(() => ctl.abort(), 7000);
-      const r = await fetch(`https://world.openfoodfacts.org/api/v2/product/${code}.json?fields=product_name_de,product_name,brands,quantity,categories_tags`, { signal: ctl.signal });
+      const r = await fetch(`https://world.openfoodfacts.org/api/v2/product/${code}.json?fields=product_name_de,product_name,brands,quantity,categories_tags,categories&lc=de`, { signal: ctl.signal });
       clearTimeout(t);
       const j = await r.json();
       if (j.status !== 1 || !j.product) return none;
@@ -885,7 +941,7 @@
       let n = (p.product_name_de || p.product_name || "").trim();
       if (brand && !n.toLowerCase().includes(brand.toLowerCase())) n = brand + " " + n;
       if (p.quantity) n += " " + p.quantity;
-      return { name: n.trim(), cat: catFromTags(p.categories_tags), brand };
+      return { name: n.trim(), cat: catFromTags(p.categories_tags), brand, offCat: offFolder(p) };
     } catch (e) { return none; }
   }
 
