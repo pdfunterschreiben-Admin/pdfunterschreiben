@@ -89,12 +89,25 @@
     if (op.t === "inc") { if (it) it.qty = Math.max(0, (it.qty || 0) + op.d); }
     else if (op.t === "set") d.items[op.id] = Object.assign({}, it || {}, op.data);
     else if (op.t === "del") delete d.items[op.id];
+    else if (op.t === "merge") {
+      const a = d.items[op.into], b = d.items[op.from];
+      if (a && b && op.into !== op.from) {
+        a.qty = (a.qty || 0) + (b.qty || 0);
+        const codes = new Set([...(a.codes || []), ...(b.codes || []), b.code].filter(Boolean));
+        codes.delete(a.code); a.codes = [...codes];
+        if (b.mhd && (!a.mhd || b.mhd < a.mhd)) a.mhd = b.mhd;
+        if (!a.brand && b.brand) a.brand = b.brand;
+        a.aliases = [...new Set([...(a.aliases || []), ...(b.aliases || []), op.alias].filter(Boolean))];
+        delete d.items[op.from];
+      }
+    }
     return d;
   }
   function showLocal() {
     const view = JSON.parse(JSON.stringify(data));
     queue.forEach((op) => apply(view, op));
     items = Object.entries(view.items).map(([id, v]) => Object.assign({ id }, v));
+    if (autoMerge()) return;
     render();
   }
   function setStatus(t) { $("sum").dataset.state = t || ""; render(); }
@@ -311,7 +324,11 @@
     "le gusto", "gut & günstig", "gut&günstig", "ja!", "k-classic", "rewe beste wahl", "beste wahl", "rewe bio", "rewe",
     "edeka bio", "edeka", "spar", "alnatura", "lebensbaum", "sonnentor", "just spices", "schuhbecks", "schuhbeck",
     "altes gewürzamt", "dennree", "rapunzel", "herbaria", "aldi", "lidl", "netto", "penny", "dm bio", "denree",
-    "gefro", "kühne", "bad reichenhaller", "knorr", "ubena", "hela", "raps", "spice for life", "steinhaus"];
+    "gefro", "kühne", "bad reichenhaller", "knorr", "ubena", "hela", "raps", "spice for life", "steinhaus",
+    "kaufland", "k-bio", "k bio", "k classic", "milfina", "nur nur natur", "gut bio", "bio sonne", "aldi süd", "aldi nord",
+    "penny ready", "rewe ja!", "ja", "jeden tag", "real quality", "globus", "mühlenhof", "bioland", "demeter", "naturland"]
+    .sort((a, b) => b.length - a.length);
+  const SIZE_RE = /\(?\s*\b\d+([.,]\d+)?\s*(g|gr|gramm|kg|mg|ml|cl|l|liter|stk|stück|st|x|er)\b\.?\s*\)?/gi;
   const isAnker = (it) => /ankerkraut/i.test((it.name || "") + " " + (it.brand || ""));
   function stripBrand(name, brand) {
     let n = (name || "").trim();
@@ -322,7 +339,14 @@
       if (!b) break;
       n = n.slice(b.length).replace(/^[\s\-–:,.®™]+/, "");
     }
-    n = n.replace(/\s*[-–]?\s*ankerkraut\b/ig, "").trim();
+    // Marke am Ende („Pfeffer gemahlen Kaufland“)
+    for (let k = 0; k < 2; k++) {
+      const low = n.toLowerCase();
+      const b = list.find((x) => x && low.endsWith(x) && /[\s\-–,(]$/.test(n.slice(0, n.length - x.length)));
+      if (!b) break;
+      n = n.slice(0, n.length - b.length).replace(/[\s\-–,(]+$/, "");
+    }
+    n = n.replace(/\s*[-–]?\s*ankerkraut\b/ig, "").replace(SIZE_RE, " ").replace(/\s{2,}/g, " ").replace(/[\s\-–,]+$/, "").trim();
     return n ? n.charAt(0).toUpperCase() + n.slice(1) : (name || "");
   }
   // Maggi-Würze bleibt „Maggi …“, sonst wäre nur „Würze“ übrig
@@ -332,6 +356,43 @@
     return stripBrand(n, it.brand);
   };
   const byName = (a, b) => displayName(a).localeCompare(displayName(b), "de");
+  // Gleiches Gewürz = gleicher Schlüssel (ohne Marke, Größe, Groß/Klein, Satzzeichen)
+  // Gleiche Gewürze unter anderem Namen
+  const SYNONYMS = {
+    "pfeffer weiß": "pfeffer gemahlen", "pfeffer weiss": "pfeffer gemahlen", "weißer pfeffer": "pfeffer gemahlen",
+    "weisser pfeffer": "pfeffer gemahlen", "pfeffer weiß gemahlen": "pfeffer gemahlen", "weißer pfeffer gemahlen": "pfeffer gemahlen",
+    "pfeffer weiss gemahlen": "pfeffer gemahlen", "pfeffer gemahlen weiß": "pfeffer gemahlen"
+  };
+  const spiceKey = (it) => {
+    if (catOf(it) !== "Gewürze" || /^maggi/i.test(it.name || "")) return null;
+    let k = displayName(it).toLowerCase().replace(/[^a-zäöüß0-9]+/g, " ").trim();
+    k = SYNONYMS[k] || k;
+    return (isAnker(it) ? "anker:" : "g:") + k;
+  };
+  const matches = (i, k) => k && (spiceKey(i) === k || (i.aliases || []).includes(k));
+  const findByCode = (code) => code ? items.find((i) => i.code === code || (i.codes || []).includes(code)) : null;
+  const findSame = (probe, exceptId) => {
+    const k = spiceKey(probe);
+    return k ? items.find((i) => i.id !== exceptId && matches(i, k)) : null;
+  };
+  let merging = false;
+  function autoMerge() {
+    if (merging || !hh) return false;
+    const seen = new Map(), ops = [];
+    for (const it of items) for (const a of it.aliases || []) if (!seen.has(a)) seen.set(a, it.id);
+    for (const it of items) {
+      const k = spiceKey(it);
+      if (!k) continue;
+      if (seen.has(k) && seen.get(k) !== it.id) ops.push({ t: "merge", into: seen.get(k), from: it.id, alias: k });
+      else seen.set(k, it.id);
+    }
+    if (!ops.length) return false;
+    merging = true;
+    queue.push(...ops); ls.set(K().queue, queue);
+    merging = false;
+    showLocal(); sync();
+    return true;
+  }
 
   // ---------- Bestand / Einkaufsliste ----------
   let view = ls.get("gr-view", "stock");
@@ -465,7 +526,7 @@
   // ---------- Eintrag-Formular ----------
   let editing = null;
   function openSheet({ item, code = "", name = "", mhd = "", cat = "", msg = "", ok = false }) {
-    editing = item || (code && items.find((i) => i.code === code)) || null;
+    editing = item || findByCode(code) || null;
     $("f-code").value = editing ? (editing.code || "") : code;
     $("f-name").value = editing ? editing.name : name;
     $("f-mhd").value = mhd || (editing && editing.mhd) || "";
@@ -476,6 +537,12 @@
     $("status").textContent = msg || (editing && !item ? "Schon im Bestand – Stückzahl um 1 erhöht." : "");
     $("status").className = "status" + (ok || (editing && !item) ? " ok" : "");
     $("f-del").hidden = !editing;
+    const others = editing ? items.filter((i) => i.id !== editing.id && catOf(i) === catOf(editing)).sort(byName) : [];
+    $("f-merge-wrap").hidden = !others.length;
+    $("f-merge").innerHTML = '<option value="">– auswählen –</option>' +
+      others.map((i) => `<option value="${i.id}"></option>`).join("");
+    [...$("f-merge").options].slice(1).forEach((o, n) => { o.textContent = displayName(others[n]) + (isAnker(others[n]) ? " (Ankerkraut)" : "") + ` · ${others[n].qty || 0} Stk.`; });
+    $("f-merge-btn").disabled = true;
     resetDel();
     $("sheet").hidden = false;
   }
@@ -487,6 +554,16 @@
     const c = catFromName($("f-name").value);
     if (c) $("f-cat").value = c;
   });
+  $("f-merge").onchange = () => { $("f-merge-btn").disabled = !$("f-merge").value; };
+  $("f-merge-btn").onclick = () => {
+    const into = items.find((i) => i.id === $("f-merge").value);
+    if (!editing || !into) return;
+    const from = editing;
+    const alias = spiceKey(from) || ("n:" + displayName(from).toLowerCase());
+    $("sheet").hidden = true;
+    change({ t: "merge", into: into.id, from: from.id, alias });
+    toast(`„${displayName(from)}“ gehört jetzt zu „${displayName(into)}“`);
+  };
   let delTimer = null;
   function resetDel() {
     clearTimeout(delTimer);
@@ -527,6 +604,16 @@
     };
     const id = editing ? editing.id : (code || "m" + Date.now());
     $("sheet").hidden = true;
+    const same = !editing && findSame(data, null);
+    if (same) {
+      const codes = [...new Set([...(same.codes || []), code].filter((c) => c && c !== same.code))];
+      change({ t: "set", id: same.id, data: { codes, brand: same.brand || data.brand,
+        mhd: data.mhd && (!same.mhd || data.mhd < same.mhd) ? data.mhd : (same.mhd || "") } });
+      change({ t: "inc", id: same.id, d: data.qty });
+      toast(`Zu „${displayName(same)}“ dazugezählt: jetzt ${(same.qty || 0) + data.qty} Stück`,
+        () => change({ t: "inc", id: same.id, d: -data.qty }));
+      return;
+    }
     change({ t: "set", id, data });
   });
 
@@ -678,7 +765,7 @@
       if (g.date) mhd = gs1Date(g.date);
     }
     code = code.replace(/\D/g, "") || code;
-    const known = items.find((i) => i.code === code);
+    const known = findByCode(code);
     const mhdMsg = mhd ? " MHD aus dem Code gelesen." : "";
     if (known) {
       // Schon im Bestand: direkt +1, ohne Formular

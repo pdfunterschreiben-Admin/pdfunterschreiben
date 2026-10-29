@@ -98,3 +98,8 @@ li .mhd,li .edit{align-self:flex-start}
 .folder.subfolder summary{padding:10px 12px;font-size:.95rem}
 .folder.subfolder ul{padding:0 12px}
 li.subwrap{display:block;padding:0;border-bottom:0}
+.mergebox{display:flex;flex-direction:column;gap:6px;margin-top:4px}
+.mergebox .row{display:flex;gap:8px}
+.mergebox select{flex:1;min-width:0}
+.mergebox .ghost{flex:0 0 auto}
+.mergebox .ghost:disabled{opacity:.5}
