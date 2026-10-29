@@ -273,7 +273,7 @@
   ];
   const NAME_RULES = [
     ["TK-Produkte", /\btk\b|tiefkühl|tiefgekühlt|frozen|iglo|frosta|pizza/i],
-    ["Gewürze", /gewürz|maggi|würze|brühe|bouillon|fond|knorr|fix für|pfeffer|paprika|curry|oregano|basilikum|thymian|rosmarin|zimt|muskat|kümmel|chili|kräuter|salz|ostmann|fuchs|kotanyi|wiberg|knoblauch(pulver|granulat)/i],
+    ["Gewürze", /gewürz|ankerkraut|just spices|maggi|würze|brühe|bouillon|fond|knorr|fix für|pfeffer|paprika|curry|oregano|basilikum|thymian|rosmarin|zimt|muskat|kümmel|chili|kräuter|salz|ostmann|fuchs|kotanyi|wiberg|knoblauch(pulver|granulat)/i],
     ["Aufschnitt", /wurst|salami|schinken|aufschnitt|mortadella|lyoner|leberwurst|mettwurst|bierschinken|kassler|cervelat|bacon|speck/i],
     ["Käse", /käse|gouda|emmentaler|edamer|mozzarella|cheddar|camembert|brie|feta|parmesan|leerdammer|tilsiter|bergkäse/i],
     ["Fleisch", /fleisch|hack|schnitzel|steak|filet|hähnchen|huhn|pute|rind|schwein|gulasch|braten|kotelett|nacken/i],
@@ -306,6 +306,33 @@
   // Auswahlfeld im Formular füllen
   $("f-cat").innerHTML = CATS.map((c) => `<option>${c}</option>`).join("");
 
+  // ---------- Gewürze: Namen ohne Hersteller, Ankerkraut extra ----------
+  const SPICE_BRANDS = ["ankerkraut", "kania", "ostmann", "fuchs gewürze", "fuchs", "kotányi", "kotanyi", "wiberg",
+    "le gusto", "gut & günstig", "gut&günstig", "ja!", "k-classic", "rewe beste wahl", "beste wahl", "rewe bio", "rewe",
+    "edeka bio", "edeka", "spar", "alnatura", "lebensbaum", "sonnentor", "just spices", "schuhbecks", "schuhbeck",
+    "altes gewürzamt", "dennree", "rapunzel", "herbaria", "aldi", "lidl", "netto", "penny", "dm bio", "denree",
+    "gefro", "kühne", "bad reichenhaller", "knorr", "ubena", "hela", "raps", "spice for life", "steinhaus"];
+  const isAnker = (it) => /ankerkraut/i.test((it.name || "") + " " + (it.brand || ""));
+  function stripBrand(name, brand) {
+    let n = (name || "").trim();
+    const list = (brand ? [brand.toLowerCase()] : []).concat(SPICE_BRANDS);
+    for (let k = 0; k < 2; k++) {
+      const low = n.toLowerCase();
+      const b = list.find((x) => x && low.startsWith(x) && /^[\s\-–:,.®™]|^$/.test(n.slice(x.length)));
+      if (!b) break;
+      n = n.slice(b.length).replace(/^[\s\-–:,.®™]+/, "");
+    }
+    n = n.replace(/\s*[-–]?\s*ankerkraut\b/ig, "").trim();
+    return n ? n.charAt(0).toUpperCase() + n.slice(1) : (name || "");
+  }
+  // Maggi-Würze bleibt „Maggi …“, sonst wäre nur „Würze“ übrig
+  const displayName = (it) => {
+    const n = it.name || "Unbekanntes Produkt";
+    if (catOf(it) !== "Gewürze" || /^maggi/i.test(n)) return n;
+    return stripBrand(n, it.brand);
+  };
+  const byName = (a, b) => displayName(a).localeCompare(displayName(b), "de");
+
   // ---------- Bestand / Einkaufsliste ----------
   let view = ls.get("gr-view", "stock");
   function setView(v) {
@@ -317,7 +344,7 @@
   const toBuy = () => items.filter((i) => !i.qty);
   $("shop-copy").onclick = async () => {
     const groups = new Map(CATS.map((c) => [c, []]));
-    toBuy().forEach((i) => groups.get(catOf(i)).push(i.name || "Unbekanntes Produkt"));
+    toBuy().forEach((i) => groups.get(catOf(i)).push(displayName(i) + (isAnker(i) ? " (Ankerkraut)" : "")));
     let txt = "Einkaufsliste" + (hh ? " – " + hh.name : "") + "\n";
     for (const [c, l] of groups) if (l.length) txt += "\n" + c + ":\n" + l.sort((a, b) => a.localeCompare(b, "de")).map((n) => "• " + n).join("\n") + "\n";
     const b = $("shop-copy");
@@ -353,10 +380,10 @@
       : "Noch nichts im Bestand. Tippe unten auf <b>Scannen</b>.";
 
     let shown = items.filter((i) => !q || ((i.name || "") + " " + (i.code || "")).toLowerCase().includes(q));
-    if (shop) shown = shown.filter((i) => !i.qty).sort((a, b) => (a.name || "").localeCompare(b.name || "", "de"));
+    if (shop) shown = shown.filter((i) => !i.qty).sort(byName);
     else if (filter === "soon") shown = shown.filter((i) => i.qty > 0 && daysLeft(i.mhd) !== null && daysLeft(i.mhd) <= 30)
       .sort((a, b) => (a.mhd || "").localeCompare(b.mhd || ""));
-    else shown.sort((a, b) => (a.name || "").localeCompare(b.name || "", "de"));
+    else shown.sort(byName);
 
     const ul = $("list");
     ul.innerHTML = "";
@@ -380,14 +407,34 @@
       const inner = document.createElement("ul");
       det.appendChild(inner);
       ul.appendChild(det);
-      for (const it of list) {
+      const anker = cat === "Gewürze" ? list.filter(isAnker) : [];
+      for (const it of list) if (!anker.includes(it)) inner.appendChild(row(it));
+      if (anker.length) {
+        const sub = document.createElement("details");
+        sub.className = "folder subfolder";
+        sub.open = forceOpen || isOpen("Gewürze/Ankerkraut");
+        const ss = document.createElement("summary");
+        const apcs = anker.reduce((s, i) => s + (i.qty || 0), 0);
+        ss.innerHTML = '<span class="fname">Ankerkraut</span><span class="fcount"></span>';
+        ss.querySelector(".fcount").textContent = shop ? `${anker.length} zu kaufen` : `${anker.length} ${anker.length === 1 ? "Sorte" : "Sorten"} · ${apcs} Stk.`;
+        sub.appendChild(ss);
+        sub.addEventListener("toggle", () => { if (!forceOpen) setOpen("Gewürze/Ankerkraut", sub.open); });
+        const subUl = document.createElement("ul");
+        anker.forEach((it) => subUl.appendChild(row(it)));
+        sub.appendChild(subUl);
+        const wrap = document.createElement("li"); wrap.className = "subwrap"; wrap.appendChild(sub);
+        inner.appendChild(wrap);
+      }
+    }
+
+    function row(it) {
       const li = document.createElement("li");
       if (!it.qty) li.className = "zero";
       li.innerHTML = '<div class="info"><span class="name"></span><span class="meta"></span>' +
         '<span class="mhd" hidden></span><button class="edit" type="button">Bearbeiten</button></div>' +
         '<div class="qty"><button type="button" aria-label="Weniger">−</button><span></span>' +
         '<button type="button" aria-label="Mehr">+</button></div>';
-      li.querySelector(".name").textContent = it.name || "Unbekanntes Produkt";
+      li.querySelector(".name").textContent = displayName(it);
       li.querySelector(".meta").textContent = it.code ? "EAN " + it.code : "ohne Strichcode";
       const m = li.querySelector(".mhd");
       const dl = daysLeft(it.mhd);
@@ -411,8 +458,7 @@
         q2.querySelector(".bought").onclick = () => change({ t: "inc", id: it.id, d: 1 });
         m.hidden = true;
       }
-      inner.appendChild(li);
-      }
+      return li;
     }
   }
 
@@ -425,6 +471,7 @@
     $("f-mhd").value = mhd || (editing && editing.mhd) || "";
     $("f-cat").value = editing ? catOf(editing) : (cat || "Sonstiges");
     catTouched = false;
+    $("f-name").dataset.brand = (editing && editing.brand) || "";
     $("f-qty").value = editing ? (item ? editing.qty : (editing.qty || 0) + 1) : 1;
     $("status").textContent = msg || (editing && !item ? "Schon im Bestand – Stückzahl um 1 erhöht." : "");
     $("status").className = "status" + (ok || (editing && !item) ? " ok" : "");
@@ -475,6 +522,7 @@
       qty: Math.max(0, parseInt($("f-qty").value, 10) || 0),
       mhd: $("f-mhd").value || "",
       cat: $("f-cat").value || "Sonstiges",
+      brand: $("f-name").dataset.brand || "",
       updated: new Date().toISOString()
     };
     const id = editing ? editing.id : (code || "m" + Date.now());
@@ -637,12 +685,13 @@
       change({ t: "inc", id: known.id, d: 1 });
       if (mhd && (!known.mhd || mhd < known.mhd)) change({ t: "set", id: known.id, data: { mhd } });
       const now = (known.qty || 0) + 1;
-      toast(`${known.name || "Produkt"}: jetzt ${now} Stück` + (mhd ? " · MHD übernommen" : ""),
+      toast(`${displayName(known)}: jetzt ${now} Stück` + (mhd ? " · MHD übernommen" : ""),
         () => change({ t: "inc", id: known.id, d: -1 }));
       return;
     }
     openSheet({ code, mhd, msg: "Produkt wird gesucht …" });
-    const { name, cat } = await lookup(code);
+    const { name, cat, brand } = await lookup(code);
+    $("f-name").dataset.brand = brand || "";
     if (!$("sheet").hidden && $("f-code").value === code && !$("f-name").value) {
       $("f-name").value = name;
       const c = cat || catFromName(name);
@@ -668,7 +717,7 @@
       let n = (p.product_name_de || p.product_name || "").trim();
       if (brand && !n.toLowerCase().includes(brand.toLowerCase())) n = brand + " " + n;
       if (p.quantity) n += " " + p.quantity;
-      return { name: n.trim(), cat: catFromTags(p.categories_tags) };
+      return { name: n.trim(), cat: catFromTags(p.categories_tags), brand };
     } catch (e) { return none; }
   }
 

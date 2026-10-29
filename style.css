@@ -94,3 +94,7 @@ li .mhd,li .edit{align-self:flex-start}
 .toast{position:fixed;left:16px;right:16px;bottom:calc(92px + env(safe-area-inset-bottom,0px));max-width:528px;margin:0 auto;z-index:35;background:var(--fg);color:var(--bg);border-radius:12px;padding:12px 14px;display:flex;align-items:center;justify-content:space-between;gap:12px;box-shadow:0 8px 24px rgba(0,0,0,.25);font-weight:600}
 .toast .t-undo{background:none;border:0;color:var(--accent);font:700 .95rem system-ui;padding:4px 2px;text-transform:uppercase;letter-spacing:.04em}
 @media (prefers-color-scheme:dark){.toast .t-undo{color:#ffb38a}}
+.folder.subfolder{margin:10px 0;border-radius:12px;background:var(--bg)}
+.folder.subfolder summary{padding:10px 12px;font-size:.95rem}
+.folder.subfolder ul{padding:0 12px}
+li.subwrap{display:block;padding:0;border-bottom:0}
