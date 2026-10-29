@@ -574,6 +574,19 @@
     }
   }
 
+  // Kurze Meldung unten mit „Rückgängig“
+  let toastTimer = null;
+  function toast(text, undo) {
+    const t = $("toast");
+    t.querySelector(".t-text").textContent = text;
+    const b = t.querySelector(".t-undo");
+    b.hidden = !undo;
+    b.onclick = () => { if (undo) undo(); t.hidden = true; clearTimeout(toastTimer); };
+    t.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { t.hidden = true; }, 5000);
+  }
+
   // GS1-Codes (DataMatrix, QR, GS1-128, Digital Link) können GTIN (01) und MHD (17 / 15) enthalten.
   function parseGS1(raw) {
     let s = raw.replace(/^\](d2|Q3|C1|e0)/, "");
@@ -620,7 +633,12 @@
     const known = items.find((i) => i.code === code);
     const mhdMsg = mhd ? " MHD aus dem Code gelesen." : "";
     if (known) {
-      openSheet({ code, mhd, msg: "Schon im Bestand – Stückzahl um 1 erhöht." + mhdMsg, ok: true });
+      // Schon im Bestand: direkt +1, ohne Formular
+      change({ t: "inc", id: known.id, d: 1 });
+      if (mhd && (!known.mhd || mhd < known.mhd)) change({ t: "set", id: known.id, data: { mhd } });
+      const now = (known.qty || 0) + 1;
+      toast(`${known.name || "Produkt"}: jetzt ${now} Stück` + (mhd ? " · MHD übernommen" : ""),
+        () => change({ t: "inc", id: known.id, d: -1 }));
       return;
     }
     openSheet({ code, mhd, msg: "Produkt wird gesucht …" });
