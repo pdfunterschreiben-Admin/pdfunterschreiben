@@ -286,8 +286,8 @@
   ];
   const NAME_RULES = [
     ["TK-Produkte", /\btk\b|tiefkühl|tiefgekühlt|frozen|iglo|frosta|pizza/i],
-    ["Gewürze", /gewürz|ankerkraut|just spices|maggi|würze|brühe|bouillon|fond|knorr|fix für|pfeffer|paprika|curry|oregano|basilikum|thymian|rosmarin|zimt|muskat|kümmel|chili|kräuter|salz|ostmann|fuchs|kotanyi|wiberg|knoblauch(pulver|granulat)/i],
-    ["Aufschnitt", /wurst|salami|schinken|aufschnitt|mortadella|lyoner|leberwurst|mettwurst|bierschinken|kassler|cervelat|bacon|speck/i],
+    ["Gewürze", /gewürz|ankerkraut|just spices|maggi|würze|brühe|bouillon|fond|knorr|fix für|pfeffer|paprika|curry|oregano|basilikum|thymian|rosmarin|zimt|muskat|kümmel|chili|kräuter|salz|ostmann|fuchs|kotanyi|wiberg|knoblauch(pulver|granulat|,? granuliert)|salbei|ingwer gemahlen|piment|liebstöckel|zitronengras|majoran|majoram|wacholder|nelken|beifuß|bohnenkraut|koriander|kurkuma|garam|schnittlauch|cayenne|lorbeer|\brub\b|würzling|grillwürz/i],
+    ["Aufschnitt", /prosciutto|cotto\b|wurst|salami|schinken|aufschnitt|mortadella|lyoner|leberwurst|mettwurst|bierschinken|kassler|cervelat|bacon|speck/i],
     ["Käse", /käse|gouda|emmentaler|edamer|mozzarella|cheddar|camembert|brie|feta|parmesan|leerdammer|tilsiter|bergkäse/i],
     ["Fleisch", /fleisch|hack|schnitzel|steak|filet|hähnchen|huhn|pute|rind|schwein|gulasch|braten|kotelett|nacken/i],
     ["Milchprodukte", /milch|joghurt|jogurt|quark|sahne|butter|schmand|skyr|pudding/i],
@@ -305,7 +305,12 @@
     for (const [c, re] of NAME_RULES) if (re.test(name || "")) return c;
     return "";
   }
-  const catOf = (it) => CATS.includes(it.cat) ? it.cat : (catFromName(it.name) || "Sonstiges");
+  const catOf = (it) => {
+    if (it.catFixed && CATS.includes(it.cat)) return it.cat;       // vom Nutzer bewusst gewählt
+    if (spiceEvidence(it)) return "Gewürze";
+    if (CATS.includes(it.cat) && it.cat !== "Sonstiges") return it.cat;
+    return catFromName(it.name) || "Sonstiges";
+  };
 
   const OPEN_KEY = "gr-open";
   let openCats = ls.get(OPEN_KEY, null);
@@ -320,56 +325,89 @@
   $("f-cat").innerHTML = CATS.map((c) => `<option>${c}</option>`).join("");
 
   // ---------- Gewürze: Namen ohne Hersteller, Ankerkraut extra ----------
-  const SPICE_BRANDS = ["ankerkraut", "kania", "ostmann", "fuchs gewürze", "fuchs", "kotányi", "kotanyi", "wiberg",
-    "le gusto", "gut & günstig", "gut&günstig", "ja!", "k-classic", "rewe beste wahl", "beste wahl", "rewe bio", "rewe",
+  const SPICE_BRANDS = ["ankerkraut", "kania", "ostmann", "fuchs gewürze", "fuchs-gruppe", "fuchs gruppe", "fuchs", "kotányi", "kotanyi", "wiberg",
+    "le gusto", "gut & günstig", "gut&günstig", "gut & guenstig", "ja!", "k-classic", "rewe beste wahl", "beste wahl", "rewe bio", "rewe",
     "edeka bio", "edeka", "spar", "alnatura", "lebensbaum", "sonnentor", "just spices", "schuhbecks", "schuhbeck",
     "altes gewürzamt", "dennree", "rapunzel", "herbaria", "aldi", "lidl", "netto", "penny", "dm bio", "denree",
     "gefro", "kühne", "bad reichenhaller", "knorr", "ubena", "hela", "raps", "spice for life", "steinhaus",
     "kaufland", "k-bio", "k bio", "k classic", "milfina", "nur nur natur", "gut bio", "bio sonne", "aldi süd", "aldi nord",
-    "penny ready", "rewe ja!", "ja", "jeden tag", "real quality", "globus", "mühlenhof", "bioland", "demeter", "naturland"]
+    "penny ready", "rewe ja!", "jeden tag", "real quality", "globus", "mühlenhof", "bioland", "demeter", "naturland",
+    "biowagner", "bio wagner", "wagner gewürze", "wagner", "mara", "würz & co.", "würz & co", "würz &co.", "würz &co", "würz&co.", "würz&co",
+    "grill meister", "lien ying", "butcher's", "butchers", "fuego", "deluxe", "gewürze", "gewürz", "bio", "ostmann gewürze"]
     .sort((a, b) => b.length - a.length);
-  const SIZE_RE = /\(?\s*\b\d+([.,]\d+)?\s*(g|gr|gramm|kg|mg|ml|cl|l|liter|stk|stück|st|x|er)\b\.?\s*\)?/gi;
+  // Hersteller-Präfixe im Strichcode (Gewürzfirmen)
+  const SPICE_EAN = ["4002674", "4027900", "4001639", "4049164", "4260347", "4062988", "4005924", "40884", "40875", "20000", "4013200"];
+  const SIZE_RE = /\(?\s*\b\d+([.,]\d+)?\s*(g|gr|gramm|kg|mg|ml|cl|l|liter|stk|stück|st|x|er|pcs|pc|pack)\b\.?\s*\)?/gi;
   const isAnker = (it) => /ankerkraut/i.test((it.name || "") + " " + (it.brand || ""));
+  function spiceEvidence(it) {
+    const n = (it.name || "") + " " + (it.brand || "");
+    if (isAnker(it) || /gewürz|würzmischung|\brub\b|würzling|grillwürz|würzsalz|allrounder|chilli geflockt/i.test(n)) return true;
+    const low = n.toLowerCase();
+    // „Wagner“ allein ist auch eine Pizzamarke – Wagner-Gewürze erkennt man am Strichcode
+    if (["kania", "ostmann", "fuchs", "biowagner", "kotányi", "kotanyi", "wiberg", "just spices", "fuego", "lebensbaum", "sonnentor", "mara ", "würz & co", "würz &co"]
+      .some((b) => low.includes(b))) return true;
+    const codes = [it.code, ...(it.codes || [])].filter(Boolean);
+    return codes.some((c) => SPICE_EAN.some((p) => c.startsWith(p)));
+  }
   function stripBrand(name, brand) {
     let n = (name || "").trim();
-    const list = (brand ? [brand.toLowerCase()] : []).concat(SPICE_BRANDS);
-    for (let k = 0; k < 2; k++) {
+    const list = (brand ? brand.toLowerCase().split(/\s*,\s*/) : []).concat(SPICE_BRANDS);
+    for (let k = 0; k < 5; k++) {
       const low = n.toLowerCase();
-      const b = list.find((x) => x && low.startsWith(x) && /^[\s\-–:,.®™]|^$/.test(n.slice(x.length)));
+      const b = list.find((x) => x && low.startsWith(x) && /^[\s\-–:,.®™|]|^$/.test(n.slice(x.length)));
       if (!b) break;
-      n = n.slice(b.length).replace(/^[\s\-–:,.®™]+/, "");
+      n = n.slice(b.length).replace(/^[\s\-–:,.®™|]+/, "");
     }
     // Marke am Ende („Pfeffer gemahlen Kaufland“)
-    for (let k = 0; k < 2; k++) {
+    for (let k = 0; k < 3; k++) {
       const low = n.toLowerCase();
       const b = list.find((x) => x && low.endsWith(x) && /[\s\-–,(]$/.test(n.slice(0, n.length - x.length)));
       if (!b) break;
       n = n.slice(0, n.length - b.length).replace(/[\s\-–,(]+$/, "");
     }
-    n = n.replace(/\s*[-–]?\s*ankerkraut\b/ig, "").replace(SIZE_RE, " ").replace(/\s{2,}/g, " ").replace(/[\s\-–,]+$/, "").trim();
+    n = n.replace(/\s*[-–]?\s*ankerkraut\b/ig, "")
+      .replace(/\s*[-–]?\s*fach\s*\d+\b/ig, "")          // „- Fach 8“
+      .replace(/,?\s*\b(dose|beutel|streuer|nachfüllbeutel|glas)\b/ig, "")
+      .replace(SIZE_RE, " ")
+      .replace(/\s{2,}/g, " ").replace(/^[\s\-–,|]+|[\s\-–,|]+$/g, "").trim();
+    if (/^pizza$/i.test(n)) n = "Pizzagewürz";
+    n = n.replace(/\s*\|\s*/g, " – ").replace(/,?\s*gefriergetrocknet\b/ig, "").replace(/^kräuter\s*[-–]\s*/i, "").trim();
     return n ? n.charAt(0).toUpperCase() + n.slice(1) : (name || "");
   }
-  // Maggi-Würze bleibt „Maggi …“, sonst wäre nur „Würze“ übrig
+  // Maggi bleibt „Maggi …“ (nur ohne Größe), sonst wäre nur „Würze“ übrig
   const displayName = (it) => {
     const n = it.name || "Unbekanntes Produkt";
-    if (catOf(it) !== "Gewürze" || /^maggi/i.test(n)) return n;
+    if (catOf(it) !== "Gewürze") return n;
+    if (/^maggi/i.test(n)) return n.replace(SIZE_RE, " ").replace(/\s{2,}/g, " ").trim();
     return stripBrand(n, it.brand);
   };
   const byName = (a, b) => displayName(a).localeCompare(displayName(b), "de");
-  // Gleiches Gewürz = gleicher Schlüssel (ohne Marke, Größe, Groß/Klein, Satzzeichen)
-  // Gleiche Gewürze unter anderem Namen
+
+  // Gleiches Gewürz = gleicher Schlüssel (ohne Marke, Größe, Groß/Klein, Satzzeichen, „gerebelt“, ß/ss)
+  const compact = (t) => t.toLowerCase().replace(/ß/g, "ss").replace(/\([^)]*\)/g, " ")
+    .replace(/\b(gerebelt|getrocknet|gefriergetrocknet|bio)\b/g, " ").replace(/[^a-zäöü0-9]+/g, "");
   const SYNONYMS = {
-    "pfeffer weiß": "pfeffer gemahlen", "pfeffer weiss": "pfeffer gemahlen", "weißer pfeffer": "pfeffer gemahlen",
-    "weisser pfeffer": "pfeffer gemahlen", "pfeffer weiß gemahlen": "pfeffer gemahlen", "weißer pfeffer gemahlen": "pfeffer gemahlen",
-    "pfeffer weiss gemahlen": "pfeffer gemahlen", "pfeffer gemahlen weiß": "pfeffer gemahlen"
+    pfefferweiss: "pfeffergemahlen", weisserpfeffer: "pfeffergemahlen", weisserpfeffergemahlen: "pfeffergemahlen",
+    pfefferweissgemahlen: "pfeffergemahlen", pfeffergemahlenweiss: "pfeffergemahlen",
+    chiligeflockt: "chiliflocken", chilligeflockt: "chiliflocken", chiliflockenscharf: "chiliflocken", chilliflocken: "chiliflocken",
+    majoram: "majoran", cheyennepfeffer: "cayennepfeffer",
+    pizzagewürz: "pizzagewürz", pizza: "pizzagewürz", gewürzpizza: "pizzagewürz",
+    kräutersalatkräuter: "salatkräuter", currygemahlen: "curry", gewürzcurry: "curry", currypulver: "curry",
+    magicdustbbqrub: "magicdust", gewürzmischungbbqmagicdust: "magicdust", bbqmagicdust: "magicdust", magicdustrub: "magicdust",
+    zimt: "zimtgemahlen", gewürzzimtgemahlen: "zimtgemahlen", paprikaedelsuess: "paprikaedelsüss"
+  };
+  const normKey = (k) => {
+    if (!k || k.indexOf(":") < 0) return k;
+    const [p, r] = [k.slice(0, k.indexOf(":")), k.slice(k.indexOf(":") + 1)];
+    if (p !== "g" && p !== "anker") return k;
+    const c = compact(r);
+    return p + ":" + (SYNONYMS[c] || c);
   };
   const spiceKey = (it) => {
     if (catOf(it) !== "Gewürze" || /^maggi/i.test(it.name || "")) return null;
-    let k = displayName(it).toLowerCase().replace(/[^a-zäöüß0-9]+/g, " ").trim();
-    k = SYNONYMS[k] || k;
-    return (isAnker(it) ? "anker:" : "g:") + k;
+    return normKey((isAnker(it) ? "anker:" : "g:") + displayName(it));
   };
-  const matches = (i, k) => k && (spiceKey(i) === k || (i.aliases || []).includes(k));
+  const matches = (i, k) => k && (spiceKey(i) === k || (i.aliases || []).some((x) => normKey(x) === k));
   const findByCode = (code) => code ? items.find((i) => i.code === code || (i.codes || []).includes(code)) : null;
   const findSame = (probe, exceptId) => {
     const k = spiceKey(probe);
@@ -378,13 +416,24 @@
   let merging = false;
   function autoMerge() {
     if (merging || !hh) return false;
-    const seen = new Map(), ops = [];
-    for (const it of items) for (const a of it.aliases || []) if (!seen.has(a)) seen.set(a, it.id);
+    // Gruppen bilden (auch über gemerkte Alias-Namen)
+    const aliasOwner = new Map();
+    for (const it of items) for (const a of it.aliases || []) if (!aliasOwner.has(normKey(a))) aliasOwner.set(normKey(a), it);
+    const groups = new Map();
     for (const it of items) {
       const k = spiceKey(it);
       if (!k) continue;
-      if (seen.has(k) && seen.get(k) !== it.id) ops.push({ t: "merge", into: seen.get(k), from: it.id, alias: k });
-      else seen.set(k, it.id);
+      const owner = aliasOwner.get(k);
+      const gk = owner && owner.id !== it.id ? (spiceKey(owner) || k) : k;
+      if (!groups.has(gk)) groups.set(gk, []);
+      groups.get(gk).push(it);
+    }
+    const ops = [];
+    for (const [, list] of groups) {
+      if (list.length < 2) continue;
+      // Der kürzeste, sauberste Name bleibt stehen
+      const target = list.slice().sort((a, b) => displayName(a).length - displayName(b).length || (b.qty || 0) - (a.qty || 0))[0];
+      for (const it of list) if (it !== target) ops.push({ t: "merge", into: target.id, from: it.id, alias: spiceKey(it) });
     }
     if (!ops.length) return false;
     merging = true;
@@ -625,6 +674,7 @@
       qty: Math.max(0, parseInt($("f-qty").value, 10) || 0),
       mhd: $("f-mhd").value || "",
       cat: $("f-cat").value || "Sonstiges",
+      catFixed: catTouched || !!(editing && editing.catFixed),
       brand: $("f-name").dataset.brand || "",
       updated: new Date().toISOString()
     };
