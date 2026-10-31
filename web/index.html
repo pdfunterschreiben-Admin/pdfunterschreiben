@@ -2714,7 +2714,7 @@ function tsWerkzeug(f, w){
 // Messgerät-Display (z. B. Benning ST 725) aus dem erkannten Text lesen
 function messWerte(roh){
   let t = String(roh || "").replace(/\r/g, "").replace(/,/g, ".");
-  t = t.replace(/(\d)\s*[.]\s*(\d)/g, "$1.$2").replace(/(\d)[Oo](?=\d)/g, "$10").replace(/(^|\s)[Oo]\.(\d)/g, "$10.$2");
+  t = t.replace(/(\d)\s*[.]\s*(\d)/g, "$1.$2").replace(/(\d\.\d{1,2})\s+(\d)(?=\s*(m\s*A|MA|M\s*[ΩQO0]|[ΩQ]))/g, "$1$2").replace(/(\d)[Oo](?=\d)/g, "$10").replace(/(^|\s)[Oo]\.(\d)/g, "$10.$2");
   const zahl = /(>\s*)?(\d{1,4}\.\d{1,3})\s*(M\s*[ΩQO0Dn2]|m\s*A|MA|[ΩQ])?/g;
   const funde = []; let m;
   while((m = zahl.exec(t))) funde.push({pos: m.index, gr: !!m[1], wert: m[2], einheit: (m[3] || "").replace(/\s/g, "")});

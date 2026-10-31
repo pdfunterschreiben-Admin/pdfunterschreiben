@@ -269,6 +269,15 @@ func (a *app) handleFormularTypenschild(w http.ResponseWriter, r *http.Request) 
 			}
 		}
 	}
+	// erkannten Text mitschreiben (hilft beim Verbessern der Erkennung), Datei bleibt klein
+	lp := filepath.Join(dataDir(), "texterkennung.log")
+	if alt, err := os.ReadFile(lp); err == nil && len(alt) > 200<<10 {
+		_ = os.WriteFile(lp, alt[len(alt)-100<<10:], 0o644)
+	}
+	if f, err := os.OpenFile(lp, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644); err == nil {
+		_, _ = f.WriteString("=== " + time.Now().Format("2006-01-02 15:04:05") + "\n" + roh + "\n")
+		_ = f.Close()
+	}
 	writeJSON(w, map[string]any{"ok": true, "werte": werte, "roh": roh})
 }
 
