@@ -301,18 +301,24 @@ body::before{content:"";position:fixed;left:61%;top:60%;width:min(760px,62vw);as
 body{padding-bottom:172px}
 .wrap{position:relative;z-index:1}
 .fz{position:absolute;bottom:9px;left:0;transform:translateX(-420px);animation:fahren 22s linear infinite;filter:drop-shadow(0 4px 3px rgba(0,0,0,.2))}
-.fz img{display:block;height:100%;width:auto}
-.fz img.g{position:absolute;left:0;top:0;animation:heben 4.4s ease-in-out infinite}
-.fz1{height:142px;animation-delay:0s}.fz1 img.g{--hub:-38%}
-.fz2{height:150px;animation-delay:-7.3s}.fz2 img.g{--hub:-34%;animation-delay:-1.5s}
-.fz3{height:80px;animation-delay:-14.6s}.fz3 img.g{--hub:-5%;animation-delay:-3s;animation-duration:3s}
+.fz img.k{display:block;height:100%;width:auto;position:relative}
+.fz .mast{position:absolute;inset:0}
+.fz .mast img{position:absolute;left:0;top:0;height:100%;width:auto}
+.fz .mast img.g{animation:heben 4.4s ease-in-out infinite}
+.fz .mast.neigen{transform-origin:61% 86%;animation:neigen 5.2s ease-in-out infinite}
+.fz .mast.schub{animation:schub 6s ease-in-out infinite}
+.fz1{height:142px;animation-delay:0s}.fz1 .mast img.g{--hub:-38%}
+.fz2{height:150px;animation-delay:-7.3s}.fz2 .mast img.g{--hub:-34%;animation-delay:-1.5s}
+.fz3{height:80px;animation-delay:-14.6s}.fz3 .mast img.g{--hub:-5%;animation-delay:-3s;animation-duration:3s}
+@keyframes neigen{0%,15%{transform:rotate(0)}35%,50%{transform:rotate(-3.5deg)}70%,85%{transform:rotate(2.5deg)}100%{transform:rotate(0)}}
+@keyframes schub{0%,15%{transform:translateX(0)}40%,65%{transform:translateX(16%)}90%,100%{transform:translateX(0)}}
 @keyframes fahren{0%{transform:translateX(-420px)}100%{transform:translateX(calc(100cqw + 40px))}}
 @keyframes heben{0%,22%{transform:translateY(0)}45%,62%{transform:translateY(var(--hub))}85%,100%{transform:translateY(0)}}
-@media (prefers-reduced-motion: reduce){.fz,.fz img.g{animation:none}.fz{position:static;transform:none;display:inline-block;margin:0 14px}.strasse{display:flex;align-items:flex-end;justify-content:center;padding-bottom:9px}}
+@media (prefers-reduced-motion: reduce){.fz,.fz img.g,.fz .mast{animation:none}.fz{position:static;transform:none;display:inline-block;margin:0 14px}.strasse{display:flex;align-items:flex-end;justify-content:center;padding-bottom:9px}}
 </style>
 </head>
 <body>
-<div class="strasse" aria-hidden="true"><div class="fz fz1"><img src="/fz-stapler-k.png" alt=""><img class="g" src="/fz-stapler-g.png" alt=""></div><div class="fz fz2"><img src="/fz-schubmast-k.png" alt=""><img class="g" src="/fz-schubmast-g.png" alt=""></div><div class="fz fz3"><img src="/fz-hubwagen-k.png" alt=""><img class="g" src="/fz-hubwagen-g.png" alt=""></div></div>
+<div class="strasse" aria-hidden="true"><div class="fz fz1"><img class="k" src="/fz-stapler-k.png" alt=""><div class="mast neigen"><img src="/fz-stapler-m.png" alt=""><img class="g" src="/fz-stapler-g.png" alt=""></div></div><div class="fz fz2"><div class="mast schub"><img src="/fz-schubmast-m.png" alt=""><img class="g" src="/fz-schubmast-g.png" alt=""></div><img class="k" src="/fz-schubmast-k.png" alt=""></div><div class="fz fz3"><img class="k" src="/fz-hubwagen-k.png" alt=""><div class="mast"><img class="g" src="/fz-hubwagen-g.png" alt=""></div></div></div>
 <div class="wrap">
   <header class="top">
     <div class="marke">
