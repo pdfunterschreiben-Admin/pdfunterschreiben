@@ -295,18 +295,18 @@ body::before{content:"";position:fixed;left:61%;top:60%;width:min(760px,62vw);as
 @media (prefers-color-scheme: dark){body::before{opacity:.10;filter:grayscale(.3) brightness(1.6)}}
 .wrap{position:relative;z-index:1}
 /* Gaudi: Fahrzeuge fahren unten durchs Programm, Gabeln heben und senken */
-.strasse{position:fixed;left:0;right:0;bottom:0;height:118px;z-index:0;pointer-events:none;overflow:hidden;container-type:inline-size;
+.strasse{position:fixed;left:0;right:0;bottom:0;height:162px;z-index:0;pointer-events:none;overflow:hidden;container-type:inline-size;
   background:linear-gradient(to top,color-mix(in srgb,var(--line) 55%,transparent),transparent 26px)}
 .strasse::after{content:"";position:absolute;left:0;right:0;bottom:8px;border-bottom:2px dashed color-mix(in srgb,var(--muted) 35%,transparent)}
-body{padding-bottom:128px}
+body{padding-bottom:172px}
 .wrap{position:relative;z-index:1}
-.fz{position:absolute;bottom:9px;left:0;transform:translateX(-340px);animation:fahren 22s linear infinite;filter:drop-shadow(0 4px 3px rgba(0,0,0,.2))}
+.fz{position:absolute;bottom:9px;left:0;transform:translateX(-420px);animation:fahren 22s linear infinite;filter:drop-shadow(0 4px 3px rgba(0,0,0,.2))}
 .fz img{display:block;height:100%;width:auto}
 .fz img.g{position:absolute;left:0;top:0;animation:heben 4.4s ease-in-out infinite}
-.fz1{height:102px;animation-delay:0s}.fz1 img.g{--hub:-38%}
-.fz2{height:108px;animation-delay:-7.3s}.fz2 img.g{--hub:-34%;animation-delay:-1.5s}
-.fz3{height:58px;animation-delay:-14.6s}.fz3 img.g{--hub:-5%;animation-delay:-3s;animation-duration:3s}
-@keyframes fahren{0%{transform:translateX(-340px)}100%{transform:translateX(calc(100cqw + 40px))}}
+.fz1{height:142px;animation-delay:0s}.fz1 img.g{--hub:-38%}
+.fz2{height:150px;animation-delay:-7.3s}.fz2 img.g{--hub:-34%;animation-delay:-1.5s}
+.fz3{height:80px;animation-delay:-14.6s}.fz3 img.g{--hub:-5%;animation-delay:-3s;animation-duration:3s}
+@keyframes fahren{0%{transform:translateX(-420px)}100%{transform:translateX(calc(100cqw + 40px))}}
 @keyframes heben{0%,22%{transform:translateY(0)}45%,62%{transform:translateY(var(--hub))}85%,100%{transform:translateY(0)}}
 @media (prefers-reduced-motion: reduce){.fz,.fz img.g{animation:none}.fz{position:static;transform:none;display:inline-block;margin:0 14px}.strasse{display:flex;align-items:flex-end;justify-content:center;padding-bottom:9px}}
 </style>
