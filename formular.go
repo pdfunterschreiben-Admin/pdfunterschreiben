@@ -4,6 +4,7 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"errors"
 	_ "embed"
 	"encoding/base64"
@@ -81,6 +82,18 @@ try {
     foreach ($p in $cfg.kreuze.PSObject.Properties) {
       try { $ws.CheckBoxes([string]$p.Name).Value = $(if ($p.Value) { 1 } else { -4146 }) } catch {}
     }
+    # Unterschriften (z. B. Kunde) als Bild direkt über die Beschriftung setzen
+    foreach ($b in @($cfg.bilder)) {
+      if (-not $b) { continue }
+      try {
+        $c = $ws.Range([string]$b.zelle); $h = [double]$b.hoehe
+        $sh = $ws.Shapes.AddPicture([string]$b.pfad, 0, -1, $c.Left + 6, $c.Top - $h - 1, -1, -1)
+        $sh.LockAspectRatio = -1; $sh.Height = $h
+        if ($sh.Width -gt [double]$b.breite) { $sh.Width = [double]$b.breite }
+        $sh.Top = $c.Top - $sh.Height - 1
+        try { $sh.Placement = 1 } catch {}
+      } catch {}
+    }
     $ws.Activate()
     $ws.Range('A1').Select()
     # Vorlagen aus dem Drive-Ordner: genau eine Seite (Breite und Höhe)
@@ -128,6 +141,12 @@ func (a *app) handleFormular(w http.ResponseWriter, r *http.Request) {
 		Nach   int               `json:"nach"`   // zusätzliche Tabellenzeilen unter dieser Zeile einfügen
 		Anzahl int               `json:"anzahl"`
 		Quelle string            `json:"quelle"` // Vorlage aus dem Drive-Ordner statt der Allgemeinen Vorlagen
+		Bilder []struct {
+			Zelle  string  `json:"zelle"`
+			PNG    string  `json:"png"`
+			Hoehe  float64 `json:"hoehe"`
+			Breite float64 `json:"breite"`
+		} `json:"bilder"` // Unterschriften
 	}
 	if err := json.NewDecoder(io.LimitReader(r.Body, 4<<20)).Decode(&req); err != nil {
 		fehler("Ungültige Anfrage.")
@@ -163,7 +182,27 @@ func (a *app) handleFormular(w http.ResponseWriter, r *http.Request) {
 		fehler("Die Vorlage konnte nicht bereitgelegt werden.")
 		return
 	}
-	cfg, _ := json.Marshal(map[string]any{"blatt": req.Blatt, "nach": req.Nach, "anzahl": min(req.Anzahl, 200), "einseite": req.Quelle != "", "drucken": req.Drucken, "werte": req.Werte, "kreuze": req.Kreuze, "xlsx": req.XLSX, "pdf": req.PDF})
+	var bilder []map[string]any
+	for i, b := range req.Bilder {
+		png, err := base64.StdEncoding.DecodeString(b.PNG)
+		if err != nil || len(png) < 50 || !zelleRe.MatchString(b.Zelle) {
+			continue
+		}
+		zelle := b.Zelle
+		if req.Nach > 0 && req.Anzahl > 0 { // zusätzliche Tabellenzeilen verschieben alles darunter
+			j := strings.IndexAny(zelle, "0123456789")
+			var zeile int
+			fmt.Sscanf(zelle[j:], "%d", &zeile)
+			if zeile > req.Nach {
+				zelle = zelle[:j] + fmt.Sprint(zeile+min(req.Anzahl, 200))
+			}
+		}
+		p := filepath.Join(dir, fmt.Sprintf("unterschrift%d.png", i))
+		if os.WriteFile(p, png, 0o600) == nil {
+			bilder = append(bilder, map[string]any{"zelle": zelle, "pfad": p, "hoehe": max(20, min(b.Hoehe, 80)), "breite": max(60, min(b.Breite, 260))})
+		}
+	}
+	cfg, _ := json.Marshal(map[string]any{"bilder": bilder, "blatt": req.Blatt, "nach": req.Nach, "anzahl": min(req.Anzahl, 200), "einseite": req.Quelle != "", "drucken": req.Drucken, "werte": req.Werte, "kreuze": req.Kreuze, "xlsx": req.XLSX, "pdf": req.PDF})
 	cfgPath := filepath.Join(dir, "auftrag.json")
 	_ = os.WriteFile(cfgPath, cfg, 0o600)
 	xlsx, pdf := filepath.Join(dir, "formular.xlsx"), filepath.Join(dir, "formular.pdf")
@@ -425,4 +464,84 @@ func (a *app) handleFormularSicherung(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
 	_, _ = w.Write(b)
+}
+
+// Ablage: jedes erstellte Formular zusätzlich unter Dokumente\Service-Mappe\Berichte\<Kunde> speichern
+func ablageDir() string {
+	return filepath.Join(os.Getenv("USERPROFILE"), "Documents", "Service-Mappe", "Berichte")
+}
+
+var ablageName = regexp.MustCompile(`[<>:"/\\|?*\x00-\x1f]+`)
+
+func (a *app) handleFormularAblage(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "POST", http.StatusMethodNotAllowed)
+		return
+	}
+	basis := ablageDir()
+	if r.URL.Query().Get("oeffnen") != "" {
+		var req struct {
+			Pfad string `json:"pfad"`
+		}
+		_ = json.NewDecoder(io.LimitReader(r.Body, 1<<16)).Decode(&req)
+		p := filepath.Clean(req.Pfad)
+		if req.Pfad != "" && strings.HasPrefix(strings.ToLower(p), strings.ToLower(basis)+string(os.PathSeparator)) {
+			if _, err := os.Stat(p); err == nil {
+				_ = hidden("explorer.exe", "/select,", p).Start()
+				w.WriteHeader(http.StatusNoContent)
+				return
+			}
+		}
+		_ = os.MkdirAll(basis, 0o755)
+		_ = hidden("explorer.exe", basis).Start()
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	var req struct {
+		Kunde   string `json:"kunde"`
+		Dateien []struct {
+			Name string `json:"name"`
+			Data string `json:"data"`
+		} `json:"dateien"`
+	}
+	if err := json.NewDecoder(io.LimitReader(r.Body, 100<<20)).Decode(&req); err != nil || len(req.Dateien) == 0 {
+		writeJSON(w, map[string]any{"ok": false, "error": "Keine Dateien."})
+		return
+	}
+	kunde := strings.TrimSpace(ablageName.ReplaceAllString(req.Kunde, " "))
+	kunde = strings.Trim(kunde, ". ")
+	if len([]rune(kunde)) > 60 {
+		kunde = strings.TrimSpace(string([]rune(kunde)[:60]))
+	}
+	if kunde == "" {
+		kunde = "Ohne Kunde"
+	}
+	dir := filepath.Join(basis, kunde)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		writeJSON(w, map[string]any{"ok": false, "error": err.Error()})
+		return
+	}
+	var pfade []string
+	for _, d := range req.Dateien {
+		b, err := base64.StdEncoding.DecodeString(d.Data)
+		if err != nil || len(b) == 0 {
+			continue
+		}
+		name := strings.Trim(ablageName.ReplaceAllString(d.Name, " "), ". ")
+		if name == "" {
+			continue
+		}
+		p := filepath.Join(dir, name)
+		ext := filepath.Ext(name)
+		for i := 2; i < 100; i++ { // nichts überschreiben
+			if _, err := os.Stat(p); err != nil {
+				break
+			}
+			p = filepath.Join(dir, strings.TrimSuffix(name, ext)+fmt.Sprintf(" (%d)", i)+ext)
+		}
+		if os.WriteFile(p, b, 0o644) == nil {
+			pfade = append(pfade, p)
+		}
+	}
+	writeJSON(w, map[string]any{"ok": true, "pfade": pfade})
 }

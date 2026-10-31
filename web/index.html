@@ -269,6 +269,16 @@ dialog.fenster.klein{position:fixed;inset:auto 16px 16px auto;margin:0;width:300
 dialog.fenster.klein>.dlg>:not(.dlg-head){display:none!important}
 dialog.fenster.klein .dlg-head{border-bottom:0;cursor:pointer}
 
+.baustein{position:relative;margin-top:4px}
+.baustein>button{font-size:12.5px;padding:4px 10px}
+.baustein-pop{position:absolute;z-index:20;left:0;top:calc(100% + 4px);width:min(560px,90vw);max-height:300px;overflow:auto;background:var(--sheet);border:1px solid var(--line);border-radius:12px;box-shadow:0 12px 30px rgba(0,0,0,.18);padding:8px;display:flex;flex-direction:column;gap:6px}
+.baustein-pop[hidden]{display:none}
+.baustein-zeile{display:flex;gap:6px}.baustein-zeile>button:first-child{flex:1;text-align:left;white-space:normal;font-weight:400}
+.sig-dlg{border:0;border-radius:18px;padding:18px;width:min(940px,96vw);background:var(--sheet);color:var(--ink);box-shadow:0 30px 80px rgba(0,0,0,.35)}
+.sig-dlg::backdrop{background:rgba(10,15,30,.5)}
+.sig-kopf{display:flex;flex-direction:column;gap:2px;margin-bottom:10px}
+.sig-dlg canvas{width:100%;aspect-ratio:3/1;background:#fff;border:2px dashed var(--line);border-radius:12px;touch-action:none;cursor:crosshair}
+.sig-fuss{display:flex;gap:8px;margin-top:12px;align-items:center}
 </style>
 </head>
 <body>
@@ -454,6 +464,7 @@ dialog.fenster.klein .dlg-head{border-bottom:0;cursor:pointer}
       <button type="button" class="ghost" id="formNeu">Neues Formular</button>
       <label class="row" style="gap:4px"><input type="checkbox" id="formAlsXlsx"> Excel</label>
       <label class="row" style="gap:4px"><input type="checkbox" id="formAlsPdf" checked> PDF</label>
+      <button type="button" id="formSig" hidden>✍ Kunde unterschreibt</button>
       <button type="button" id="formDrucken">🖨 Drucken</button>
       <button type="button" class="primary" id="formSpeichern">Speichern …</button>
     </div>
@@ -2573,6 +2584,7 @@ function merkZellen(x){ if(!x.merken) return []; if(typeof x.z === "string") ret
 function merkSetzen(k, v){ try{ const m = JSON.parse(localStorage.getItem("formMerk") || "{}"); m[k] = v; localStorage.setItem("formMerk", JSON.stringify(m)); }catch(e){} }
 function formWerte(){
   const w = formState.daten[formState.akt] || (formState.daten[formState.akt] = formStart(formDef()));
+  gemeinsamEin(formDef(), w);
   // gespeicherte Werte (z. B. eigene Messgeräte) auch in schon angefangene Formulare übernehmen
   let merk = {}; try{ merk = JSON.parse(localStorage.getItem("formMerk") || "{}"); }catch(e){}
   for(const a of formDef().abschnitte) for(const x of a.felder) for(const [z, k] of merkZellen(x)) if(!(z in w)) w[z] = merk[k] || "";
@@ -2590,7 +2602,7 @@ function formStart(f){
 }
 
 function formRender(){
-  const f = formState.akt === "#geraete" ? FORMULARE[0] : formDef(), w = formState.akt === "#geraete" ? {} : formWerte();
+  const f = formState.akt[0] === "#" ? FORMULARE[0] : formDef(), w = formState.akt[0] === "#" ? {} : formWerte();
   $("#formListe").innerHTML = "";
   for(const g of FORMULARE.filter(g => !g.quelle || (formState.register || []).some(r => r.name === g.quelle))){
     const b = document.createElement("button"); b.type = "button"; b.textContent = g.titel;
@@ -2614,10 +2626,14 @@ function formRender(){
   }
   { const h = document.createElement("span"); h.className = "hint"; h.style.margin = "10px 2px 2px"; h.textContent = "Nachschlagen"; $("#formListe").appendChild(h);
     const b = document.createElement("button"); b.type = "button"; b.textContent = "📋 Geräteliste"; b.setAttribute("aria-current", formState.akt === "#geraete" ? "true" : "false");
-    b.onclick = () => { formState.akt = "#geraete"; formRender(); }; $("#formListe").appendChild(b); }
+    b.onclick = () => { formState.akt = "#geraete"; formRender(); }; $("#formListe").appendChild(b);
+    const v = document.createElement("button"); v.type = "button"; v.textContent = "🕘 Verlauf"; v.setAttribute("aria-current", formState.akt === "#verlauf" ? "true" : "false");
+    v.onclick = () => { formState.akt = "#verlauf"; formRender(); }; $("#formListe").appendChild(v); }
+  sigKnopf();
   if(formState.akt === "#geraete"){ geraeteAnsicht(); return; }
+  if(formState.akt === "#verlauf"){ verlaufAnsicht(); return; }
   const box = $("#formInhalt"); box.innerHTML = "";
-  const set = (k, v) => { w[k] = v; formMerken(); };
+  const set = (k, v) => { w[k] = v; gemeinsamAus(f, w); formMerken(); };
   for(const a of f.abschnitte){
     const sek = document.createElement("div"); sek.className = "form-sek";
     const h = document.createElement("strong"); h.textContent = a.titel; sek.appendChild(h);
@@ -2641,7 +2657,7 @@ function formRender(){
         const ta = document.createElement("textarea");
         if(x.t === "flaeche"){ ta.value = w[x.z] || ""; ta.oninput = () => set(x.z, ta.value); }
         else { ta.rows = x.z.length; ta.value = x.z.map(z => w[z] || "").join("\n").replace(/\n+$/, ""); ta.oninput = () => { const z = ta.value.split("\n"); x.z.forEach((c, k) => w[c] = k === x.z.length - 1 ? z.slice(k).join(" ") : (z[k] || "")); formMerken(); }; }
-        l.appendChild(ta); sek.appendChild(l);
+        l.appendChild(ta); l.appendChild(bausteinKnopf(ta)); sek.appendChild(l);
       } else if(x.t === "kreuz" || x.t === "x"){
         if(!kreuze){ kreuze = document.createElement("div"); kreuze.className = "form-kreuze"; sek.appendChild(kreuze); }
         const k = x.t === "kreuz" ? "#" + x.n : x.z;
@@ -2779,6 +2795,7 @@ async function tsLesen(f, w, bilder, st){
     for(const a of f.abschnitte) for(const x of a.felder) if(x.ts){ const val = v[x.ts]; if(val){ w[x.z] = val; n++; } else if(x.ts !== "SCHUTZKLASSE" && x.ts !== "EINHEIT") w[x.z] = ""; }
     teile.push(n ? `Typenschild: ${n} Werte` : "Typenschild: keine Werte erkannt");
     if(n && f.abschnitte.some(a => a.felder.some(x => x.geraet))) geraetSpeichern(f, w);
+    if(n) gemeinsamAus(f, w);
   }
   if(geraete.length){
     // Messgerät-Fotos ein zweites Mal kontrastverstärkt lesen; dort erkannte Werte haben Vorrang
@@ -2934,12 +2951,32 @@ function auftragWerte(text){
   return res;
 }
 // Zielzellen je Formular (Schlüssel = Zellen im Reparaturauftrag)
-const AUFTRAG_ZIEL = {
-  reparatur: null,
+const REP = {E4: "E4", D5: "D5", D6: "D6", D7: "D7", D8: "D8", Q9: "Q9", D15: "D15", D16: "D16", D17: "D17", D19: "D19", D23: "D23"};
+// gleiche Angaben in allen Formularen (Schlüssel = Zellen im Reparaturauftrag)
+const FELD_MAP = {
+  reparatur: REP,
   garantie: {E4: "B10", D5: "B3", D6: "B4", D7: "B5", D15: "B12", D16: "B13", D17: "B14", D19: "B16", D23: "B20"},
   technisch: {E4: "B9", D5: "B3", D6: "B4", D7: "B5", D15: "B11", D16: "B12", D17: "B13", D19: "B15", D23: "B19"},
-  ladegeraet: {E4: "B9", D5: "F4", D6: "F6", D7: "F8", D17: "B17", D23: "B19"}
+  ladegeraet: {E4: "B9", D5: "F4", D6: "F6", D7: "F8", D17: "B17", D23: "B19"},
+  pruefung: {E4: "H5", D5: "A5"},
+  rueckgabe: {D5: "G5", D6: "G7", D7: "G9", D15: "B9", D16: "B11", D17: "B13", D23: "B15"},
+  bestkunde: {D5: "C3", D6: "C4", D7: "C5", Q9: "G7", D15: "C10", D16: "C11", D17: "C12", D19: "C14", D23: "C19"},
+  toyota: {D5: "V6", D17: "A6", D23: "M6"}
 };
+const AUFTRAG_ZIEL = {reparatur: null, garantie: FELD_MAP.garantie, technisch: FELD_MAP.technisch, ladegeraet: FELD_MAP.ladegeraet};
+function gemeinsam(){ return formState.daten._gemeinsam || (formState.daten._gemeinsam = {stand: 0, v: {}}); }
+// Werte des Formulars in den gemeinsamen Stand übernehmen
+function gemeinsamAus(f, w){
+  const map = FELD_MAP[f.id]; if(!map) return; const g = gemeinsam(); let neu = false;
+  for(const [k, z] of Object.entries(map)) if((w[z] || "") !== (g.v[k] || "")){ g.v[k] = w[z] || ""; neu = true; }
+  if(neu){ g.stand = Date.now(); w._gStand = g.stand; }
+}
+// gemeinsamen Stand in ein anderes Formular eintragen (nur wenn er neuer ist)
+function gemeinsamEin(f, w){
+  const map = FELD_MAP[f.id], g = formState.daten._gemeinsam; if(!map || !g || !(g.stand > (w._gStand || 0))) return;
+  for(const [k, z] of Object.entries(map)) if(g.v[k] !== undefined) w[z] = g.v[k];
+  w._gStand = g.stand;
+}
 async function auftragLesen(f, w, bytes, st, typ){
   st.textContent = "Wird gelesen …";
   let text = "";
@@ -2950,8 +2987,137 @@ async function auftragLesen(f, w, bytes, st, typ){
   st.textContent = "";
   const v = auftragWerte(text), ziel = AUFTRAG_ZIEL[f.id]; let n = 0;
   for(const [z, x] of Object.entries(v)){ const z2 = ziel ? ziel[z] : z; if(x && z2){ w[z2] = x; n++; } }
+  gemeinsamAus(f, w);
   formMerken(); formRender();
   formMeldung(n ? `${n} Angaben übernommen (Kunde und Gerät). Bitte kurz prüfen.` : "Es wurden keine Angaben erkannt.", 8000);
+}
+
+/* ---- Unterschrift des Kunden (kommt als Bild ins Excel-Blatt und damit auch in die PDF) ---- */
+const SIG_KUNDE = {reparatur: "B55", pruefung: "O65", bestkunde: "A43"};
+function sigKnopf(){
+  const b = $("#formSig"), w = formState.akt[0] === "#" ? null : formWerte();
+  b.hidden = !(formState.akt in SIG_KUNDE);
+  b.textContent = w && w._sigKunde ? "✍ Kunde hat unterschrieben ✓" : "✍ Kunde unterschreibt";
+}
+function sigDialog(){
+  const w = formWerte(), d = document.createElement("dialog"); d.className = "sig-dlg";
+  d.innerHTML = '<div class="sig-kopf"><strong>Unterschrift Kunde</strong><span class="hint">Mit Finger, Stift oder Maus im Feld unterschreiben.</span></div><canvas width="900" height="300"></canvas><div class="sig-fuss"><button type="button" class="ghost" data-a="leeren">Leeren</button><button type="button" class="ghost" data-a="weg"' + (w._sigKunde ? "" : " hidden") + '>Unterschrift entfernen</button><span style="flex:1"></span><button type="button" class="ghost" data-a="abbr">Abbrechen</button><button type="button" class="primary" data-a="ok">Übernehmen</button></div>';
+  document.body.appendChild(d);
+  const c = d.querySelector("canvas"), g = c.getContext("2d"); let mal = false, leer = true, last = null;
+  g.lineWidth = 3.2; g.lineCap = g.lineJoin = "round"; g.strokeStyle = "#1a2a6c";
+  const pos = e => { const r = c.getBoundingClientRect(); return [(e.clientX - r.left) * c.width / r.width, (e.clientY - r.top) * c.height / r.height]; };
+  c.onpointerdown = e => { mal = true; leer = false; last = pos(e); c.setPointerCapture(e.pointerId); g.beginPath(); g.arc(last[0], last[1], 1.4, 0, 7); g.fillStyle = g.strokeStyle; g.fill(); };
+  c.onpointermove = e => { if(!mal) return; const p = pos(e); g.beginPath(); g.moveTo(last[0], last[1]); g.lineTo(p[0], p[1]); g.stroke(); last = p; };
+  c.onpointerup = c.onpointercancel = () => { mal = false; };
+  const zu = () => { d.close(); d.remove(); };
+  d.addEventListener("cancel", e => { e.preventDefault(); zu(); });
+  d.querySelector("[data-a=leeren]").onclick = () => { g.clearRect(0, 0, c.width, c.height); leer = true; };
+  d.querySelector("[data-a=abbr]").onclick = zu;
+  d.querySelector("[data-a=weg]").onclick = () => { delete w._sigKunde; formMerken(); sigKnopf(); zu(); formMeldung("Unterschrift entfernt.", 3000); };
+  d.querySelector("[data-a=ok]").onclick = () => {
+    if(leer){ formMeldung("Bitte erst unterschreiben.", 3000); return; }
+    // auf die Unterschrift zuschneiden
+    const px = g.getImageData(0, 0, c.width, c.height).data; let x0 = c.width, y0 = c.height, x1 = 0, y1 = 0;
+    for(let y = 0; y < c.height; y++) for(let x = 0; x < c.width; x++) if(px[(y * c.width + x) * 4 + 3] > 10){ if(x < x0) x0 = x; if(x > x1) x1 = x; if(y < y0) y0 = y; if(y > y1) y1 = y; }
+    const t = document.createElement("canvas"), m = 6; t.width = x1 - x0 + 2 * m; t.height = y1 - y0 + 2 * m;
+    t.getContext("2d").drawImage(c, x0 - m, y0 - m, t.width, t.height, 0, 0, t.width, t.height);
+    w._sigKunde = t.toDataURL("image/png"); formMerken(); sigKnopf(); zu();
+    formMeldung("Unterschrift übernommen – sie kommt beim Speichern/Drucken ins Formular.", 5000);
+  };
+  d.showModal();
+}
+$("#formSig").onclick = sigDialog;
+
+/* ---- Pflichtangaben je Formular ---- */
+const PFLICHT = {
+  reparatur: ["Kundenname", "Fabrikat", "Type", "Fahrgestell-Nr.", "Betr. Std."],
+  pruefung: ["Auftraggeber", "Hersteller", "Fabr. Nr.", "Schutzleiterwiderstand (Ω)", "Isolationswiderstand (MΩ)", ["Messgeräte", "H51"]],
+  rueckgabe: ["Fabrikat", "Fahrgestell-Nr."],
+  bestkunde: ["Kundenname", "Fahrgestell-Nr.", ["Ersatzteile", "B26"]],
+  bestmonteur: [["Ersatzteile", "B15"]],
+  garantie: ["Kundenname", "Montage-Auftrag-Nr.", "Fahrgestell-Nr."],
+  technisch: ["Kundenname", "Fahrgestell-Nr.", ["1. Symptome", "A24"]],
+  ladegeraet: ["Name", "Seriennummer"],
+  urlaub: [["Urlaub vom", "B9"]],
+  toyota: ["Gerätenummer", "Betriebsstunden"]
+};
+function pflichtFehlt(f, w){
+  const out = [];
+  for(const p of PFLICHT[f.id] || []){
+    if(Array.isArray(p)){ if(!String(w[p[1]] || "").trim()) out.push(p[0]); continue; }
+    let z = null; for(const a of f.abschnitte) for(const x of a.felder) if(x.l === p && typeof x.z === "string") z = x.z;
+    if(z && !String(w[z] || "").trim()) out.push(p.replace(/\s*\(.*\)$/, ""));
+  }
+  if(f.id in SIG_KUNDE && !w._sigKunde) out.push("Unterschrift Kunde");
+  return out;
+}
+
+/* ---- Textbausteine für Beschreibungsfelder ---- */
+function bausteine(){ try{ return JSON.parse(JSON.parse(localStorage.getItem("formMerk") || "{}")["§bausteine"] || "[]"); }catch(e){ return []; } }
+function bausteineSetzen(l){ merkSetzen("§bausteine", JSON.stringify(l)); formMerken(); }
+function bausteinKnopf(ta){
+  const wrap = document.createElement("div"); wrap.className = "baustein";
+  const b = document.createElement("button"); b.type = "button"; b.className = "ghost"; b.textContent = "＋ Textbaustein";
+  const pop = document.createElement("div"); pop.className = "baustein-pop"; pop.hidden = true;
+  const einf = t => {
+    const a = ta.selectionStart ?? ta.value.length, e = ta.selectionEnd ?? a, vor = ta.value.slice(0, a);
+    const trenn = vor && !/[\s]$/.test(vor) ? (ta.rows > 1 ? "\n" : " ") : "";
+    ta.value = vor + trenn + t + ta.value.slice(e); ta.dispatchEvent(new Event("input")); ta.focus();
+  };
+  const zeigen = () => {
+    pop.innerHTML = ""; const l = bausteine();
+    if(!l.length){ const h = document.createElement("span"); h.className = "hint"; h.textContent = "Noch keine Bausteine. Text ins Feld schreiben und unten speichern."; pop.appendChild(h); }
+    l.forEach((t, i) => {
+      const z = document.createElement("div"); z.className = "baustein-zeile";
+      const ins = document.createElement("button"); ins.type = "button"; ins.textContent = t; ins.title = "Einfügen"; ins.onclick = () => { einf(t); pop.hidden = true; };
+      const del = document.createElement("button"); del.type = "button"; del.className = "ghost"; del.textContent = "✕"; del.title = "Baustein löschen";
+      del.onclick = () => { const n = bausteine(); n.splice(i, 1); bausteineSetzen(n); zeigen(); };
+      z.append(ins, del); pop.appendChild(z);
+    });
+    const sp = document.createElement("button"); sp.type = "button"; sp.textContent = "★ Text aus diesem Feld als Baustein speichern";
+    sp.onclick = () => {
+      const t = (ta.value.slice(ta.selectionStart, ta.selectionEnd) || ta.value).trim();
+      if(!t){ formMeldung("Das Feld ist leer – erst den Text schreiben.", 5000); return; }
+      const n = bausteine(); if(!n.includes(t)) n.push(t); bausteineSetzen(n); zeigen(); formMeldung("Baustein gespeichert.", 3000);
+    };
+    pop.appendChild(sp);
+  };
+  b.onclick = () => { pop.hidden = !pop.hidden; if(!pop.hidden) zeigen(); };
+  wrap.append(b, pop); return wrap;
+}
+
+/* ---- Verlauf der erstellten Formulare ---- */
+function verlaufAnsicht(){
+  const box = $("#formInhalt"); box.innerHTML = "";
+  const sek = document.createElement("div"); sek.className = "form-sek";
+  const h = document.createElement("strong"); h.textContent = "Verlauf – zuletzt erstellte Formulare"; sek.appendChild(h);
+  const tools = document.createElement("div"); tools.className = "form-tools";
+  const such = document.createElement("input"); such.type = "search"; such.placeholder = "Suchen (Kunde, Formular, Nr.) …"; such.style.flex = "1";
+  const ord = document.createElement("button"); ord.type = "button"; ord.textContent = "📂 Ablage-Ordner öffnen";
+  ord.onclick = () => fetch("/api/formular/ablage?oeffnen=1", {method: "POST"});
+  tools.append(such, ord); sek.appendChild(tools);
+  const hint = document.createElement("span"); hint.className = "hint"; hint.textContent = "Alle erstellten Formulare liegen zusätzlich unter Dokumente\\Service-Mappe\\Berichte\\<Kunde>. „Öffnen“ lädt die Eingaben wieder ins Formular, z. B. zum Ändern oder neu Drucken."; sek.appendChild(hint);
+  const tab = document.createElement("table"); tab.className = "form-tab"; sek.appendChild(tab); box.appendChild(sek);
+  const zeigen = () => {
+    const q = such.value.trim().toLowerCase(), vl = (formState.daten._verlauf || []);
+    tab.innerHTML = "<thead><tr><th>Datum</th><th>Formular</th><th>Kunde</th><th>Nr.</th><th></th></tr></thead>";
+    const tb = document.createElement("tbody");
+    vl.filter(e => !q || [e.titel, e.kunde, e.nr].join(" ").toLowerCase().includes(q)).forEach(e => {
+      const tr = document.createElement("tr");
+      const d = new Date(e.zeit), dt = d.toLocaleDateString("de-DE") + " " + d.toLocaleTimeString("de-DE", {hour: "2-digit", minute: "2-digit"});
+      for(const t of [dt, e.titel + (e.gedruckt ? " (gedruckt)" : ""), e.kunde || "–", e.nr || ""]){ const td = document.createElement("td"); td.textContent = t; tr.appendChild(td); }
+      const td = document.createElement("td"); td.style.whiteSpace = "nowrap";
+      const ob = document.createElement("button"); ob.type = "button"; ob.textContent = "Öffnen";
+      ob.onclick = () => { formState.daten[e.id] = JSON.parse(JSON.stringify(e.w)); formState.daten[e.id]._gStand = Date.now() + 1; formState.akt = e.id; formMerken(); formRender(); formMeldung("Eingaben vom " + dt + " geladen.", 5000); };
+      td.appendChild(ob);
+      for(const pf of e.pfade || []){ const fb = document.createElement("button"); fb.type = "button"; fb.textContent = /\.pdf$/i.test(pf) ? "PDF" : "Excel"; fb.style.marginLeft = "4px";
+        fb.onclick = () => fetch("/api/formular/ablage?oeffnen=1", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({pfad: pf})}); td.appendChild(fb); }
+      tr.appendChild(td); tb.appendChild(tr);
+    });
+    tab.appendChild(tb);
+    if(!tb.children.length){ const tr = document.createElement("tr"); tr.innerHTML = '<td colspan="5" class="hint">Noch keine Formulare erstellt.</td>'; tb.appendChild(tr); }
+  };
+  such.oninput = zeigen; zeigen();
 }
 
 /* ---- gemeinsame Geräteliste ---- */
@@ -3072,12 +3238,20 @@ function zusatz(f, w, werte){
   return n ? {nach: l, anzahl: n} : {};
 }
 async function formSpeichern(drucken){
-  if(formState.akt === "#geraete"){ formMeldung("Bitte zuerst links ein Formular wählen."); return; }
+  if(formState.akt[0] === "#"){ formMeldung("Bitte zuerst links ein Formular wählen."); return; }
   const f = formDef(), w = formWerte();
   const xlsx = !drucken && $("#formAlsXlsx").checked, pdf = !drucken && $("#formAlsPdf").checked;
   if(!drucken && !xlsx && !pdf){ formMeldung("Bitte Excel und/oder PDF auswählen."); return; }
+  // 8) Pflichtangaben prüfen – beim zweiten Klick wird trotzdem gespeichert
+  const fehlt = pflichtFehlt(f, w), schl = f.id + "|" + fehlt.join("|");
+  if(fehlt.length && !(formState.pflichtOk === schl && Date.now() - formState.pflichtZeit < 30000)){
+    formState.pflichtOk = schl; formState.pflichtZeit = Date.now();
+    formMeldung("Es fehlt: " + fehlt.join(", ") + ". Zum trotzdem " + (drucken ? "Drucken" : "Speichern") + " noch einmal klicken.", 12000);
+    return;
+  }
+  formState.pflichtOk = null;
   const werte = {}, kreuze = {};
-  for(const [k, v] of Object.entries(w)){ if(k === "#mehr") continue; if(k[0] === "#") kreuze[k.slice(1)] = !!v; else if(v !== "" && v != null) werte[k] = String(v); }
+  for(const [k, v] of Object.entries(w)){ if(k === "#mehr" || k[0] === "_") continue; if(k[0] === "#") kreuze[k.slice(1)] = !!v; else if(v !== "" && v != null) werte[k] = String(v); }
   for(const a of f.abschnitte) for(const x of a.felder){
     if(x.t === "datum" && !x.echt && werte[x.z]){ const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(werte[x.z]); if(m) werte[x.z] = m[3] + "." + m[2] + "." + m[1]; }
     if(x.stueck && werte[x.z]) werte[x.z] = werte[x.z] + " Stück";
@@ -3091,7 +3265,8 @@ async function formSpeichern(drucken){
   if(f.id === "pruefung") werte.K13 = "A";   // Nennleistung immer in Ampere
   const btn = $("#formSpeichern"); btn.disabled = true; const alt = btn.textContent; btn.textContent = "Bitte warten …"; formMeldung(drucken ? "Excel füllt das Formular aus und druckt …" : "Excel füllt das Formular aus – das dauert ein paar Sekunden …", 60000);
   let r;
-  const anfrage = {...zusatz(f, w, werte), blatt: f.blatt || "", quelle: f.quelle ? ((formState.register || []).find(g => g.name === f.quelle) || {}).id || "-" : "", werte, kreuze, xlsx, pdf, drucken: !!drucken};
+  const bilder = w._sigKunde && SIG_KUNDE[f.id] ? [{zelle: SIG_KUNDE[f.id], png: w._sigKunde.split(",")[1], hoehe: 34, breite: 150}] : [];
+  const anfrage = {bilder, ...zusatz(f, w, werte), blatt: f.blatt || "", quelle: f.quelle ? ((formState.register || []).find(g => g.name === f.quelle) || {}).id || "-" : "", werte, kreuze, xlsx, pdf, drucken: !!drucken};
   try{ r = await (await fetch("/api/formular", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(anfrage)})).json(); }
   catch(e){ r = {ok: false, error: "Keine Verbindung zum Programm."}; }
   btn.disabled = false; btn.textContent = alt;
@@ -3113,6 +3288,17 @@ async function formSpeichern(drucken){
     const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([data], {type: mime})); a.download = name;
     document.body.appendChild(a); a.click(); a.remove(); return name;
   };
+  // 3) automatische Ablage und 7) Verlauf
+  const kundeName = (FELD_MAP[f.id] && w[FELD_MAP[f.id].D5]) || feld(/^(Kundenname|Auftraggeber|Name|Endkunde)$/) || "";
+  const nrV = (FELD_MAP[f.id] && w[FELD_MAP[f.id].E4]) || "";
+  let pfade = [];
+  if(!drucken && (r.pdf || r.xlsx)){
+    try{ const a = await (await fetch("/api/formular/ablage", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({kunde: kundeName, dateien: [r.pdf && {name: basis + ".pdf", data: r.pdf}, r.xlsx && {name: basis + ".xlsx", data: r.xlsx}].filter(Boolean)})})).json();
+      if(a.ok) pfade = a.pfade || []; }catch(e){}
+  }
+  const vl = formState.daten._verlauf || (formState.daten._verlauf = []);
+  vl.unshift({zeit: Date.now(), id: f.id, titel: f.titel, kunde: kundeName, nr: nrV, gedruckt: !!drucken, pfade, w: JSON.parse(JSON.stringify(w))});
+  vl.splice(150); formMerken();
   if(drucken){ formMeldung("An den Drucker geschickt.", 6000); return; }
   // Das „Speichern unter“-Fenster darf der Browser nur direkt nach einem Klick öffnen – deshalb eigene Knöpfe
   const e = $("#formStatus"); clearTimeout(formMeldT); e.hidden = false; e.textContent = "Fertig – jetzt speichern: ";
@@ -3161,11 +3347,13 @@ function formNeu(behalten){
     if(!KUNDE_FELD.test(x.l) || (f.id === "spesen")) continue;
     for(const z of (Array.isArray(x.z) ? x.z : [x.z])) if(z && alt[z]) neu[z] = alt[z];
   }
+  if(behalten){ const g = gemeinsam(); for(const k of ["D15", "D16", "D17", "D19", "D23", "E4"]) delete g.v[k]; g.stand = Date.now(); gemeinsamAus(f, neu); neu._gStand = g.stand; }
+  else { formState.daten._gemeinsam = {stand: Date.now(), v: {}}; neu._gStand = Date.now(); }
   formState.daten[formState.akt] = neu; formMerken(); formRender();
   formMeldung(behalten ? "Neues Formular – die Kundendaten sind stehen geblieben." : "Neues Formular – alles geleert.", 5000);
 }
 $("#formNeu").onclick = () => {
-  if(formState.akt === "#geraete") return;
+  if(formState.akt[0] === "#") return;
   const e = $("#formStatus"); clearTimeout(formMeldT); e.hidden = false; e.textContent = "Neues Formular: ";
   const k = (t, fn, cls) => { const b = document.createElement("button"); b.type = "button"; b.textContent = t; b.style.marginLeft = "6px"; if(cls) b.className = cls; b.onclick = fn; e.appendChild(b); };
   k("Kundendaten behalten", () => formNeu(true), "primary");
