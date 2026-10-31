@@ -381,6 +381,7 @@ dialog.fenster.klein .dlg-head{border-bottom:0;cursor:pointer}
       </div>
       <div class="aktionen row">
         <input type="file" id="pdfFile" accept="application/pdf,.pdf,.xlsx,.xlsm,.xls,.xlsb" multiple hidden>
+        <button id="kundeAll" hidden>📱 Kunde unterschreibt alle</button>
         <button id="mailAll" hidden>✉️ Per E-Mail senden</button>
         <button id="saveAll" hidden>💾 Alle speichern</button>
         <button class="primary" id="printAll" hidden>🖨 Drucken</button>
@@ -1097,6 +1098,8 @@ function updateSaveAll(){
   $("#saveAll").hidden = n < 2; $("#saveAll").textContent = `Alle speichern (${n})`;
   $("#printAll").hidden = !state.docs.length;
   $("#mailAll").hidden = !state.docs.length;
+  $("#kundeAll").hidden = state.docs.length < 2;
+  $("#kundeAll").textContent = state.docs.length && state.docs.every(d => d.kunde) ? `✓ Kunde hat alle unterschrieben (${state.docs.length})` : `📱 Kunde unterschreibt alle (${state.docs.length})`;
   $("#printAll").textContent = state.docs.length > 1 ? `Alle drucken (${state.docs.length})` : "Drucken";
 }
 /* ---------- Ankreuzfelder ---------- */
@@ -1326,22 +1329,24 @@ function updateStampEl(doc){
 }
 
 /* ---------- Unterschrift des Kunden per Handy ---------- */
+$("#kundeAll").onclick = () => kundeHandy(null);
 async function kundeHandy(doc){
+  const docs = doc ? [doc] : state.docs.slice();
   const d = document.createElement("dialog"); d.className = "sig-dlg";
-  d.innerHTML = '<div class="sig-kopf"><strong>Unterschrift Kunde – ' + esc(doc.name) + '</strong></div><div class="sig-handy"></div><div class="sig-fuss">' +
-    (doc.kunde ? '<button type="button" class="ghost" data-a="weg">Kunden-Unterschrift entfernen</button>' : '') + '<span style="flex:1"></span><button type="button" class="ghost" data-a="abbr">Schließen</button></div>';
+  d.innerHTML = '<div class="sig-kopf"><strong>Unterschrift Kunde – ' + (doc ? esc(doc.name) : "für alle " + docs.length + " Berichte") + '</strong></div><div class="sig-handy"></div><div class="sig-fuss">' +
+    (docs.some(x => x.kunde) ? '<button type="button" class="ghost" data-a="weg">Kunden-Unterschrift entfernen</button>' : '') + '<span style="flex:1"></span><button type="button" class="ghost" data-a="abbr">Schließen</button></div>';
   document.body.appendChild(d); let offen = true;
   const zu = () => { offen = false; d.close(); d.remove(); };
   d.addEventListener("cancel", e => { e.preventDefault(); zu(); });
   d.querySelector("[data-a=abbr]").onclick = zu;
-  const weg = d.querySelector("[data-a=weg]"); if(weg) weg.onclick = () => { doc.kunde = null; doc.kStamp = null; doc.saved = false; zu(); rebuild(doc); };
+  const weg = d.querySelector("[data-a=weg]"); if(weg) weg.onclick = () => { for(const x of docs){ x.kunde = null; x.kStamp = null; x.saved = false; } zu(); renderAll(); };
   d.showModal();
   const u = await handyUnterschrift(d.querySelector(".sig-handy"), () => !offen);
   if(!u || !offen) return;
   const img = new Image(); img.src = u; await img.decode().catch(() => {});
-  doc.kunde = {url: u, r: img.naturalWidth ? img.naturalHeight / img.naturalWidth : 0.4};
-  await kundePlatz(doc); doc.saved = false; zu(); rebuild(doc);
-  toast("Unterschrift des Kunden ist da – bei Bedarf verschieben, dann speichern.");
+  for(const x of docs){ x.kunde = {url: u, r: img.naturalWidth ? img.naturalHeight / img.naturalWidth : 0.4}; await kundePlatz(x); x.saved = false; }
+  zu(); renderAll();
+  toast(docs.length > 1 ? `Unterschrift des Kunden in allen ${docs.length} Berichten eingesetzt – bei Bedarf verschieben, dann speichern.` : "Unterschrift des Kunden ist da – bei Bedarf verschieben, dann speichern.");
 }
 // Platz für die Kunden-Unterschrift: über „Unterschrift Kunde“ (oder Auftraggeber)
 async function kundePlatz(doc){
