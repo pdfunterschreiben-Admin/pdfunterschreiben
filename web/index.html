@@ -294,19 +294,25 @@ header.top .ver button:hover{background:rgba(255,255,255,.26)}
 body::before{content:"";position:fixed;left:61%;top:60%;width:min(760px,62vw);aspect-ratio:803/150;transform:translate(-50%,-50%);background:url("/wasserzeichen.png") center/contain no-repeat;opacity:.07;pointer-events:none;z-index:0}
 @media (prefers-color-scheme: dark){body::before{opacity:.10;filter:grayscale(.3) brightness(1.6)}}
 .wrap{position:relative;z-index:1}
-/* Gaudi: Fahrzeuge fahren unten durchs Bild */
-.strasse{position:relative;height:150px;margin-top:24px;overflow:hidden;border-bottom:2px dashed color-mix(in srgb,var(--muted) 35%,transparent)}
-.strasse .fz{position:absolute;bottom:2px;left:0;transform:translateX(-300px);animation:fahren 18s linear infinite;filter:drop-shadow(0 5px 4px rgba(0,0,0,.2))}
-.strasse .fz1{height:124px;animation-delay:0s}
-.strasse .fz2{height:136px;animation-delay:-6s}
-.strasse .fz3{height:70px;animation-delay:-12s}
-@keyframes fahren{0%{transform:translateX(-300px)}100%{transform:translateX(calc(100cqw + 40px))}}
-.strasse{container-type:inline-size}
-.strasse .fz:hover{animation-play-state:paused}
-@media (prefers-reduced-motion: reduce){.strasse .fz{animation:none;position:static;transform:none;margin-right:18px}.strasse{display:flex;align-items:flex-end;justify-content:center}}
+/* Gaudi: Fahrzeuge fahren unten durchs Programm, Gabeln heben und senken */
+.strasse{position:fixed;left:0;right:0;bottom:0;height:118px;z-index:0;pointer-events:none;overflow:hidden;container-type:inline-size;
+  background:linear-gradient(to top,color-mix(in srgb,var(--line) 55%,transparent),transparent 26px)}
+.strasse::after{content:"";position:absolute;left:0;right:0;bottom:8px;border-bottom:2px dashed color-mix(in srgb,var(--muted) 35%,transparent)}
+body{padding-bottom:128px}
+.wrap{position:relative;z-index:1}
+.fz{position:absolute;bottom:9px;left:0;transform:translateX(-340px);animation:fahren 22s linear infinite;filter:drop-shadow(0 4px 3px rgba(0,0,0,.2))}
+.fz img{display:block;height:100%;width:auto}
+.fz img.g{position:absolute;left:0;top:0;animation:heben 4.4s ease-in-out infinite}
+.fz1{height:102px;animation-delay:0s}.fz1 img.g{--hub:-38%}
+.fz2{height:108px;animation-delay:-7.3s}.fz2 img.g{--hub:-34%;animation-delay:-1.5s}
+.fz3{height:58px;animation-delay:-14.6s}.fz3 img.g{--hub:-5%;animation-delay:-3s;animation-duration:3s}
+@keyframes fahren{0%{transform:translateX(-340px)}100%{transform:translateX(calc(100cqw + 40px))}}
+@keyframes heben{0%,22%{transform:translateY(0)}45%,62%{transform:translateY(var(--hub))}85%,100%{transform:translateY(0)}}
+@media (prefers-reduced-motion: reduce){.fz,.fz img.g{animation:none}.fz{position:static;transform:none;display:inline-block;margin:0 14px}.strasse{display:flex;align-items:flex-end;justify-content:center;padding-bottom:9px}}
 </style>
 </head>
 <body>
+<div class="strasse" aria-hidden="true"><div class="fz fz1"><img src="/fz-stapler-k.png" alt=""><img class="g" src="/fz-stapler-g.png" alt=""></div><div class="fz fz2"><img src="/fz-schubmast-k.png" alt=""><img class="g" src="/fz-schubmast-g.png" alt=""></div><div class="fz fz3"><img src="/fz-hubwagen-k.png" alt=""><img class="g" src="/fz-hubwagen-g.png" alt=""></div></div>
 <div class="wrap">
   <header class="top">
     <div class="marke">
@@ -1121,8 +1127,7 @@ async function autoPlace(doc){
 function renderAll(){
   const box = $("#docs"); box.innerHTML = "";
   if(!state.docs.length){
-    box.innerHTML = '<p class="hint leer-hinweis">Tipp: Berichte (PDF oder Excel) kannst du auch einfach ins Fenster ziehen.</p>'
-      + '<div class="strasse" aria-hidden="true"><img class="fz fz1" src="/fz-stapler.png" alt=""><img class="fz fz2" src="/fz-schubmast.png" alt=""><img class="fz fz3" src="/fz-hubwagen.png" alt=""></div>';
+    box.innerHTML = '<p class="hint leer-hinweis">Tipp: Berichte (PDF oder Excel) kannst du auch einfach ins Fenster ziehen.</p>';
   }
   state.docs.forEach(d => box.appendChild(buildDoc(d)));
   updateSaveAll();
