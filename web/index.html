@@ -2697,30 +2697,84 @@ function formRender(){
 function tabZeilen(x, w){ const z = x.r.slice(), l = x.r[x.r.length - 1]; for(let i = 1; i <= (w["#mehr"] || 0); i++) z.push(l + i); return z; }
 /* ---- Typenschild ---- */
 function tsWerkzeug(f, w){
+  const mess = f.id === "pruefung";
   const d = document.createElement("div"); d.className = "col"; d.style.gap = "8px";
   const r = document.createElement("div"); r.className = "form-tools";
-  const lab = document.createElement("label"); lab.className = "btn file-btn"; lab.textContent = "📷 Typenschild-Foto wählen …";
-  const inp = document.createElement("input"); inp.type = "file"; inp.accept = "image/*"; lab.appendChild(inp);
-  const hb = document.createElement("button"); hb.type = "button"; hb.textContent = "📱 Typenschild mit dem Handy";
+  const lab = document.createElement("label"); lab.className = "btn file-btn"; lab.textContent = mess ? "📷 Fotos wählen (Typenschild + Messgerät) …" : "📷 Typenschild-Foto wählen …";
+  const inp = document.createElement("input"); inp.type = "file"; inp.accept = "image/*"; inp.multiple = mess; lab.appendChild(inp);
+  const hb = document.createElement("button"); hb.type = "button"; hb.textContent = mess ? "📱 Fotos mit dem Handy" : "📱 Typenschild mit dem Handy";
   const st = document.createElement("span"); st.className = "hint";
   const qr = document.createElement("div"); qr.className = "form-qr"; qr.hidden = true;
   r.append(lab, hb, st); d.append(r, qr);
-  inp.onchange = async () => { const file = inp.files[0]; inp.value = ""; if(file) await tsLesen(f, w, new Uint8Array(await file.arrayBuffer()), st); };
+  if(mess){ const h = document.createElement("span"); h.className = "hint"; h.textContent = "Typenschild und Messgerät-Display zusammen auswählen. Bei zwei Messgerät-Fotos kommt R ISO vom Foto mit Isolationsmessung, R PE und Strom vom anderen."; d.appendChild(h); }
+  inp.onchange = async () => { const fs = [...inp.files]; inp.value = ""; if(fs.length) await tsLesen(f, w, await Promise.all(fs.map(async x => new Uint8Array(await x.arrayBuffer()))), st); };
   hb.onclick = () => tsHandy(f, w, st, qr, hb);
   return d;
 }
-async function tsLesen(f, w, bytes, st){
-  st.textContent = "Typenschild wird gelesen …";
+// Messgerät-Display (z. B. Benning ST 725) aus dem erkannten Text lesen
+function messWerte(roh){
+  let t = String(roh || "").replace(/\r/g, "").replace(/,/g, ".");
+  t = t.replace(/(\d)\s*[.]\s*(\d)/g, "$1.$2").replace(/(\d)[Oo](?=\d)/g, "$10").replace(/(^|\s)[Oo]\.(\d)/g, "$10.$2");
+  const zahl = /(>\s*)?(\d{1,4}\.\d{1,3})\s*(M\s*[ΩQO0Dn2]|m\s*A|MA|[ΩQ])?/g;
+  const funde = []; let m;
+  while((m = zahl.exec(t))) funde.push({pos: m.index, gr: !!m[1], wert: m[2], einheit: (m[3] || "").replace(/\s/g, "")});
+  const res = {};
+  const labels = {rpe: /R\s*P\s*E/gi, riso: /R\s*[I1l|]\s*S\s*[O0]/gi, strom: /I\s*(E\s*A|LEAK|L\s*E\s*A\s*K|P\s*E|D\s*I\s*F\s*F)\b/gi};
+  const frei = () => funde.filter(x => !x.weg);
+  // 1) nach Einheit
+  for(const x of funde){
+    const e = x.einheit.toUpperCase();
+    let k = null;
+    if(/^M[ΩQO0DN2]$/.test(e) || x.gr) k = "riso"; else if(e === "MA") k = "strom"; else if(/^[ΩQ]$/.test(e)) k = "rpe";
+    if(k && !res[k]){ res[k] = x; x.weg = true; }
+  }
+  // 2) nach Beschriftung (nächste Zahl dahinter)
+  for(const [k, re] of Object.entries(labels)){
+    if(res[k]) continue; let l;
+    while((l = re.exec(t))){ const x = frei().find(y => y.pos > l.index); if(x){ res[k] = x; x.weg = true; break; } }
+  }
+  // 3) Reihenfolge auf dem Display: R PE, R ISO, Strom
+  const hatIso = res.riso || labels.riso.test(t) || /19\.99/.test(t);
+  for(const k of hatIso ? ["rpe", "riso", "strom"] : ["rpe", "strom"]){ if(!res[k]){ const x = frei()[0]; if(x){ res[k] = x; x.weg = true; } } }
+  const aus = {};
+  for(const k of ["rpe", "riso", "strom"]) if(res[k]) aus[k] = (res[k].gr || (k === "riso" && /19\.99/.test(res[k].wert)) ? "> " : "") + res[k].wert.replace(".", ",");
+  aus.iso = !!res.riso || !!hatIso;
+  aus.pass = /P\s*[AR4]\s*[S5]\s*[S5]/i.test(t); aus.fail = /F\s*A\s*[I1l]\s*L/i.test(t);
+  aus.geraet = /BENNING|ST\s*7\d\d|R\s*P\s*E|R\s*[I1l]\s*S\s*[O0]|P\s*[AR]\s*[S5]\s*[S5]/i.test(t) || Object.keys(res).length >= 2;
+  return aus;
+}
+async function tsLesen(f, w, bilder, st){
+  if(!Array.isArray(bilder)) bilder = [bilder];
+  const mess = f.id === "pruefung";
+  st.textContent = bilder.length > 1 ? `${bilder.length} Fotos werden gelesen …` : "Foto wird gelesen …";
+  let erg;
   try{
-    const r = await (await fetch("/api/formular/typenschild", {method: "POST", body: bytes})).json();
-    if(!r.ok) throw new Error(r.error || "Keine Werte erkannt.");
-    let n = 0;
-    for(const a of f.abschnitte) for(const x of a.felder) if(x.ts){ const v = r.werte[x.ts]; if(v){ w[x.z] = v; n++; } else if(x.ts !== "SCHUTZKLASSE" && x.ts !== "EINHEIT") w[x.z] = ""; }
-    formMerken(); formRender();
-    formMeldung(n ? `Typenschild gelesen: ${n} Werte eingetragen. Bitte kurz prüfen.` : "Auf dem Foto wurden keine Werte erkannt.", 6000);
-    if(n) geraetSpeichern(f, w);
-  }catch(e){ st.textContent = ""; formMeldung("Typenschild: " + (e.message || e), 7000); return; }
+    erg = await Promise.all(bilder.map(async b => { try{ return await (await fetch("/api/formular/typenschild", {method: "POST", body: b})).json(); }catch(e){ return {ok: false, error: "Keine Verbindung zum Programm."}; } }));
+  }catch(e){ erg = []; }
   st.textContent = "";
+  const gut = erg.filter(r => r && r.ok);
+  if(!gut.length){ formMeldung("Foto: " + ((erg[0] && erg[0].error) || "Keine Werte erkannt."), 7000); return; }
+  for(const r of gut) r.mw = mess ? messWerte(r.roh) : {geraet: false};
+  const geraete = gut.filter(r => r.mw.geraet && (Object.keys(r.werte || {}).length < 3 || /BENNING|ST\s*7\d\d/i.test(r.roh || "")));
+  const schilder = gut.filter(r => !geraete.includes(r)).sort((a, b) => Object.keys(b.werte || {}).length - Object.keys(a.werte || {}).length);
+  const teile = [];
+  if(schilder.length){
+    const v = schilder[0].werte || {}; let n = 0;
+    for(const a of f.abschnitte) for(const x of a.felder) if(x.ts){ const val = v[x.ts]; if(val){ w[x.z] = val; n++; } else if(x.ts !== "SCHUTZKLASSE" && x.ts !== "EINHEIT") w[x.z] = ""; }
+    teile.push(n ? `Typenschild: ${n} Werte` : "Typenschild: keine Werte erkannt");
+    if(n) geraetSpeichern(f, w);
+  }
+  if(geraete.length){
+    // R ISO vom Foto mit Isolationsmessung, R PE und Strom vom anderen Foto
+    const mitIso = geraete.find(r => r.mw.iso), ohneIso = [...geraete].reverse().find(r => !r.mw.iso);
+    const quelleIso = mitIso || geraete[0], quelleRest = geraete.length > 1 ? (ohneIso || geraete[geraete.length - 1]) : geraete[0];
+    const neu = {E42: quelleRest.mw.rpe, I42: quelleIso.mw.riso, M42: quelleRest.mw.strom};
+    let n = 0; for(const [z, v] of Object.entries(neu)) if(v){ w[z] = v; n++; }
+    if(geraete.some(r => r.mw.fail)) w["#Check Box 22"] = false; else if(geraete.every(r => r.mw.pass)) w["#Check Box 22"] = true;
+    teile.push(n ? `Messgerät: ${n} Messwerte` : "Messgerät: keine Messwerte erkannt");
+  }
+  formMerken(); formRender();
+  formMeldung(teile.join(" · ") + " eingetragen. Bitte kurz prüfen.", 8000);
 }
 async function tsHandy(f, w, st, qr, hb){
   const api = async (event, extra = {}) => (await fetch("/api/fotos", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({event, ...extra})})).json();
@@ -2729,7 +2783,7 @@ async function tsHandy(f, w, st, qr, hb){
   try{ s = await api("fotostart"); if(!s.ok) throw new Error(s.error); }
   catch(e){ hb.disabled = false; st.textContent = ""; formMeldung("Handy: " + (e.message || e), 6000); return; }
   qr.hidden = false;
-  qr.innerHTML = '<img alt="QR-Code"><span class="hint">Mit dem Handy scannen und das Typenschild fotografieren.<br><button type="button" class="ghost">Abbrechen</button></span>';
+  qr.innerHTML = '<img alt="QR-Code"><span class="hint">Mit dem Handy scannen und ' + (f.id === "pruefung" ? "Typenschild und Messgerät-Display" : "das Typenschild") + ' fotografieren.<br><button type="button" class="ghost">Abbrechen</button></span>';
   qr.querySelector("img").src = "/api/fotos/qr?u=" + encodeURIComponent(s.url);
   let aus = false; qr.querySelector("button").onclick = () => { aus = true; };
   st.textContent = "Warte auf das Foto vom Handy …";
@@ -2740,11 +2794,21 @@ async function tsHandy(f, w, st, qr, hb){
     let l; try{ l = await api("fotoliste", {token: s.token}); }catch(e){ continue; }
     if(!l.ok){ if(l.abgelaufen) break; continue; }
     if(l.files && l.files.length){
-      const g = await api("fotoholen", {token: s.token, id: l.files[l.files.length - 1].id});
+      // weitere Fotos abwarten (z. B. Typenschild + Messgerät), bis 8 s lang nichts mehr kommt
+      let anzahl = l.files.length, ruhe = Date.now();
+      if(f.id === "pruefung") while(!aus && Date.now() - ruhe < 8000){
+        st.textContent = `${anzahl} Foto(s) da – warte auf weitere …`;
+        await new Promise(r => setTimeout(r, 2000));
+        try{ const l2 = await api("fotoliste", {token: s.token}); if(l2.ok && l2.files.length > anzahl){ l = l2; anzahl = l2.files.length; ruhe = Date.now(); } }catch(e){}
+      }
+      const bilder = [];
+      for(const fi of (f.id === "pruefung" ? l.files : l.files.slice(-1))){
+        const g = await api("fotoholen", {token: s.token, id: fi.id}); if(!g.ok) continue;
+        const bin = atob(g.b64), b = new Uint8Array(bin.length); for(let i = 0; i < bin.length; i++) b[i] = bin.charCodeAt(i); bilder.push(b);
+      }
       ende();
-      if(!g.ok){ formMeldung("Das Foto konnte nicht geholt werden.", 6000); st.textContent = ""; return; }
-      const bin = atob(g.b64), b = new Uint8Array(bin.length); for(let i = 0; i < bin.length; i++) b[i] = bin.charCodeAt(i);
-      await tsLesen(f, w, b, st); return;
+      if(!bilder.length){ formMeldung("Das Foto konnte nicht geholt werden.", 6000); st.textContent = ""; return; }
+      await tsLesen(f, w, bilder, st); return;
     }
   }
   ende(); st.textContent = "";

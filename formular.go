@@ -255,6 +255,10 @@ func (a *app) handleFormularTypenschild(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	werte := map[string]string{}
+	roh := ""
+	if i := strings.Index(t, "\n#ROH\n"); i >= 0 {
+		roh = t[i+6:]
+	}
 	for _, z := range strings.Split(t[3:], "\n") {
 		if z == "#ROH" {
 			break
@@ -265,7 +269,7 @@ func (a *app) handleFormularTypenschild(w http.ResponseWriter, r *http.Request) 
 			}
 		}
 	}
-	writeJSON(w, map[string]any{"ok": true, "werte": werte})
+	writeJSON(w, map[string]any{"ok": true, "werte": werte, "roh": roh})
 }
 
 // gemeinsame Geräteliste (dieselbe wie in den Allgemeinen Vorlagen)
