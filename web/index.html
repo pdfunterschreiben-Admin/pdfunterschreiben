@@ -2909,18 +2909,19 @@ function auftragWerte(text){
   const titel = /Auftrags[üu]bersicht\s+\d+\s*\[([^\]]+)\]/i.exec(alles);
   const bau = /Baustelle\s+([^,\n]+),\s*([^,\n]+),\s*(?:DE?-)?(\d{5})\s+([^\n,]+)/i.exec(alles);
   if(titel){
-    // Lupo: Kunde = Auftraggeber aus der Fensterzeile; ist das die eigene Firma, dann der Standort
-    const teile = titel[1].split(/;/).map(x => x.trim()).filter(Boolean);
-    if(EIGENE_FIRMA.test(titel[1])){
-      if(bau){ res.D5 = bau[1].trim(); res.D6 = bau[2].trim(); res.D7 = bau[3] + " " + bau[4].trim(); return res; }
-    }else{
-      const ort = teile.length > 1 ? teile[teile.length - 1] : "";
-      res.D5 = (teile.length > 1 ? teile.slice(0, -1) : teile).join(" ");
-      const str = L.map(x => x.trim()).filter(strasse).find(x => !bau || x !== bau[2].trim()); if(str) res.D6 = str;
-      const plz = L.map(x => /^(?:DE?-)?(\d{5})\b\s*(.*)$/.exec(x.trim())).find(Boolean);
-      if(plz || ort) res.D7 = ((plz ? plz[1] + " " : "") + (ort || plz[2])).trim();
-      return res;
+    // Lupo: Kunde = immer der Standort (Lieferanschrift)
+    const ortFix = o => o.trim().replace(/rbom\b/g, "rborn").replace(/\s+/g, " ");
+    if(bau){ res.D5 = bau[1].trim(); res.D6 = bau[2].trim(); res.D7 = bau[3] + " " + ortFix(bau[4]); return res; }
+    const st = L.findIndex(x => /Standort/i.test(x));
+    const nach = st >= 0 ? L.slice(st + 1) : L;
+    const plzI = nach.findIndex(x => /^\s*(?:DE?-)?\d{5}\s+\S/.test(x) && !EIGENE_FIRMA.test(x));
+    if(plzI >= 0){
+      const m = /^\s*(?:DE?-)?(\d{5})\s+(.+)$/.exec(nach[plzI]); res.D7 = m[1] + " " + ortFix(m[2].split(/\s{2,}/)[0]);
+      const vor = nach.slice(0, plzI).map(x => x.trim().split(/\s{2,}/)[0]).filter(x => x && !/^(Baustelle|Rechnungs|Telefon|Mobil|Lieferschein)/i.test(x) && !EIGENE_FIRMA.test(x));
+      const si = vor.map(strasse).lastIndexOf(true);
+      if(si >= 0){ res.D6 = vor[si]; res.D5 = vor.slice(Math.max(0, si - 2), si).join(" "); }
     }
+    return res;
   }
   // Montagebericht: erste Anschrift mit PLZ, die nicht die eigene Firma ist
   for(let i = 0; i < L.length; i++){
