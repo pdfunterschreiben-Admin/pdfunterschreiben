@@ -1363,7 +1363,7 @@ async function kundeHandy(doc){
   d.querySelector("[data-a=abbr]").onclick = zu;
   const weg = d.querySelector("[data-a=weg]"); if(weg) weg.onclick = () => { for(const x of docs){ x.kunde = null; x.kStamp = null; x.saved = false; } zu(); renderAll(); };
   d.showModal();
-  const u = await handyUnterschrift(d.querySelector(".sig-handy"), () => !offen, async () => (await Promise.all(docs.map(x => seitenBilder(x.pdf, x.name.replace(/\.(pdf|xlsx?|xlsm)$/i, ""), 6)))).flat());
+  const u = await handyUnterschrift(d.querySelector(".sig-handy"), () => !offen, async () => (await Promise.all(docs.map(x => seitenBilder(x.pdf, x.name.replace(/\.(pdf|xlsx?|xlsm)$/i, ""))))).flat());
   if(!u || !offen) return;
   const img = new Image(); img.src = u; await img.decode().catch(() => {});
   for(const x of docs){ x.kunde = {url: u, r: img.naturalWidth ? img.naturalHeight / img.naturalWidth : 0.4}; await kundePlatz(x); x.saved = false; }
@@ -3077,14 +3077,14 @@ async function auftragLesen(f, w, bytes, st, typ){
 /* ---- Unterschrift des Kunden auf dem Handy (QR-Code) ---- */
 // zeigt im Element „box“ einen QR-Code; liefert die Unterschrift als PNG-Data-URL (oder null bei Abbruch)
 // Seiten eines PDFs (pdf.js) als JPEG für die Vorschau auf dem Handy
-async function seitenBilder(pdf, titel, max = 8){
+async function seitenBilder(pdf, titel, max = 60){
   const out = [];
   for(let n = 1; n <= Math.min(pdf.numPages, max); n++){
-    const pg = await pdf.getPage(n), vp1 = pg.getViewport({scale: 1}), sc = 1100 / vp1.width, vp = pg.getViewport({scale: sc});
+    const pg = await pdf.getPage(n), vp1 = pg.getViewport({scale: 1}), sc = 950 / vp1.width, vp = pg.getViewport({scale: sc});
     const c = document.createElement("canvas"); c.width = Math.round(vp.width); c.height = Math.round(vp.height);
     const g = c.getContext("2d"); g.fillStyle = "#fff"; g.fillRect(0, 0, c.width, c.height);
     await pg.render({canvasContext: g, viewport: vp}).promise;
-    out.push({titel: titel + (pdf.numPages > 1 ? " – Seite " + n + " von " + pdf.numPages : ""), b64: c.toDataURL("image/jpeg", 0.72).split(",")[1]});
+    out.push({titel: titel + (pdf.numPages > 1 ? " – Seite " + n + " von " + pdf.numPages : ""), b64: c.toDataURL("image/jpeg", 0.66).split(",")[1]});
   }
   return out;
 }
@@ -3097,10 +3097,12 @@ async function handyUnterschrift(box, abbruch, vorschau){
     try{
       box.innerHTML = '<span class="hint">Vorschau für das Handy wird vorbereitet …</span>';
       const seiten = await vorschau();
-      for(let i = 0; i < seiten.length && !abbruch(); i++){
-        box.innerHTML = `<span class="hint">Vorschau wird übertragen (${i + 1} von ${seiten.length}) …</span>`;
-        await api("fotovorschau", {token: s.token, nr: i + 1, titel: seiten[i].titel, b64: seiten[i].b64});
-      }
+      // 4 Seiten gleichzeitig übertragen – auch 30 Seiten sind so in ein paar Sekunden oben
+      let fertig = 0, naechste = 0;
+      const arbeiter = async () => { while(naechste < seiten.length && !abbruch()){ const i = naechste++;
+        await api("fotovorschau", {token: s.token, nr: i + 1, titel: seiten[i].titel, b64: seiten[i].b64}).catch(() => {});
+        box.innerHTML = `<span class="hint">Vorschau wird übertragen (${++fertig} von ${seiten.length} Seiten) …</span>`; } };
+      await Promise.all([arbeiter(), arbeiter(), arbeiter(), arbeiter()]);
     }catch(e){ console.log("Vorschau", e); }
   }
   const url = s.url + (s.url.includes("?") ? "&" : "?") + "u=1";
@@ -3148,7 +3150,7 @@ function sigDialog(){
     const r = await (await fetch("/api/formular", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(formAnfrage(f, w, {pdf: true, ohneKunde: true}))})).json();
     if(!r.ok || !r.pdf) return [];
     const b = atob(r.pdf), a = new Uint8Array(b.length); for(let i = 0; i < b.length; i++) a[i] = b.charCodeAt(i);
-    return seitenBilder(await openPdf(a), f.titel, 4);
+    return seitenBilder(await openPdf(a), f.titel);
   }).then(u => {
     if(!u || !offen) return;
     w._sigKunde = u; formMerken(); sigKnopf(); zu(); formMeldung("Unterschrift vom Handy übernommen – sie kommt beim Speichern ins Formular.", 6000);

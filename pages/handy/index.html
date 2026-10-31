@@ -41,11 +41,11 @@
 <div id="sig" hidden>
   <div id="vor" hidden>
     <h2>Bitte prüfen</h2>
-    <p class="hint">Diese Berichte unterschreiben Sie. Zum Vergrößern mit zwei Fingern zoomen.</p>
+    <p class="hint">Diese Berichte unterschreiben Sie. Zum Vergrößern mit zwei Fingern zoomen. Das Unterschriftsfeld finden Sie ganz unten – <a href="#sigFeld">direkt zur Unterschrift</a>.</p>
     <div id="vorSeiten"></div>
     <p class="hint" style="margin-top:14px"><b>Mit Ihrer Unterschrift bestätigen Sie die oben gezeigten Berichte.</b></p>
   </div>
-  <h2>Unterschrift</h2>
+  <h2 id="sigFeld">Unterschrift</h2>
   <p class="hint">Bitte im weißen Feld unterschreiben – am besten das Handy quer halten.</p>
   <canvas width="1100" height="500"></canvas>
   <div class="reihe"><button type="button" id="sigLeer">Löschen</button><button type="button" class="voll" id="sigOk">Senden</button></div>
@@ -214,11 +214,12 @@ function vorschauLaden() {
       c.textContent = s.titel || ""; im.alt = s.titel || "Bericht"; f.appendChild(c); f.appendChild(im); box.appendChild(f); s.img = im;
       im.style.minHeight = "120px"; im.style.background = "#eee";
     });
-    (function naechste() {
+    function naechste() {
       if (i >= l.length) return;
       var s = l[i++];
       anfrage({ event: "h_vorschaubild", id: s.id }).then(function (b) { s.img.src = "data:image/jpeg;base64," + b; s.img.style.minHeight = ""; naechste(); }).catch(naechste);
-    })();
+    }
+    naechste(); naechste(); naechste();   // 3 Seiten gleichzeitig laden
   }).catch(function () {});
 }
 
