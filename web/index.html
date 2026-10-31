@@ -3091,7 +3091,8 @@ async function formSpeichern(drucken){
   if(f.id === "pruefung") werte.K13 = "A";   // Nennleistung immer in Ampere
   const btn = $("#formSpeichern"); btn.disabled = true; const alt = btn.textContent; btn.textContent = "Bitte warten …"; formMeldung(drucken ? "Excel füllt das Formular aus und druckt …" : "Excel füllt das Formular aus – das dauert ein paar Sekunden …", 60000);
   let r;
-  try{ r = await (await fetch("/api/formular", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({...zusatz(f, w, werte), blatt: f.blatt || "", quelle: f.quelle ? ((formState.register || []).find(g => g.name === f.quelle) || {}).id || "-" : "", werte, kreuze, xlsx, pdf, drucken: !!drucken})})).json(); }
+  const anfrage = {...zusatz(f, w, werte), blatt: f.blatt || "", quelle: f.quelle ? ((formState.register || []).find(g => g.name === f.quelle) || {}).id || "-" : "", werte, kreuze, xlsx, pdf, drucken: !!drucken};
+  try{ r = await (await fetch("/api/formular", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(anfrage)})).json(); }
   catch(e){ r = {ok: false, error: "Keine Verbindung zum Programm."}; }
   btn.disabled = false; btn.textContent = alt;
   if(!r.ok){ formMeldung(r.error || "Das Formular konnte nicht erstellt werden.", 9000); return; }
@@ -3125,7 +3126,23 @@ async function formSpeichern(drucken){
     knopf("Unterschreiben / E-Mail", async () => { await addDoc(basis + ".pdf", pb.slice(), null, null); renderAll(); $("#formDlg").close(); });
   }
   if(r.xlsx) knopf("Excel speichern …", klick(bytes(r.xlsx), ".xlsx", "Excel-Arbeitsmappe", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"));
+  // An die Dispo: Excel-Datei (Allgemeine Vorlage) als Anhang in einer neuen Outlook-Mail
+  if(!drucken){ const db = knopf("📧 An Dispo senden", async () => {
+    db.disabled = true; const alt = db.textContent; db.textContent = "Bitte warten …";
+    try{
+      let x = r.xlsx;
+      if(!x){ formMeldung("Excel-Datei wird erstellt …", 60000); const r2 = await (await fetch("/api/formular", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({...anfrage, xlsx: true, pdf: false, drucken: false})})).json(); if(!r2.ok) throw new Error(r2.error || "Excel-Datei konnte nicht erstellt werden."); x = r2.xlsx; }
+      const nr = w.E4 || w.H5 || w.B10 || w.B9 || "";
+      const kunde = feld(/^(Kundenname|Auftraggeber|Name)$/);
+      const subject = [f.titel, nr, kunde].filter(Boolean).join(" – ");
+      const m = await (await fetch("/api/mail", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({subject, to: DISPO_MAIL, files: [{name: basis + ".xlsx", data: x}]})})).json();
+      if(!m.ok) throw new Error(m.error || "Outlook konnte nicht geöffnet werden.");
+      formMeldung("Outlook ist offen – Mail an die Dispo prüfen und auf „Senden“ klicken.", 8000);
+    }catch(e){ formMeldung("An Dispo senden: " + (e.message || e), 8000); }
+    db.disabled = false; db.textContent = alt;
+  }); }
 }
+const DISPO_MAIL = "service@schlueter-gabelstapler.de";
 
 $("#formBtn").onclick = () => {
   formLaden(); formRender(); $("#formDlg").showModal();
