@@ -89,8 +89,8 @@ try {
       if (-not $b) { continue }
       try {
         $c = $ws.Range([string]$b.zelle).MergeArea; $bw = [double]$b.w; $bh = [double]$b.h
-        # „in“: oben in die Zelle (Beschriftung steht unten in der Zelle); sonst unten auf die Linie über der Beschriftung
-        if ($b.modus -eq 'in') { $top = $c.Top + 1 } else { $top = $c.Top - $bh - 0.5 }
+        # „in“: oben in die Zelle (Beschriftung steht unten in der Zelle); sonst auf die Linie über der Beschriftung
+        if ($b.modus -eq 'in') { $top = $c.Top + 1 } else { $top = $c.Top - $bh * 0.82 }   # Unterschrift reicht etwas über die Linie wie von Hand
         $left = $c.Left + [Math]::Max(2, ($c.Width - $bw) / 2)
         $sh = $ws.Shapes.AddPicture([string]$b.pfad, 0, -1, $left, $top, $bw, $bh)
         try { $sh.Placement = 2 } catch {}

@@ -3080,8 +3080,8 @@ async function handyUnterschrift(box, abbruch){
 const SIG_KUNDE = {reparatur: "B55", pruefung: "O65", bestkunde: "A43"};
 // Platz der Unterschriften im Excel-Blatt: Zelle der Beschriftung, Höhe in Punkt, „in“ = oben in der Zelle, sonst über der Beschriftung
 const SIG_PLATZ = {
-  kunde: {reparatur: ["B55", 17, "in"], pruefung: ["O65", 28], bestkunde: ["A43", 19]},
-  technik: {reparatur: ["O55", 17, "in"], pruefung: ["B65", 28], bestkunde: ["F43", 19], bestmonteur: ["F32", 19], rueckgabe: ["H39", 26], garantie: ["C43", 26], technisch: ["C44", 30]}
+  kunde: {reparatur: ["B55", 18, "in"], pruefung: ["O65", 32], bestkunde: ["A43", 24]},
+  technik: {reparatur: ["O55", 18, "in"], pruefung: ["B65", 32], bestkunde: ["F43", 24], bestmonteur: ["F32", 24], rueckgabe: ["H39", 30], garantie: ["C43", 30], technisch: ["C44", 34]}
 };
 function sigKnopf(){
   const b = $("#formSig"), w = formState.akt[0] === "#" ? null : formWerte();
