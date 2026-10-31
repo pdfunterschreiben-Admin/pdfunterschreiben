@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Fotos senden</title>
+<style>
+  body{font:16px system-ui,sans-serif;margin:0;padding:20px;color:#1a1a1a;background:#f6f6f4}
+  h2{margin:0 0 6px;font-size:20px}.hint{color:#666;font-size:14px;margin:0 0 18px}
+  label.btn{display:block;text-align:center;background:#c8102e;color:#fff;border-radius:10px;padding:18px;font-weight:600;font-size:18px;margin-bottom:10px}
+  label.btn.zwei{background:#fff;color:#c8102e;border:2px solid #c8102e}
+  input{display:none}#liste{margin-top:18px;display:flex;flex-direction:column;gap:6px}
+  .z{display:flex;justify-content:space-between;gap:10px;background:#fff;border-radius:8px;padding:10px 12px;font-size:14px}
+  .z span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #st,#fertig{margin-top:18px;font-weight:600}.ok{color:#1d7a35}.err{color:#c8102e}
+  [hidden]{display:none!important}
+  #sig canvas{display:block;width:100%;aspect-ratio:2.2/1;background:#fff;border:2px dashed #bbb;border-radius:12px;touch-action:none}
+  .reihe{display:flex;gap:10px;margin-top:12px}.reihe button{flex:1;padding:16px;border-radius:10px;font-size:17px;font-weight:600;border:2px solid #c8102e;background:#fff;color:#c8102e}
+  .reihe button.voll{background:#c8102e;color:#fff}
+</style>
+</head>
+<body>
+<div id="laden">Einen Moment …</div>
+
+<div id="abgelaufen" hidden>
+  <h2>Link abgelaufen</h2>
+  <p id="abgText"></p>
+</div>
+
+<div id="fotos" hidden>
+  <h2>Fotos an die Service-Mappe senden</h2>
+  <p class="hint">Fotos aus der Galerie auswählen (Typenschild zuerst). Sie werden für die Übertragung verkleinert und erscheinen gleich im Programm am PC.</p>
+  <label class="btn">Fotos auswählen<input type="file" id="f" accept="image/*" multiple></label>
+  <div id="liste"></div><div id="fertig" class="ok"></div>
+</div>
+
+<div id="sig" hidden>
+  <h2>Unterschrift</h2>
+  <p class="hint">Bitte im weißen Feld unterschreiben – am besten das Handy quer halten.</p>
+  <canvas width="1100" height="500"></canvas>
+  <div class="reihe"><button type="button" id="sigLeer">Löschen</button><button type="button" class="voll" id="sigOk">Senden</button></div>
+  <div id="sigSt"></div>
+</div>
+
+<div id="ts" hidden>
+  <h2>Typenschild fotografieren</h2>
+  <p class="hint">Das Foto wird gelesen und die Werte erscheinen gleich in Excel.</p>
+  <label class="btn">📷 Foto aufnehmen<input type="file" id="k" accept="image/*" capture="environment"></label>
+  <label class="btn zwei">Aus der Galerie wählen<input type="file" id="g" accept="image/*"></label>
+  <div id="st"></div>
+</div>
+
+<script>
+// Läuft ohne Google-Anmeldung: Die Seite schickt die Fotos direkt an den Server (Apps Script, doPost).
+// So stört es nicht, wenn im Handy-Browser mehrere Google-Konten angemeldet sind.
+var SERVER = "https://script.google.com/macros/s/AKfycbwj7l1K2RcGtPUu4wdRFjI7NLayzAtqjx0_XorzQmMNEqh-JyuEaOrUlOEN1BT9HVSC/exec";
+var p = new URLSearchParams(location.search);
+var MODUS = p.get("ts") ? "ts" : "foto";
+var SIG = p.get("u") === "1";
+var T = String(p.get(MODUS) || "").replace(/[^a-f0-9]/g, "");
+function $(id) { return document.getElementById(id); }
+
+function anfrage(daten) {
+  daten.token = T;
+  return fetch(SERVER, { method: "POST", body: JSON.stringify(daten), credentials: "omit",
+    headers: { "Content-Type": "text/plain;charset=utf-8" } })
+    .then(function (r) { if (!r.ok) throw new Error("Server antwortet nicht (" + r.status + ")"); return r.text(); })
+    .then(function (t) {
+      var i = t.indexOf("\n"), kopf = i < 0 ? t : t.slice(0, i), rest = i < 0 ? "" : t.slice(i + 1);
+      if (kopf !== "OK") throw new Error(rest || t.slice(0, 200));
+      return rest;
+    });
+}
+
+function abgelaufen() {
+  $("laden").hidden = true; $("fotos").hidden = true; $("ts").hidden = true; $("abgelaufen").hidden = false;
+  $("abgText").textContent = MODUS === "ts"
+    ? "Bitte in Excel erneut auf „Typenschild einlesen“ klicken und den neuen QR-Code scannen."
+    : "Bitte im Programm „Service-Mappe“ bei der Dokumentation erneut auf „Fotos vom Handy“ tippen und den neuen QR-Code scannen.";
+}
+
+function start(versuch) {
+  if (!T) { abgelaufen(); return; }
+  anfrage({ event: "h_check", modus: MODUS }).then(function (r) {
+    if (r !== "1") { abgelaufen(); return; }
+    $("laden").hidden = true;
+    $(MODUS === "ts" ? "ts" : SIG ? "sig" : "fotos").hidden = false;
+    document.title = MODUS === "ts" ? "Typenschild fotografieren" : SIG ? "Unterschrift – Service-Mappe" : "Fotos senden – Service-Mappe";
+  }).catch(function (e) {
+    if (versuch < 3) { setTimeout(function () { start(versuch + 1); }, 1500 * versuch); return; }
+    $("laden").className = "err"; $("laden").textContent = "Keine Verbindung zum Server: " + e.message + ". Bitte Seite neu laden.";
+  });
+}
+
+function lesen(f, wie) {
+  return new Promise(function (ok, no) {
+    var r = new FileReader(); r.onload = function () { ok(r.result); }; r.onerror = no;
+    wie === "buf" ? r.readAsArrayBuffer(f) : r.readAsDataURL(f);
+  });
+}
+function verkleinern(f, q) {
+  return createImageBitmap(f).then(function (b) {
+    var s = Math.min(1, 2400 / Math.max(b.width, b.height)), c = document.createElement("canvas");
+    c.width = Math.round(b.width * s); c.height = Math.round(b.height * s);
+    c.getContext("2d").drawImage(b, 0, 0, c.width, c.height);
+    return c.toDataURL("image/jpeg", q).split(",")[1];
+  }).catch(function () { return lesen(f).then(function (d) { return String(d).split(",")[1]; }); });
+}
+// Aufnahmezeit aus den EXIF-Daten (vor dem Verkleinern, danach ist sie weg)
+function exifZeit(buf) {
+  try {
+    var v = new DataView(buf); if (v.getUint16(0) !== 0xFFD8) return 0; var o = 2;
+    while (o < v.byteLength - 10) {
+      var m = v.getUint16(o), len = v.getUint16(o + 2);
+      if (m === 0xFFE1 && v.getUint32(o + 4) === 0x45786966) {
+        var t = o + 10, le = v.getUint16(t) === 0x4949;
+        var u16 = function (q) { return v.getUint16(q, le); }, u32 = function (q) { return v.getUint32(q, le); };
+        var ex = 0, dt = 0, scan = function (q) {
+          var c = u16(q);
+          for (var i = 0; i < c; i++) { var e = q + 2 + i * 12, tag = u16(e);
+            if (tag === 0x8769) ex = t + u32(e + 8);
+            if (tag === 0x9003 || (tag === 0x0132 && !dt)) dt = t + u32(e + 8); }
+        };
+        scan(t + u32(t + 4)); if (ex) scan(ex); if (!dt) return 0;
+        var s = ""; for (var k = 0; k < 19; k++) s += String.fromCharCode(v.getUint8(dt + k));
+        var a = /(\d{4}):(\d{2}):(\d{2}) (\d{2}):(\d{2}):(\d{2})/.exec(s);
+        return a ? new Date(+a[1], a[2] - 1, +a[3], +a[4], +a[5], +a[6]).getTime() : 0;
+      }
+      if ((m & 0xFF00) !== 0xFF00) break; o += 2 + len;
+    }
+  } catch (e) {}
+  return 0;
+}
+
+// ---- Fotos vom Handy (Service-Mappe) ----
+var q = [], aktiv = 0, n = 0, MAX = 3;
+$("f").onchange = function (e) {
+  for (var i = 0; i < e.target.files.length; i++) {
+    var f = e.target.files[i], z = document.createElement("div");
+    z.className = "z"; z.innerHTML = "<span></span><span>wartet …</span>"; z.firstChild.textContent = f.name;
+    $("liste").appendChild(z); q.push({ f: f, z: z });
+  }
+  e.target.value = ""; $("fertig").textContent = "";
+  for (var k = 0; k < MAX; k++) weiter();
+};
+function weiter() {
+  if (aktiv >= MAX) return;
+  var j = q.shift();
+  if (!j) { if (!aktiv && n) $("fertig").textContent = "Fertig – " + n + " Foto(s) gesendet. Du kannst weitere auswählen oder die Seite schließen."; return; }
+  aktiv++; j.z.lastChild.textContent = "wird vorbereitet …"; var zeit = 0;
+  lesen(j.f.slice(0, 262144), "buf").then(function (b) { zeit = exifZeit(b); return verkleinern(j.f, 0.88); })
+    .then(function (b64) {
+      var versuch = 0;
+      var senden = function () {
+        versuch++; j.z.lastChild.textContent = versuch > 1 ? "neuer Versuch (" + versuch + ") …" : "wird gesendet …";
+        anfrage({ event: "h_foto", name: j.f.name.replace(/\.[^.]+$/, "") + ".jpg", lm: zeit || j.f.lastModified,
+                  mime: "image/jpeg", b64: b64, exif: zeit ? 1 : 0 })
+          .then(function () { n++; j.z.lastChild.textContent = "✓ gesendet"; j.z.lastChild.className = "ok"; aktiv--; weiter(); })
+          .catch(function (err) {
+            var t = String(err && err.message || err);
+            if (versuch < 3 && !/abgelaufen/.test(t)) { setTimeout(senden, 2000 * versuch); return; }
+            j.z.lastChild.textContent = "Fehler: " + t; j.z.lastChild.className = "err"; aktiv--; weiter();
+          });
+      };
+      senden();
+    })
+    .catch(function (err) { j.z.lastChild.textContent = "Fehler: " + err; j.z.lastChild.className = "err"; aktiv--; weiter(); });
+}
+
+// ---- Typenschild (Allgemeine Vorlagen) ----
+function tsSenden(f) {
+  if (!f) return;
+  var st = $("st"); st.className = ""; st.textContent = "Foto wird gesendet und gelesen …";
+  verkleinern(f, 0.9).then(function (b64) {
+    var versuch = 0;
+    var senden = function () {
+      versuch++;
+      anfrage({ event: "h_ts", b64: b64, mime: "image/jpeg" }).then(function (r) {
+        st.className = r === "1" ? "ok" : "err";
+        st.textContent = r === "1" ? "✓ Fertig – die Werte stehen jetzt in Excel. Du kannst diese Seite schließen."
+                                   : "Das Foto konnte nicht gelesen werden. Bitte in Excel nochmal versuchen.";
+      }).catch(function (e) {
+        var t = String(e && e.message || e);
+        if (versuch < 3 && !/abgelaufen|schon ein Foto/.test(t)) { st.textContent = "neuer Versuch (" + (versuch + 1) + ") …"; setTimeout(senden, 2000 * versuch); return; }
+        st.className = "err"; st.textContent = "Fehler: " + t;
+      });
+    };
+    senden();
+  });
+}
+$("k").onchange = function (e) { tsSenden(e.target.files[0]); e.target.value = ""; };
+$("g").onchange = function (e) { tsSenden(e.target.files[0]); e.target.value = ""; };
+
+// ---- Unterschrift des Kunden ----
+(function () {
+  var c = document.querySelector("#sig canvas"), g = c.getContext("2d"), mal = false, leer = true, last = null;
+  g.lineWidth = 5; g.lineCap = g.lineJoin = "round"; g.strokeStyle = "#1a2a6c"; g.fillStyle = "#1a2a6c";
+  function pos(e) { var r = c.getBoundingClientRect(); return [(e.clientX - r.left) * c.width / r.width, (e.clientY - r.top) * c.height / r.height]; }
+  c.onpointerdown = function (e) { mal = true; leer = false; last = pos(e); c.setPointerCapture(e.pointerId); g.beginPath(); g.arc(last[0], last[1], 2.4, 0, 7); g.fill(); };
+  c.onpointermove = function (e) { if (!mal) return; var q = pos(e); g.beginPath(); g.moveTo(last[0], last[1]); g.lineTo(q[0], q[1]); g.stroke(); last = q; };
+  c.onpointerup = c.onpointercancel = function () { mal = false; };
+  $("sigLeer").onclick = function () { g.clearRect(0, 0, c.width, c.height); leer = true; $("sigSt").textContent = ""; };
+  $("sigOk").onclick = function () {
+    var st = $("sigSt");
+    if (leer) { st.className = "err"; st.textContent = "Bitte zuerst unterschreiben."; return; }
+    var px = g.getImageData(0, 0, c.width, c.height).data, x0 = c.width, y0 = c.height, x1 = 0, y1 = 0;
+    for (var y = 0; y < c.height; y += 1) for (var x = 0; x < c.width; x += 1) if (px[(y * c.width + x) * 4 + 3] > 10) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+    var t = document.createElement("canvas"), m = 8; t.width = x1 - x0 + 2 * m; t.height = y1 - y0 + 2 * m;
+    t.getContext("2d").drawImage(c, x0 - m, y0 - m, t.width, t.height, 0, 0, t.width, t.height);
+    var b64 = t.toDataURL("image/png").split(",")[1];
+    $("sigOk").disabled = true; st.className = ""; st.textContent = "Wird gesendet …";
+    anfrage({ event: "h_foto", name: "unterschrift.png", lm: Date.now(), mime: "image/png", b64: b64, exif: 0 })
+      .then(function () { st.className = "ok"; st.textContent = "✓ Danke! Die Unterschrift ist übertragen. Sie können die Seite schließen."; })
+      .catch(function (e) { $("sigOk").disabled = false; st.className = "err"; st.textContent = "Fehler: " + (e.message || e); });
+  };
+})();
+
+start(1);
+</script>
+</body>
+</html>

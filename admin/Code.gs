@@ -463,7 +463,7 @@ function fotoAnfrage(d) {
     const folder = fotoOrdner().createFolder('upload-' + token.slice(0, 8));
     PropertiesService.getScriptProperties().setProperty('foto_' + token,
       JSON.stringify({ exp: Date.now() + FOTO_MIN * 60000, folder: folder.getId() }));
-    return { ok: true, token: token, url: (neueVersion(d.version, '1.17.0') ? HANDY_URL : ScriptApp.getService().getUrl()) + '?foto=' + token, minuten: FOTO_MIN };
+    return { ok: true, token: token, url: (neueVersion(d.version, '1.20.1') ? HANDY_URL_NEU : neueVersion(d.version, '1.17.0') ? HANDY_URL : ScriptApp.getService().getUrl()) + '?foto=' + token, minuten: FOTO_MIN };
   }
   const s = fotoSitzung(d.token, true);
   if (!s) return { ok: false, abgelaufen: true, error: 'Der QR-Code ist abgelaufen.' };
@@ -512,9 +512,11 @@ function fotoHochladen(token, name, lm, mime, b64, exif) {
 // Die Handy-Seite liegt auf GitHub Pages (docs/handy im Repository) und schickt die Fotos per doPost.
 // Über Google (doGet) gab es Fehler, wenn im Handy-Browser mehrere Google-Konten angemeldet sind.
 const HANDY_URL = 'https://pdfunterschreiben-admin.github.io/service-mappe/handy/';
+// ab Service-Mappe 1.20.1 unter eigener Adresse (ältere Programme kennen nur die alte)
+const HANDY_URL_NEU = 'https://service-mappe.github.io/handy/';
 // Programme vor 1.17.0 zeigen nur QR-Codes für script.google.com an
 function neueVersion(v, ab) {
-  const a = String(v || '0').split('.').map(Number), b = ab.split('.').map(Number);
+  const a = String(v || '0').split('.').map(x => parseInt(x, 10) || 0), b = ab.split('.').map(Number);   // „1.19.7-test.5“ -> 1, 19, 7
   for (let i = 0; i < 3; i++) { if ((a[i] || 0) !== b[i]) return (a[i] || 0) > b[i]; }
   return true;
 }

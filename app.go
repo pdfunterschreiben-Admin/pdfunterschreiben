@@ -153,7 +153,7 @@ func (a *app) routes() http.Handler {
 		// Nur feste Adressen im Standardbrowser öffnen (dort ist man bei Google angemeldet)
 		links := map[string]string{
 			"tabelle": "https://docs.google.com/spreadsheets/d/1i7jifCaffYGLXdDVSidWPqHbZTkaWhAF6_wVwN3H0NA/edit",
-			"tdoc":    "https://pdfunterschreiben-admin.github.io/service-mappe/tdoc/",
+			"tdoc":    "https://service-mappe.github.io/tdoc/",
 		}
 		u, ok := links[r.URL.Query().Get("ziel")]
 		if r.Method != http.MethodPost || !ok {
