@@ -466,7 +466,8 @@ dialog.fenster.klein .dlg-head{border-bottom:0;cursor:pointer}
       <button type="button" class="ghost" id="formNeu">Neues Formular</button>
       <label class="row" style="gap:4px"><input type="checkbox" id="formAlsXlsx"> Excel</label>
       <label class="row" style="gap:4px"><input type="checkbox" id="formAlsPdf" checked> PDF</label>
-      <button type="button" id="formSig" hidden>✍ Kunde unterschreibt</button>
+      <button type="button" id="formSig" hidden>📱 Kunde unterschreibt</button>
+      <button type="button" id="formDispo">📧 An Dispo senden</button>
       <button type="button" id="formDrucken">🖨 Drucken</button>
       <button type="button" class="primary" id="formSpeichern">Speichern …</button>
     </div>
@@ -3075,42 +3076,22 @@ const SIG_KUNDE = {reparatur: "B55", pruefung: "O65", bestkunde: "A43"};
 function sigKnopf(){
   const b = $("#formSig"), w = formState.akt[0] === "#" ? null : formWerte();
   b.hidden = !(formState.akt in SIG_KUNDE);
-  b.textContent = w && w._sigKunde ? "✍ Kunde hat unterschrieben ✓" : "✍ Kunde unterschreibt";
+  b.textContent = w && w._sigKunde ? "📱 Kunde hat unterschrieben ✓" : "📱 Kunde unterschreibt";
 }
 function sigDialog(){
   const w = formWerte(), d = document.createElement("dialog"); d.className = "sig-dlg";
-  d.innerHTML = '<div class="sig-kopf"><strong>Unterschrift Kunde</strong><span class="hint">Mit Finger, Stift oder Maus im Feld unterschreiben.</span></div><canvas width="900" height="300"></canvas><div class="sig-handy"></div><div class="sig-fuss"><button type="button" class="ghost" data-a="leeren">Leeren</button><button type="button" class="ghost" data-a="handy">📱 Auf dem Handy unterschreiben</button><button type="button" class="ghost" data-a="weg"' + (w._sigKunde ? "" : " hidden") + '>Unterschrift entfernen</button><span style="flex:1"></span><button type="button" class="ghost" data-a="abbr">Abbrechen</button><button type="button" class="primary" data-a="ok">Übernehmen</button></div>';
-  document.body.appendChild(d);
-  const c = d.querySelector("canvas"), g = c.getContext("2d"); let mal = false, leer = true, last = null;
-  g.lineWidth = 3.2; g.lineCap = g.lineJoin = "round"; g.strokeStyle = "#1a2a6c";
-  const pos = e => { const r = c.getBoundingClientRect(); return [(e.clientX - r.left) * c.width / r.width, (e.clientY - r.top) * c.height / r.height]; };
-  c.onpointerdown = e => { mal = true; leer = false; last = pos(e); c.setPointerCapture(e.pointerId); g.beginPath(); g.arc(last[0], last[1], 1.4, 0, 7); g.fillStyle = g.strokeStyle; g.fill(); };
-  c.onpointermove = e => { if(!mal) return; const p = pos(e); g.beginPath(); g.moveTo(last[0], last[1]); g.lineTo(p[0], p[1]); g.stroke(); last = p; };
-  c.onpointerup = c.onpointercancel = () => { mal = false; };
-  let offen = true;
+  d.innerHTML = '<div class="sig-kopf"><strong>Unterschrift Kunde (Handy)</strong></div><div class="sig-handy"></div><div class="sig-fuss">' +
+    (w._sigKunde ? '<button type="button" class="ghost" data-a="weg">Unterschrift entfernen</button>' : '') + '<span style="flex:1"></span><button type="button" class="ghost" data-a="abbr">Schließen</button></div>';
+  document.body.appendChild(d); let offen = true;
   const zu = () => { offen = false; d.close(); d.remove(); };
   d.addEventListener("cancel", e => { e.preventDefault(); zu(); });
-  d.querySelector("[data-a=handy]").onclick = async ev => {
-    ev.target.disabled = true; c.hidden = true;
-    const u = await handyUnterschrift(d.querySelector(".sig-handy"), () => !offen);
-    if(!offen) return;
-    if(u){ w._sigKunde = u; formMerken(); sigKnopf(); zu(); formMeldung("Unterschrift vom Handy übernommen.", 5000); }
-    else { ev.target.disabled = false; c.hidden = false; }
-  };
-  d.querySelector("[data-a=leeren]").onclick = () => { g.clearRect(0, 0, c.width, c.height); leer = true; };
   d.querySelector("[data-a=abbr]").onclick = zu;
-  d.querySelector("[data-a=weg]").onclick = () => { delete w._sigKunde; formMerken(); sigKnopf(); zu(); formMeldung("Unterschrift entfernt.", 3000); };
-  d.querySelector("[data-a=ok]").onclick = () => {
-    if(leer){ formMeldung("Bitte erst unterschreiben.", 3000); return; }
-    // auf die Unterschrift zuschneiden
-    const px = g.getImageData(0, 0, c.width, c.height).data; let x0 = c.width, y0 = c.height, x1 = 0, y1 = 0;
-    for(let y = 0; y < c.height; y++) for(let x = 0; x < c.width; x++) if(px[(y * c.width + x) * 4 + 3] > 10){ if(x < x0) x0 = x; if(x > x1) x1 = x; if(y < y0) y0 = y; if(y > y1) y1 = y; }
-    const t = document.createElement("canvas"), m = 6; t.width = x1 - x0 + 2 * m; t.height = y1 - y0 + 2 * m;
-    t.getContext("2d").drawImage(c, x0 - m, y0 - m, t.width, t.height, 0, 0, t.width, t.height);
-    w._sigKunde = t.toDataURL("image/png"); formMerken(); sigKnopf(); zu();
-    formMeldung("Unterschrift übernommen – sie kommt beim Speichern/Drucken ins Formular.", 5000);
-  };
+  const weg = d.querySelector("[data-a=weg]"); if(weg) weg.onclick = () => { delete w._sigKunde; formMerken(); sigKnopf(); zu(); formMeldung("Unterschrift entfernt.", 3000); };
   d.showModal();
+  handyUnterschrift(d.querySelector(".sig-handy"), () => !offen).then(u => {
+    if(!u || !offen) return;
+    w._sigKunde = u; formMerken(); sigKnopf(); zu(); formMeldung("Unterschrift vom Handy übernommen – sie kommt beim Speichern ins Formular.", 6000);
+  });
 }
 $("#formSig").onclick = sigDialog;
 
@@ -3322,10 +3303,10 @@ function zusatz(f, w, werte){
   for(const k of Object.keys(werte)){ const m = /^([A-Z]+)(\d+)$/.exec(k); if(m && +m[2] > l + n && +m[2] <= l + w["#mehr"]) delete werte[k]; }
   return n ? {nach: l, anzahl: n} : {};
 }
-async function formSpeichern(drucken){
+async function formSpeichern(drucken, dispo){
   if(formState.akt[0] === "#"){ formMeldung("Bitte zuerst links ein Formular wählen."); return; }
   const f = formDef(), w = formWerte();
-  const xlsx = !drucken && $("#formAlsXlsx").checked, pdf = !drucken && $("#formAlsPdf").checked;
+  const xlsx = dispo || (!drucken && $("#formAlsXlsx").checked), pdf = !dispo && !drucken && $("#formAlsPdf").checked;
   if(!drucken && !xlsx && !pdf){ formMeldung("Bitte Excel und/oder PDF auswählen."); return; }
   // 8) Pflichtangaben prüfen – beim zweiten Klick wird trotzdem gespeichert
   const fehlt = pflichtFehlt(f, w), schl = f.id + "|" + fehlt.join("|");
@@ -3411,7 +3392,7 @@ async function formSpeichern(drucken){
       formMeldung("Outlook ist offen – Mail an die Dispo prüfen und auf „Senden“ klicken.", 8000);
     }catch(e){ formMeldung("An Dispo senden: " + (e.message || e), 8000); }
     db.disabled = false; db.textContent = alt;
-  }); }
+  }); if(dispo) db.click(); }
 }
 const DISPO_MAIL = "service@schlueter-gabelstapler.de";
 
@@ -3423,6 +3404,7 @@ $("#formBtn").onclick = () => {
 $("#formClose").onclick = () => $("#formDlg").close();
 $("#formSpeichern").onclick = () => formSpeichern(false);
 $("#formDrucken").onclick = () => formSpeichern(true);
+$("#formDispo").onclick = () => formSpeichern(false, true);
 $("#formTdoc").onclick = () => { fetch("/api/open?ziel=tdoc", {method: "POST"}); formMeldung("Die Einrichtungsseite öffnet sich im Browser – dort den roten Knopf in die Lesezeichenleiste ziehen.", 9000); };
 // Kundendaten: bleiben auf Wunsch stehen, wenn für denselben Kunden ein weiterer Auftrag geschrieben wird
 const KUNDE_FELD = /^(Kunden-Nr\.|Kundenname|Straße \/ Hausnummer|PLZ \/ Ort|Ansprechpartner|E-Mail|Telefon|Telefax|Auftraggeber|Name|Adresse|Ort|Endkunde|Je Zeile ein Eintrag)$/;
