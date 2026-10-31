@@ -8,7 +8,7 @@ name: Release
 on:
   push:
     branches: [main]
-    paths-ignore: ["android/**", ".github/workflows/android.yml", "vorlagen/**", "pptx/**", ".github/workflows/pptx-release.yml"]
+    paths-ignore: [".github/workflows/setup-name.yml", "android/**", ".github/workflows/android.yml", "vorlagen/**", "pptx/**", ".github/workflows/pptx-release.yml"]
   workflow_dispatch:
 
 permissions:
@@ -120,7 +120,10 @@ jobs:
         run: |
           # alter Testkanal (wurde von Version 1.12.2 auch für Firmen-Adressen abgefragt) – entfernen
           gh release delete testkanal -R "$GITHUB_REPOSITORY" --yes --cleanup-tag 2>/dev/null || true
-          gh release create "$TAG" PDF-Unterschreiben-Setup.exe version.json --target "$GITHUB_SHA" --latest \
+          # gleiche Datei zusätzlich mit neuem Namen (fester Download-Link …/latest/download/Service-Mappe-Setup.exe);
+          # der alte Name bleibt, weil ältere Programme ihn für Updates nutzen
+          cp PDF-Unterschreiben-Setup.exe Service-Mappe-Setup.exe
+          gh release create "$TAG" PDF-Unterschreiben-Setup.exe Service-Mappe-Setup.exe version.json --target "$GITHUB_SHA" --latest \
             --title "Service-Mappe $VERSION" --notes "$(git log -1 --format=%s "$GITHUB_SHA")"
 
       - name: Testversion veröffentlichen

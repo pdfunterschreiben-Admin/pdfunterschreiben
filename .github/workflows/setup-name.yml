@@ -1,0 +1,21 @@
+# Legt im neuesten Release eine Kopie des Setups als „Service-Mappe-Setup.exe“ ab
+# (fester Download-Link: …/releases/latest/download/Service-Mappe-Setup.exe)
+name: Setup-Name
+on:
+  push:
+    branches: [main]
+    paths: [".github/workflows/setup-name.yml"]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  kopie:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="$(gh release view -R "$GITHUB_REPOSITORY" --json tagName -q .tagName)"
+          gh release download "$TAG" -R "$GITHUB_REPOSITORY" -p PDF-Unterschreiben-Setup.exe
+          cp PDF-Unterschreiben-Setup.exe Service-Mappe-Setup.exe
+          gh release upload "$TAG" Service-Mappe-Setup.exe -R "$GITHUB_REPOSITORY" --clobber
