@@ -2892,6 +2892,8 @@ function auftragWerte(text){
   wert(/\bHersteller\b/i, "D15"); wert(/^\s*Typ\b|\s{2,}Typ\b|\bTyp\s*:/i, "D16");
   wert(/\bSerien-?\s*Nr\.?|\bFg\.?\s*-?\s*Nr\.?|\bFahrgestell-?\s*Nr\.?/i, "D17"); wert(/\bBaujahr\b/i, "D19");
   wert(/\bBetriebsstunden\b|\bBetriebsstd\.?\s*Ger\.?/i, "D23");
+  // „LPE220-7244072“ -> „7244072“, wenn vorne der Typ steht (Seriennummer im Montagebericht)
+  if(res.D17 && res.D16){ const m = /^([A-Z0-9]+)[-\s]+(\S+)$/i.exec(res.D17); if(m && res.D16.toUpperCase().split(/\s+/)[0] === m[1].toUpperCase() && /Serien/i.test(L.join(" "))) res.D17 = m[2]; }
   const auf = /(Servicebericht|Auftrags[üu]bersicht)\s+(\d{6,})/i.exec(L.join("\n")); if(auf) res.E4 = auf[2];
   wert(/\bBestelldaten\s*1?\b/i, "D8"); if(res.D8 && /^(vom|---)/i.test(res.D8)) delete res.D8;
   // Anschrift: erste mit PLZ, die nicht die eigene Firma ist
