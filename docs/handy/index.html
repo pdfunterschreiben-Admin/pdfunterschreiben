@@ -15,6 +15,9 @@
   .z span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   #st,#fertig{margin-top:18px;font-weight:600}.ok{color:#1d7a35}.err{color:#c8102e}
   [hidden]{display:none!important}
+  #sig canvas{display:block;width:100%;aspect-ratio:2.2/1;background:#fff;border:2px dashed #bbb;border-radius:12px;touch-action:none}
+  .reihe{display:flex;gap:10px;margin-top:12px}.reihe button{flex:1;padding:16px;border-radius:10px;font-size:17px;font-weight:600;border:2px solid #c8102e;background:#fff;color:#c8102e}
+  .reihe button.voll{background:#c8102e;color:#fff}
 </style>
 </head>
 <body>
@@ -32,6 +35,14 @@
   <div id="liste"></div><div id="fertig" class="ok"></div>
 </div>
 
+<div id="sig" hidden>
+  <h2>Unterschrift</h2>
+  <p class="hint">Bitte im weißen Feld unterschreiben – am besten das Handy quer halten.</p>
+  <canvas width="1100" height="500"></canvas>
+  <div class="reihe"><button type="button" id="sigLeer">Löschen</button><button type="button" class="voll" id="sigOk">Senden</button></div>
+  <div id="sigSt"></div>
+</div>
+
 <div id="ts" hidden>
   <h2>Typenschild fotografieren</h2>
   <p class="hint">Das Foto wird gelesen und die Werte erscheinen gleich in Excel.</p>
@@ -46,6 +57,7 @@
 var SERVER = "https://script.google.com/macros/s/AKfycbwj7l1K2RcGtPUu4wdRFjI7NLayzAtqjx0_XorzQmMNEqh-JyuEaOrUlOEN1BT9HVSC/exec";
 var p = new URLSearchParams(location.search);
 var MODUS = p.get("ts") ? "ts" : "foto";
+var SIG = p.get("u") === "1";
 var T = String(p.get(MODUS) || "").replace(/[^a-f0-9]/g, "");
 function $(id) { return document.getElementById(id); }
 
@@ -73,8 +85,8 @@ function start(versuch) {
   anfrage({ event: "h_check", modus: MODUS }).then(function (r) {
     if (r !== "1") { abgelaufen(); return; }
     $("laden").hidden = true;
-    $(MODUS === "ts" ? "ts" : "fotos").hidden = false;
-    document.title = MODUS === "ts" ? "Typenschild fotografieren" : "Fotos senden – Service-Mappe";
+    $(MODUS === "ts" ? "ts" : SIG ? "sig" : "fotos").hidden = false;
+    document.title = MODUS === "ts" ? "Typenschild fotografieren" : SIG ? "Unterschrift – Service-Mappe" : "Fotos senden – Service-Mappe";
   }).catch(function (e) {
     if (versuch < 3) { setTimeout(function () { start(versuch + 1); }, 1500 * versuch); return; }
     $("laden").className = "err"; $("laden").textContent = "Keine Verbindung zum Server: " + e.message + ". Bitte Seite neu laden.";
@@ -179,6 +191,30 @@ function tsSenden(f) {
 }
 $("k").onchange = function (e) { tsSenden(e.target.files[0]); e.target.value = ""; };
 $("g").onchange = function (e) { tsSenden(e.target.files[0]); e.target.value = ""; };
+
+// ---- Unterschrift des Kunden ----
+(function () {
+  var c = document.querySelector("#sig canvas"), g = c.getContext("2d"), mal = false, leer = true, last = null;
+  g.lineWidth = 5; g.lineCap = g.lineJoin = "round"; g.strokeStyle = "#1a2a6c"; g.fillStyle = "#1a2a6c";
+  function pos(e) { var r = c.getBoundingClientRect(); return [(e.clientX - r.left) * c.width / r.width, (e.clientY - r.top) * c.height / r.height]; }
+  c.onpointerdown = function (e) { mal = true; leer = false; last = pos(e); c.setPointerCapture(e.pointerId); g.beginPath(); g.arc(last[0], last[1], 2.4, 0, 7); g.fill(); };
+  c.onpointermove = function (e) { if (!mal) return; var q = pos(e); g.beginPath(); g.moveTo(last[0], last[1]); g.lineTo(q[0], q[1]); g.stroke(); last = q; };
+  c.onpointerup = c.onpointercancel = function () { mal = false; };
+  $("sigLeer").onclick = function () { g.clearRect(0, 0, c.width, c.height); leer = true; $("sigSt").textContent = ""; };
+  $("sigOk").onclick = function () {
+    var st = $("sigSt");
+    if (leer) { st.className = "err"; st.textContent = "Bitte zuerst unterschreiben."; return; }
+    var px = g.getImageData(0, 0, c.width, c.height).data, x0 = c.width, y0 = c.height, x1 = 0, y1 = 0;
+    for (var y = 0; y < c.height; y += 1) for (var x = 0; x < c.width; x += 1) if (px[(y * c.width + x) * 4 + 3] > 10) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+    var t = document.createElement("canvas"), m = 8; t.width = x1 - x0 + 2 * m; t.height = y1 - y0 + 2 * m;
+    t.getContext("2d").drawImage(c, x0 - m, y0 - m, t.width, t.height, 0, 0, t.width, t.height);
+    var b64 = t.toDataURL("image/png").split(",")[1];
+    $("sigOk").disabled = true; st.className = ""; st.textContent = "Wird gesendet …";
+    anfrage({ event: "h_foto", name: "unterschrift.png", lm: Date.now(), mime: "image/png", b64: b64, exif: 0 })
+      .then(function () { st.className = "ok"; st.textContent = "✓ Danke! Die Unterschrift ist übertragen. Sie können die Seite schließen."; })
+      .catch(function (e) { $("sigOk").disabled = false; st.className = "err"; st.textContent = "Fehler: " + (e.message || e); });
+  };
+})();
 
 start(1);
 </script>

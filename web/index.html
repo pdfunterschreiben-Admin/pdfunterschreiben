@@ -279,6 +279,8 @@ dialog.fenster.klein .dlg-head{border-bottom:0;cursor:pointer}
 .sig-kopf{display:flex;flex-direction:column;gap:2px;margin-bottom:10px}
 .sig-dlg canvas{width:100%;aspect-ratio:3/1;background:#fff;border:2px dashed var(--line);border-radius:12px;touch-action:none;cursor:crosshair}
 .sig-fuss{display:flex;gap:8px;margin-top:12px;align-items:center}
+.sig-qr{display:flex;gap:16px;align-items:center;padding:8px 0}.sig-qr img{width:200px;height:200px;image-rendering:pixelated;background:#fff;border-radius:8px}
+.stamp.kunde{outline:2px dashed #1d7a35}
 </style>
 </head>
 <body>
@@ -1164,6 +1166,7 @@ function buildDoc(doc){
       <div class="row">
         <button class="ghost" data-a="date" aria-pressed="${!!doc.addDate}">${doc.addDate ? "✓ Datum" : "Datum einfügen"}</button>
         <button class="ghost" data-a="auto">Automatisch platzieren</button>
+        <button class="ghost" data-a="kunde">${doc.kunde ? "✓ Kunde unterschrieben" : "📱 Kunde unterschreibt"}</button>
         <button class="ghost" data-a="rm">Schließen</button>
         <button class="primary" data-a="save" ${doc.stamp ? "" : "disabled"}>${doc.excel ? "Speichern …" : "Unterschreiben &amp; speichern"}</button>
       </div>
@@ -1172,6 +1175,7 @@ function buildDoc(doc){
   el.querySelector('[data-a="rm"]').onclick = () => { state.docs = state.docs.filter(d => d !== doc); try{ doc.pdf.destroy(); }catch(e){} renderAll(); };
   el.querySelector('[data-a="save"]').onclick = () => doc.excel ? chooseSave(doc) : saveDoc(doc);
   el.querySelector('[data-a="date"]').onclick = () => { doc.addDate = !doc.addDate; doc.saved = false; rebuild(doc); };
+  el.querySelector('[data-a="kunde"]').onclick = () => kundeHandy(doc);
   el.querySelector('[data-a="auto"]').onclick = async () => { doc.moved = false; doc.saved = false; await autoPlace(doc); rebuild(doc); };
 
   const pagesEl = el.querySelector(".pages");
@@ -1289,6 +1293,7 @@ function updateStampEl(doc){
   const card = document.querySelector(`.doc[data-id="${doc.id}"]`); if(!card) return;
   card.querySelectorAll(".stamp").forEach(s => s.remove());
   renderDate(doc, card);
+  kundeStampEl(doc, card);
   if(!doc.stamp) return;
   const wrap = card.querySelector(`.page[data-page="${doc.stamp.page}"]`); if(!wrap) return;
   const P = doc.pages[doc.stamp.page], s = doc.stamp;
@@ -1319,6 +1324,49 @@ function updateStampEl(doc){
   wrap.appendChild(st);
 }
 
+/* ---------- Unterschrift des Kunden per Handy ---------- */
+async function kundeHandy(doc){
+  const d = document.createElement("dialog"); d.className = "sig-dlg";
+  d.innerHTML = '<div class="sig-kopf"><strong>Unterschrift Kunde – ' + esc(doc.name) + '</strong></div><div class="sig-handy"></div><div class="sig-fuss">' +
+    (doc.kunde ? '<button type="button" class="ghost" data-a="weg">Kunden-Unterschrift entfernen</button>' : '') + '<span style="flex:1"></span><button type="button" class="ghost" data-a="abbr">Schließen</button></div>';
+  document.body.appendChild(d); let offen = true;
+  const zu = () => { offen = false; d.close(); d.remove(); };
+  d.addEventListener("cancel", e => { e.preventDefault(); zu(); });
+  d.querySelector("[data-a=abbr]").onclick = zu;
+  const weg = d.querySelector("[data-a=weg]"); if(weg) weg.onclick = () => { doc.kunde = null; doc.kStamp = null; doc.saved = false; zu(); rebuild(doc); };
+  d.showModal();
+  const u = await handyUnterschrift(d.querySelector(".sig-handy"), () => !offen);
+  if(!u || !offen) return;
+  const img = new Image(); img.src = u; await img.decode().catch(() => {});
+  doc.kunde = {url: u, r: img.naturalWidth ? img.naturalHeight / img.naturalWidth : 0.4};
+  await kundePlatz(doc); doc.saved = false; zu(); rebuild(doc);
+  toast("Unterschrift des Kunden ist da – bei Bedarf verschieben, dann speichern.");
+}
+// Platz für die Kunden-Unterschrift: über „Unterschrift Kunde“ (oder Auftraggeber)
+async function kundePlatz(doc){
+  let hit = null;
+  for(const kw of ["Unterschrift Kunde", "Unterschrift des Kunden", "Unterschrift Auftraggeber", "Kunde:"]){ hit = await findKeyword(doc, kw); if(hit) break; }
+  let w = state.width, h = w * doc.kunde.r; if(h > 42){ h = 42; w = h / doc.kunde.r; }
+  if(hit) doc.kStamp = {page: hit.page, x: (hit.x0 + hit.x1) / 2 - w / 2, y: hit.vy - hit.fh * 0.85 - 2 - h, w, h};
+  else { const pg = doc.pages.length - 1, P = doc.pages[pg]; doc.kStamp = {page: pg, x: 50, y: P.h - h - 70, w, h}; }
+  const P = doc.pages[doc.kStamp.page]; doc.kStamp.x = Math.max(2, Math.min(P.w - w - 2, doc.kStamp.x)); doc.kStamp.y = Math.max(2, Math.min(P.h - h - 2, doc.kStamp.y));
+}
+function kundeStampEl(doc, card){
+  if(!doc.kunde || !doc.kStamp) return;
+  const s = doc.kStamp, wrap = card.querySelector(`.page[data-page="${s.page}"]`); if(!wrap) return;
+  const P = doc.pages[s.page], st = document.createElement("div"); st.className = "stamp kunde";
+  const lage = () => { st.style.left = (s.x / P.w * 100) + "%"; st.style.top = (s.y / P.h * 100) + "%"; st.style.width = (s.w / P.w * 100) + "%"; st.style.height = (s.h / P.h * 100) + "%"; };
+  lage(); st.innerHTML = `<img alt="" src="${doc.kunde.url}"><button class="del" aria-label="Kunden-Unterschrift entfernen">×</button>`; st.title = "Unterschrift Kunde – zum Verschieben ziehen";
+  st.querySelector(".del").onclick = e => { e.stopPropagation(); doc.kunde = null; doc.kStamp = null; doc.saved = false; rebuild(doc); };
+  st.addEventListener("click", e => e.stopPropagation()); st.addEventListener("dblclick", e => e.stopPropagation());
+  let drag = null;
+  st.addEventListener("pointerdown", e => { if(e.target.closest(".del")) return; e.stopPropagation(); st.setPointerCapture(e.pointerId); const r = wrap.getBoundingClientRect(); drag = {r, ox: e.clientX - r.left - s.x / P.w * r.width, oy: e.clientY - r.top - s.y / P.h * r.height}; });
+  st.addEventListener("pointermove", e => { if(!drag) return; s.x = Math.max(0, Math.min(P.w - s.w, (e.clientX - drag.r.left - drag.ox) / drag.r.width * P.w)); s.y = Math.max(0, Math.min(P.h - s.h, (e.clientY - drag.r.top - drag.oy) / drag.r.height * P.h)); lage(); });
+  const end = () => { if(drag){ drag = null; doc.saved = false; updateHead(doc); } };
+  st.addEventListener("pointerup", end); st.addEventListener("pointercancel", end);
+  wrap.appendChild(st);
+}
+
 /* ---------- Unterschreiben & speichern ---------- */
 function dataUrlBytes(url){ const b = atob(url.split(",")[1]); const a = new Uint8Array(b.length); for(let i = 0; i < b.length; i++) a[i] = b.charCodeAt(i); return a; }
 async function buildSigned(doc){
@@ -1337,6 +1385,12 @@ async function buildSigned(doc){
     const dvp = (await doc.pdf.getPage(pos.page + 1)).getViewport({scale: 1});
     const [tx, ty] = dvp.convertToPdfPoint(pos.x, pos.y);
     out.getPage(pos.page).drawText(today(), {x: tx, y: ty, size: DATE_PT, font, color: rgb(.07,.07,.07), rotate: degrees(dvp.rotation)});
+  }
+  if(doc.kunde && doc.kStamp){
+    const kp = await out.embedPng(dataUrlBytes(doc.kunde.url)), k = doc.kStamp;
+    const kvp = (await doc.pdf.getPage(k.page + 1)).getViewport({scale: 1});
+    const [kx, ky] = kvp.convertToPdfPoint(k.x, k.y + k.h);
+    out.getPage(k.page).drawImage(kp, {x: kx, y: ky, width: k.w, height: k.h, rotate: degrees(kvp.rotation)});
   }
   const hex = state.ink.replace("#", ""), ink = rgb(parseInt(hex.slice(0,2),16)/255, parseInt(hex.slice(2,4),16)/255, parseInt(hex.slice(4,6),16)/255);
   for(const c of (doc.checks || []).filter(c => c.on)){
@@ -2992,6 +3046,30 @@ async function auftragLesen(f, w, bytes, st, typ){
   formMeldung(n ? `${n} Angaben übernommen (Kunde und Gerät). Bitte kurz prüfen.` : "Es wurden keine Angaben erkannt.", 8000);
 }
 
+/* ---- Unterschrift des Kunden auf dem Handy (QR-Code) ---- */
+// zeigt im Element „box“ einen QR-Code; liefert die Unterschrift als PNG-Data-URL (oder null bei Abbruch)
+async function handyUnterschrift(box, abbruch){
+  const api = async (event, extra = {}) => (await fetch("/api/fotos", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({event, ...extra})})).json();
+  box.innerHTML = '<span class="hint">QR-Code wird erstellt …</span>';
+  let s; try{ s = await api("fotostart"); if(!s.ok) throw new Error(s.error); }catch(e){ box.innerHTML = '<span class="hint">Handy: ' + esc(e.message || String(e)) + '</span>'; return null; }
+  const url = s.url + (s.url.includes("?") ? "&" : "?") + "u=1";
+  box.innerHTML = '<div class="sig-qr"><img alt="QR-Code"><span class="hint">Den Kunden den QR-Code mit seinem Handy scannen lassen – oder mit deinem Handy scannen und dem Kunden geben. Die Unterschrift erscheint dann automatisch hier.</span></div>';
+  box.querySelector("img").src = "/api/fotos/qr?u=" + encodeURIComponent(url);
+  const ende = () => api("fotoende", {token: s.token}).catch(() => {});
+  const bis = Date.now() + 20 * 60000;
+  while(Date.now() < bis && !abbruch()){
+    await new Promise(r => setTimeout(r, 2000));
+    let l; try{ l = await api("fotoliste", {token: s.token}); }catch(e){ continue; }
+    if(!l.ok){ if(l.abgelaufen) break; continue; }
+    if(l.files && l.files.length){
+      const g = await api("fotoholen", {token: s.token, id: l.files[l.files.length - 1].id}); ende();
+      if(g.ok) return "data:" + (g.mime || "image/png") + ";base64," + g.b64;
+      box.innerHTML = '<span class="hint">Die Unterschrift konnte nicht geholt werden.</span>'; return null;
+    }
+  }
+  ende(); return null;
+}
+
 /* ---- Unterschrift des Kunden (kommt als Bild ins Excel-Blatt und damit auch in die PDF) ---- */
 const SIG_KUNDE = {reparatur: "B55", pruefung: "O65", bestkunde: "A43"};
 function sigKnopf(){
@@ -3001,7 +3079,7 @@ function sigKnopf(){
 }
 function sigDialog(){
   const w = formWerte(), d = document.createElement("dialog"); d.className = "sig-dlg";
-  d.innerHTML = '<div class="sig-kopf"><strong>Unterschrift Kunde</strong><span class="hint">Mit Finger, Stift oder Maus im Feld unterschreiben.</span></div><canvas width="900" height="300"></canvas><div class="sig-fuss"><button type="button" class="ghost" data-a="leeren">Leeren</button><button type="button" class="ghost" data-a="weg"' + (w._sigKunde ? "" : " hidden") + '>Unterschrift entfernen</button><span style="flex:1"></span><button type="button" class="ghost" data-a="abbr">Abbrechen</button><button type="button" class="primary" data-a="ok">Übernehmen</button></div>';
+  d.innerHTML = '<div class="sig-kopf"><strong>Unterschrift Kunde</strong><span class="hint">Mit Finger, Stift oder Maus im Feld unterschreiben.</span></div><canvas width="900" height="300"></canvas><div class="sig-handy"></div><div class="sig-fuss"><button type="button" class="ghost" data-a="leeren">Leeren</button><button type="button" class="ghost" data-a="handy">📱 Auf dem Handy unterschreiben</button><button type="button" class="ghost" data-a="weg"' + (w._sigKunde ? "" : " hidden") + '>Unterschrift entfernen</button><span style="flex:1"></span><button type="button" class="ghost" data-a="abbr">Abbrechen</button><button type="button" class="primary" data-a="ok">Übernehmen</button></div>';
   document.body.appendChild(d);
   const c = d.querySelector("canvas"), g = c.getContext("2d"); let mal = false, leer = true, last = null;
   g.lineWidth = 3.2; g.lineCap = g.lineJoin = "round"; g.strokeStyle = "#1a2a6c";
@@ -3009,8 +3087,16 @@ function sigDialog(){
   c.onpointerdown = e => { mal = true; leer = false; last = pos(e); c.setPointerCapture(e.pointerId); g.beginPath(); g.arc(last[0], last[1], 1.4, 0, 7); g.fillStyle = g.strokeStyle; g.fill(); };
   c.onpointermove = e => { if(!mal) return; const p = pos(e); g.beginPath(); g.moveTo(last[0], last[1]); g.lineTo(p[0], p[1]); g.stroke(); last = p; };
   c.onpointerup = c.onpointercancel = () => { mal = false; };
-  const zu = () => { d.close(); d.remove(); };
+  let offen = true;
+  const zu = () => { offen = false; d.close(); d.remove(); };
   d.addEventListener("cancel", e => { e.preventDefault(); zu(); });
+  d.querySelector("[data-a=handy]").onclick = async ev => {
+    ev.target.disabled = true; c.hidden = true;
+    const u = await handyUnterschrift(d.querySelector(".sig-handy"), () => !offen);
+    if(!offen) return;
+    if(u){ w._sigKunde = u; formMerken(); sigKnopf(); zu(); formMeldung("Unterschrift vom Handy übernommen.", 5000); }
+    else { ev.target.disabled = false; c.hidden = false; }
+  };
   d.querySelector("[data-a=leeren]").onclick = () => { g.clearRect(0, 0, c.width, c.height); leer = true; };
   d.querySelector("[data-a=abbr]").onclick = zu;
   d.querySelector("[data-a=weg]").onclick = () => { delete w._sigKunde; formMerken(); sigKnopf(); zu(); formMeldung("Unterschrift entfernt.", 3000); };
@@ -3048,7 +3134,6 @@ function pflichtFehlt(f, w){
     let z = null; for(const a of f.abschnitte) for(const x of a.felder) if(x.l === p && typeof x.z === "string") z = x.z;
     if(z && !String(w[z] || "").trim()) out.push(p.replace(/\s*\(.*\)$/, ""));
   }
-  if(f.id in SIG_KUNDE && !w._sigKunde) out.push("Unterschrift Kunde");
   return out;
 }
 
