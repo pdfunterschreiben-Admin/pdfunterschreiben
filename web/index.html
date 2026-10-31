@@ -2714,7 +2714,7 @@ function tsWerkzeug(f, w){
 // Messgerät-Display (z. B. Benning ST 725) aus dem erkannten Text lesen
 function messWerte(roh){
   let t = String(roh || "").replace(/\r/g, "").replace(/,/g, ".");
-  t = t.replace(/(\d)\s*[.]\s*(\d)/g, "$1.$2").replace(/(\d\.\d{1,2})\s+(\d)(?=\s*(m\s*A|MA|M\s*[ΩQO0]|[ΩQ]))/g, "$1$2").replace(/(\d)[Oo](?=\d)/g, "$10").replace(/(^|\s)[Oo]\.(\d)/g, "$10.$2");
+  t = t.replace(/(\d)\s*[.]\s*(\d)/g, "$1.$2").replace(/(\d\.\d{1,2})\s*[Il|](?=\s*(m\s*A|MA)\b)/g, "$11").replace(/(\d\.\d{1,2})\s+(\d)(?=\s*(m\s*A|MA|M\s*[ΩQO0]|[ΩQ]))/g, "$1$2").replace(/(\d)[Oo](?=\d)/g, "$10").replace(/(^|\s)[Oo]\.(\d)/g, "$10.$2");
   const zahl = /(>\s*)?(\d{1,4}\.\d{1,3})\s*(M\s*[ΩQO0Dn2]|m\s*A|MA|[ΩQ])?/g;
   const funde = []; let m;
   while((m = zahl.exec(t))) funde.push({pos: m.index, gr: !!m[1], wert: m[2], einheit: (m[3] || "").replace(/\s/g, "")});
@@ -2743,6 +2743,21 @@ function messWerte(roh){
   aus.geraet = /BENNING|ST\s*7\d\d|R\s*P\s*E|R\s*[I1l]\s*S\s*[O0]|P\s*[AR]\s*[S5]\s*[S5]/i.test(t) || Object.keys(res).length >= 2;
   return aus;
 }
+// Display-Foto kontrastreicher machen: schwache Segmente (z. B. der obere Strich der 7) werden deutlich
+async function kontrast(bytes){
+  try{
+    const bm = await createImageBitmap(new Blob([bytes]));
+    const sc = Math.min(1, 2400 / Math.max(bm.width, bm.height)), c = document.createElement("canvas");
+    c.width = Math.round(bm.width * sc); c.height = Math.round(bm.height * sc);
+    const g = c.getContext("2d"); g.drawImage(bm, 0, 0, c.width, c.height);
+    const d = g.getImageData(0, 0, c.width, c.height), p = d.data, h = new Uint32Array(256), n = p.length / 4;
+    for(let i = 0; i < p.length; i += 4){ const y = (p[i] * 299 + p[i + 1] * 587 + p[i + 2] * 114) / 1000 | 0; p[i] = y; h[y]++; }
+    let lo = 0, hi = 255, a = 0; while(lo < 254 && (a += h[lo]) < n * 0.2) lo++; a = 0; while(hi > lo + 1 && (a += h[hi]) < n * 0.02) hi--;
+    for(let i = 0; i < p.length; i += 4){ const v = Math.max(0, Math.min(255, (p[i] - lo) * 255 / (hi - lo))); p[i] = p[i + 1] = p[i + 2] = v; }
+    g.putImageData(d, 0, 0);
+    return new Uint8Array(await (await new Promise(r => c.toBlob(r, "image/jpeg", 0.92))).arrayBuffer());
+  }catch(e){ return null; }
+}
 async function tsLesen(f, w, bilder, st){
   if(!Array.isArray(bilder)) bilder = [bilder];
   const mess = f.id === "pruefung";
@@ -2765,6 +2780,14 @@ async function tsLesen(f, w, bilder, st){
     if(n) geraetSpeichern(f, w);
   }
   if(geraete.length){
+    // Messgerät-Fotos ein zweites Mal kontrastverstärkt lesen; dort erkannte Werte haben Vorrang
+    st.textContent = "Messwerte werden genauer gelesen …";
+    await Promise.all(geraete.map(async r => {
+      const k = await kontrast(bilder[erg.indexOf(r)]); if(!k) return;
+      try{ const r2 = await (await fetch("/api/formular/typenschild", {method: "POST", body: k})).json();
+        if(r2.ok){ const m2 = messWerte(r2.roh); for(const x of ["rpe", "riso", "strom"]) if(m2[x]) r.mw[x] = m2[x]; } }catch(e){}
+    }));
+    st.textContent = "";
     // R ISO vom Foto mit Isolationsmessung, R PE und Strom vom anderen Foto
     const mitIso = geraete.find(r => r.mw.iso), ohneIso = [...geraete].reverse().find(r => !r.mw.iso);
     const quelleIso = mitIso || geraete[0], quelleRest = geraete.length > 1 ? (ohneIso || geraete[geraete.length - 1]) : geraete[0];
