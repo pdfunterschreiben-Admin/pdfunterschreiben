@@ -2880,25 +2880,51 @@ async function pdfZeilen(bytes){
   return out.join("\n");
 }
 const EIGENE_FIRMA = /Schl[uü]ter|Nordel|Hilter|Gabelstapler.?-?\s*Vertrieb/i;
+const HERSTELLER = ["BT", "Toyota", "Linde", "Jungheinrich", "Still", "Hyster", "Yale", "Crown", "Cesab", "Raymond", "Clark", "Mitsubishi", "Nissan", "Doosan", "Hyundai", "Manitou", "Hubtex", "Combilift", "Baumann", "Ameise", "Heli", "Hangcha", "EP", "Unicarriers", "Pramac", "Kalmar", "Atlet", "Rocla", "Lafis", "Dambach", "Hans-Hubtex"];
 function auftragWerte(text){
-  const L = String(text || "").replace(/\r/g, "").split("\n").map(x => x.replace(/\s+$/, "")).filter(x => x.trim());
+  // kyrillische Doppelgänger (Texterkennung liest z. B. „Тур“) in lateinische Buchstaben
+  const t0 = String(text || "").replace(/\r/g, "").replace(/[ТтУуРрОоАаЕеСсНнКкМмВХх]/g, c => "TTyyPpOoAaEeCcHhKkMmBXx"["ТтУуРрОоАаЕеСсНнКкМмВХх".indexOf(c)]);
+  const L = t0.split("\n").map(x => x.replace(/\s+$/, "")).filter(x => x.trim());
   const res = {};
-  const wert = (re, z) => {
+  const LABEL = /^(Fg\.?-?\s*Nr\.?|Hersteller|Typ|Baujahr|Ident\.?-?\s*Nr\.?|Betriebsstd.*|Serien-?Nr\.?)$/i;
+  const wert = (re, z, mussZahl) => {
     for(let i = 0; i < L.length; i++){ const m = re.exec(L[i]); if(!m) continue;
-      let v = L[i].slice(m.index + m[0].length).replace(/^[\s:.]+/, "").split(/\s{2,}/)[0].trim();
-      if(!v && L[i + 1]) v = L[i + 1].trim().split(/\s{2,}/)[0];
-      if(v && !/^-+$/.test(v)){ res[z] = v; return; } }
+      const kand = [L[i].slice(m.index + m[0].length).replace(/^[\s:.]+/, "").split(/\s{2,}/)[0].trim(), (L[i + 1] || "").trim().split(/\s{2,}/)[0]];
+      for(const v of kand) if(v && !/^-+$/.test(v) && !LABEL.test(v) && (!mussZahl || /\d/.test(v))){ res[z] = v; return; } }
   };
-  wert(/\bHersteller\b/i, "D15"); wert(/^\s*Typ\b|\s{2,}Typ\b|\bTyp\s*:/i, "D16");
-  wert(/\bSerien-?\s*Nr\.?|\bFg\.?\s*-?\s*Nr\.?|\bFahrgestell-?\s*Nr\.?/i, "D17"); wert(/\bBaujahr\b/i, "D19");
-  wert(/\bBetriebsstunden\b|\bBetriebsstd\.?\s*Ger\.?/i, "D23");
-  // „LPE220-7244072“ -> „7244072“, wenn vorne der Typ steht (Seriennummer im Montagebericht)
-  if(res.D17 && res.D16){ const m = /^([A-Z0-9]+)[-\s]+(\S+)$/i.exec(res.D17); if(m && res.D16.toUpperCase().split(/\s+/)[0] === m[1].toUpperCase() && /Serien/i.test(L.join(" "))) res.D17 = m[2]; }
-  const auf = /(Servicebericht|Auftrags[üu]bersicht)\s+(\d{6,})/i.exec(L.join("\n")); if(auf) res.E4 = auf[2];
-  wert(/\bBestelldaten\s*1?\b/i, "D8"); if(res.D8 && /^(vom|---)/i.test(res.D8)) delete res.D8;
-  // Anschrift: erste mit PLZ, die nicht die eigene Firma ist
+  const her = L.find(x => HERSTELLER.some(h => h.toLowerCase() === x.trim().toLowerCase()));
+  if(her) res.D15 = HERSTELLER.find(h => h.toLowerCase() === her.trim().toLowerCase()); else wert(/\bHersteller\b/i, "D15");
+  wert(/^\s*Typ\b|\s{2,}Typ\b|\bTyp\s*:/i, "D16");
+  const fg = L.map(x => x.trim()).find(x => /^[A-Z0-9]{3,}-\d{4,}$/.test(x));
+  if(fg) res.D17 = fg; else wert(/\bSerien-?\s*Nr\.?|\bFg\.?\s*-?\s*Nr\.?|\bFahrgestell-?\s*Nr\.?/i, "D17", true);
+  wert(/\bBaujahr\b/i, "D19", true);
+  wert(/\bBetriebsstunden\b|\bBetriebsstd\.?\s*Ger\.?/i, "D23", true);
+  if(res.D17 && res.D16){ const m = /^([A-Z0-9]+)[-\s]+(\S+)$/i.exec(res.D17); if(m && res.D16.toUpperCase().split(/\s+/)[0] === m[1].toUpperCase() && /Serien-?\s*Nr/i.test(L.join(" "))) res.D17 = m[2]; }
+  const alles = L.join("\n");
+  const auf = /(Servicebericht|Auftrags[üu]bersicht)\s+(\d{6,})/i.exec(alles); if(auf) res.E4 = auf[2];
+  const best = /Bestelldaten\s*1?\s*:?[ \t]*([^\n]*)/i.exec(alles);
+  if(best){ const v = best[1].split(/\s{2,}/)[0].trim(); if(v && !/^(-+|vom\b)/i.test(v) && !/\d{3,}/.test(v)) res.D8 = v; }
+  const tel = /Bestelldaten\s*2\s*(\+?[\d\s()\/-]{7,})/i.exec(alles); if(tel) res.Q9 = tel[1].trim();
+  const strasse = x => /^[A-Za-zÄÖÜäöüß][A-Za-zÄÖÜäöüß.\- ]{2,40}\s\d{1,4}\s?[a-z]?(-\d{1,4})?$/.test(x.trim()) && !/^(Telefon|Mobil|Position|Menge|Termin)/i.test(x.trim());
+  const titel = /Auftrags[üu]bersicht\s+\d+\s*\[([^\]]+)\]/i.exec(alles);
+  const bau = /Baustelle\s+([^,\n]+),\s*([^,\n]+),\s*(?:DE?-)?(\d{5})\s+([^\n,]+)/i.exec(alles);
+  if(titel){
+    // Lupo: Kunde = Auftraggeber aus der Fensterzeile; ist das die eigene Firma, dann der Standort
+    const teile = titel[1].split(/;/).map(x => x.trim()).filter(Boolean);
+    if(EIGENE_FIRMA.test(titel[1])){
+      if(bau){ res.D5 = bau[1].trim(); res.D6 = bau[2].trim(); res.D7 = bau[3] + " " + bau[4].trim(); return res; }
+    }else{
+      const ort = teile.length > 1 ? teile[teile.length - 1] : "";
+      res.D5 = (teile.length > 1 ? teile.slice(0, -1) : teile).join(" ");
+      const str = L.map(x => x.trim()).filter(strasse).find(x => !bau || x !== bau[2].trim()); if(str) res.D6 = str;
+      const plz = L.map(x => /^(?:DE?-)?(\d{5})\b\s*(.*)$/.exec(x.trim())).find(Boolean);
+      if(plz || ort) res.D7 = ((plz ? plz[1] + " " : "") + (ort || plz[2])).trim();
+      return res;
+    }
+  }
+  // Montagebericht: erste Anschrift mit PLZ, die nicht die eigene Firma ist
   for(let i = 0; i < L.length; i++){
-    const m = /^\s*(\d{5})\s+([A-Za-zÄÖÜäöüß][^\d]{1,40}?)(\s{2,}|$)/.exec(L[i]); if(!m) continue;
+    const m = /^\s*(?:DE?-)?(\d{5})\s+([A-Za-zÄÖÜäöüß][^\d]{1,40}?)(\s{2,}|$)/.exec(L[i]); if(!m) continue;
     const vor = []; for(let k = i - 1; k >= 0 && vor.length < 4; k--){ const t = L[k].trim().split(/\s{2,}/)[0]; if(!t || /^(Auftraggeber|Ansprechpartner|Standort|Lieferschein|Baustelle|Rechnungs|Telefon|Mobil)/i.test(t)) { if(vor.length) break; continue; } vor.unshift(t); }
     if(vor.some(x => EIGENE_FIRMA.test(x)) || EIGENE_FIRMA.test(m[2])) continue;
     const str = vor.length ? vor.pop() : ""; res.D6 = str; res.D7 = m[1] + " " + m[2].trim();
