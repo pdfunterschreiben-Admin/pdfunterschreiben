@@ -281,6 +281,15 @@ dialog.fenster.klein .dlg-head{border-bottom:0;cursor:pointer}
 .sig-fuss{display:flex;gap:8px;margin-top:12px;align-items:center}
 .sig-qr{display:flex;gap:16px;align-items:center;padding:8px 0}.sig-qr img{width:200px;height:200px;image-rendering:pixelated;background:#fff;border-radius:8px}
 .stamp.kunde{outline:2px dashed #1d7a35}
+/* Kopfleiste mit Firmengebäude */
+header.top{background:#0b1a3a url("/kopf.jpg") center 58%/cover no-repeat!important;backdrop-filter:none!important;border-bottom:3px solid var(--brand);min-height:118px;color:#fff;position:sticky}
+header.top::before{content:"";position:absolute;inset:0;background:linear-gradient(90deg,rgba(6,14,36,.82) 0%,rgba(6,14,36,.45) 45%,rgba(6,14,36,.15) 75%,rgba(6,14,36,.35) 100%);pointer-events:none}
+header.top>*{position:relative}
+header.top h1{color:#fff;text-shadow:0 2px 8px rgba(0,0,0,.5)}
+header.top .lead{color:rgba(255,255,255,.85);text-shadow:0 1px 6px rgba(0,0,0,.5)}
+header.top .ver{color:rgba(255,255,255,.85)}
+header.top .ver button{background:rgba(255,255,255,.14);border-color:rgba(255,255,255,.35);color:#fff;backdrop-filter:blur(6px)}
+header.top .ver button:hover{background:rgba(255,255,255,.26)}
 </style>
 </head>
 <body>
