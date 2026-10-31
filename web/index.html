@@ -2465,7 +2465,7 @@ const FORMULARE = [
     {titel: "Auftrag", felder: [
       {t: "x", z: "G2", l: "Reparaturauftrag"}, {t: "x", z: "I2", l: "Kostenvoranschlag"},
       {t: "text", z: "E4", l: "Auftragsnummer"}, {t: "datum", z: "R6", l: "Datum", d: HEUTE, echt: true}]},
-    {titel: "Kunde", felder: [
+    {titel: "Kunde", werkzeug: "auftrag", felder: [
       {t: "text", z: "D5", l: "Kundenname"}, {t: "text", z: "D6", l: "Straße / Hausnummer"}, {t: "text", z: "D7", l: "PLZ / Ort"},
       {t: "text", z: "D8", l: "Ansprechpartner"}, {t: "text", z: "D9", l: "E-Mail"}, {t: "text", z: "Q9", l: "Telefon"}, {t: "text", z: "Q10", l: "Telefax"},
       {t: "x", z: "E12", l: "vorher anrufen"}, {t: "x", z: "J12", l: "Termin absprechen"}]},
@@ -2623,6 +2623,7 @@ function formRender(){
     const h = document.createElement("strong"); h.textContent = a.titel; sek.appendChild(h);
     if(a.werkzeug === "typenschild") sek.appendChild(tsWerkzeug(f, w));
     if(a.werkzeug === "tdoc") sek.appendChild(tdocWerkzeug(f, w));
+    if(a.werkzeug === "auftrag") sek.appendChild(auftragWerkzeug(f, w));
     let felder = null, kreuze = null;
     for(const x of a.felder){
       if(x.t === "text" || x.t === "datum" || x.t === "wahl"){
@@ -2799,14 +2800,14 @@ async function tsLesen(f, w, bilder, st){
   formMerken(); formRender();
   formMeldung(teile.join(" · ") + " eingetragen. Bitte kurz prüfen.", 8000);
 }
-async function tsHandy(f, w, st, qr, hb){
+async function tsHandy(f, w, st, qr, hb, fertig){
   const api = async (event, extra = {}) => (await fetch("/api/fotos", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({event, ...extra})})).json();
   hb.disabled = true; st.textContent = "QR-Code wird erstellt …";
   let s;
   try{ s = await api("fotostart"); if(!s.ok) throw new Error(s.error); }
   catch(e){ hb.disabled = false; st.textContent = ""; formMeldung("Handy: " + (e.message || e), 6000); return; }
   qr.hidden = false;
-  qr.innerHTML = '<img alt="QR-Code"><span class="hint">Mit dem Handy scannen und ' + (f.id === "pruefung" ? "Typenschild und Messgerät-Display" : "das Typenschild") + ' fotografieren.<br><button type="button" class="ghost">Abbrechen</button></span>';
+  qr.innerHTML = '<img alt="QR-Code"><span class="hint">Mit dem Handy scannen und ' + (f.id === "pruefung" ? "Typenschild und Messgerät-Display" : f.id === "auftrag" ? "den Montagebericht bzw. Lupo-Bildschirm" : "das Typenschild") + ' fotografieren.<br><button type="button" class="ghost">Abbrechen</button></span>';
   qr.querySelector("img").src = "/api/fotos/qr?u=" + encodeURIComponent(s.url);
   let aus = false; qr.querySelector("button").onclick = () => { aus = true; };
   st.textContent = "Warte auf das Foto vom Handy …";
@@ -2831,10 +2832,90 @@ async function tsHandy(f, w, st, qr, hb){
       }
       ende();
       if(!bilder.length){ formMeldung("Das Foto konnte nicht geholt werden.", 6000); st.textContent = ""; return; }
-      await tsLesen(f, w, bilder, st); return;
+      if(fertig) await fertig(bilder); else await tsLesen(f, w, bilder, st); return;
     }
   }
   ende(); st.textContent = "";
+}
+
+/* ---- Kunden- und Gerätedaten aus Montagebericht (PDF) oder Lupo (Bildschirmfoto/Foto) ---- */
+function auftragWerkzeug(f, w){
+  const d = document.createElement("div"); d.className = "col"; d.style.gap = "8px";
+  const r = document.createElement("div"); r.className = "form-tools";
+  const lab = document.createElement("label"); lab.className = "btn file-btn"; lab.textContent = "📄 Montagebericht / Lupo-Bild wählen …";
+  const inp = document.createElement("input"); inp.type = "file"; inp.accept = "application/pdf,image/*"; lab.appendChild(inp);
+  const pb = document.createElement("button"); pb.type = "button"; pb.textContent = "📋 Bildschirmfoto einfügen";
+  const hb = document.createElement("button"); hb.type = "button"; hb.textContent = "📱 Mit dem Handy";
+  const st = document.createElement("span"); st.className = "hint";
+  const qr = document.createElement("div"); qr.className = "form-qr"; qr.hidden = true;
+  const h = document.createElement("span"); h.className = "hint"; h.textContent = "Füllt Kunde, Ansprechpartner, Hersteller, Typ, Seriennummer, Baujahr und Betriebsstunden aus. Lupo: Bildschirmfoto mit Win+Umschalt+S machen und hier einfügen (oder Strg+V).";
+  r.append(lab, pb, hb, st); d.append(r, qr, h);
+  inp.onchange = async () => { const x = inp.files[0]; inp.value = ""; if(x) await auftragLesen(f, w, new Uint8Array(await x.arrayBuffer()), st, x.type); };
+  pb.onclick = async () => {
+    try{
+      for(const it of await navigator.clipboard.read()){ const t = it.types.find(y => y.startsWith("image/")); if(t){ await auftragLesen(f, w, new Uint8Array(await (await it.getType(t)).arrayBuffer()), st, t); return; } }
+      formMeldung("In der Zwischenablage ist kein Bild. Erst in Lupo mit Win+Umschalt+S ein Bildschirmfoto machen.", 7000);
+    }catch(e){ formMeldung("Bitte mit Strg+V einfügen.", 5000); }
+  };
+  hb.onclick = () => tsHandy({...f, id: "auftrag"}, w, st, qr, hb, b => auftragLesen(f, w, b[0], st, "image/jpeg"));
+  if(!window._auftragPaste){ window._auftragPaste = true;
+    document.addEventListener("paste", e => {
+      if(!$("#formDlg").open || formState.akt !== "reparatur" || /^(INPUT|TEXTAREA)$/.test((document.activeElement || {}).tagName)) return;
+      const it = [...(e.clipboardData || {}).items || []].find(y => y.type.startsWith("image/")); if(!it) return;
+      e.preventDefault(); it.getAsFile().arrayBuffer().then(b => auftragLesen(FORMULARE.find(x => x.id === "reparatur"), formWerte(), new Uint8Array(b), $("#formStatus"), it.type));
+    }); }
+  return d;
+}
+async function pdfZeilen(bytes){
+  const doc = await openPdf(bytes), out = [];
+  for(let n = 1; n <= Math.min(doc.numPages, 2); n++){
+    const pg = await doc.getPage(n), tc = await pg.getTextContent(), z = new Map();
+    for(const it of tc.items){ if(!it.str || !it.str.trim()) continue; const y = Math.round(it.transform[5] / 3); (z.get(y) || z.set(y, []).get(y)).push(it); }
+    for(const y of [...z.keys()].sort((a, b) => b - a)){
+      const its = z.get(y).sort((a, b) => a.transform[4] - b.transform[4]); let l = "", ende = null;
+      for(const it of its){ if(ende !== null) l += it.transform[4] - ende > 8 ? "   " : (it.transform[4] - ende > 1 ? " " : ""); l += it.str; ende = it.transform[4] + (it.width || 0); }
+      out.push(l);
+    }
+  }
+  return out.join("\n");
+}
+const EIGENE_FIRMA = /Schl[uü]ter|Nordel|Hilter|Gabelstapler.?-?\s*Vertrieb/i;
+function auftragWerte(text){
+  const L = String(text || "").replace(/\r/g, "").split("\n").map(x => x.replace(/\s+$/, "")).filter(x => x.trim());
+  const res = {};
+  const wert = (re, z) => {
+    for(let i = 0; i < L.length; i++){ const m = re.exec(L[i]); if(!m) continue;
+      let v = L[i].slice(m.index + m[0].length).replace(/^[\s:.]+/, "").split(/\s{2,}/)[0].trim();
+      if(!v && L[i + 1]) v = L[i + 1].trim().split(/\s{2,}/)[0];
+      if(v && !/^-+$/.test(v)){ res[z] = v; return; } }
+  };
+  wert(/\bHersteller\b/i, "D15"); wert(/^\s*Typ\b|\s{2,}Typ\b|\bTyp\s*:/i, "D16");
+  wert(/\bSerien-?\s*Nr\.?|\bFg\.?\s*-?\s*Nr\.?|\bFahrgestell-?\s*Nr\.?/i, "D17"); wert(/\bBaujahr\b/i, "D19");
+  wert(/\bBetriebsstunden\b|\bBetriebsstd\.?\s*Ger\.?/i, "D23");
+  const auf = /(Servicebericht|Auftrags[üu]bersicht)\s+(\d{6,})/i.exec(L.join("\n")); if(auf) res.E4 = auf[2];
+  wert(/\bBestelldaten\s*1?\b/i, "D8"); if(res.D8 && /^(vom|---)/i.test(res.D8)) delete res.D8;
+  // Anschrift: erste mit PLZ, die nicht die eigene Firma ist
+  for(let i = 0; i < L.length; i++){
+    const m = /^\s*(\d{5})\s+([A-Za-zÄÖÜäöüß][^\d]{1,40}?)(\s{2,}|$)/.exec(L[i]); if(!m) continue;
+    const vor = []; for(let k = i - 1; k >= 0 && vor.length < 4; k--){ const t = L[k].trim().split(/\s{2,}/)[0]; if(!t || /^(Auftraggeber|Ansprechpartner|Standort|Lieferschein|Baustelle|Rechnungs|Telefon|Mobil)/i.test(t)) { if(vor.length) break; continue; } vor.unshift(t); }
+    if(vor.some(x => EIGENE_FIRMA.test(x)) || EIGENE_FIRMA.test(m[2])) continue;
+    const str = vor.length ? vor.pop() : ""; res.D6 = str; res.D7 = m[1] + " " + m[2].trim();
+    res.D5 = vor.filter(x => !/^Seite\b/i.test(x)).join(" ").replace(/\s+/g, " ").trim(); break;
+  }
+  return res;
+}
+async function auftragLesen(f, w, bytes, st, typ){
+  st.textContent = "Wird gelesen …";
+  let text = "";
+  try{
+    if(/pdf/.test(typ || "") || (bytes[0] === 0x25 && bytes[1] === 0x50)) text = await pdfZeilen(bytes);
+    else { const r = await (await fetch("/api/formular/typenschild", {method: "POST", body: bytes})).json(); if(!r.ok) throw new Error(r.error || "Nicht lesbar."); text = r.roh || ""; }
+  }catch(e){ st.textContent = ""; formMeldung("Lesen fehlgeschlagen: " + (e.message || e), 7000); return; }
+  st.textContent = "";
+  const v = auftragWerte(text); let n = 0;
+  for(const [z, x] of Object.entries(v)) if(x){ w[z] = x; n++; }
+  formMerken(); formRender();
+  formMeldung(n ? `${n} Angaben übernommen (Kunde und Gerät). Bitte kurz prüfen.` : "Es wurden keine Angaben erkannt.", 8000);
 }
 
 /* ---- gemeinsame Geräteliste ---- */
