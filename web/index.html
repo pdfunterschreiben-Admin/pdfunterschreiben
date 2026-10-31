@@ -290,6 +290,10 @@ header.top .lead{color:rgba(255,255,255,.85);text-shadow:0 1px 6px rgba(0,0,0,.5
 header.top .ver{color:rgba(255,255,255,.85)}
 header.top .ver button{background:rgba(255,255,255,.14);border-color:rgba(255,255,255,.35);color:#fff;backdrop-filter:blur(6px)}
 header.top .ver button:hover{background:rgba(255,255,255,.26)}
+/* Firmenlogo als Wasserzeichen im Hintergrund */
+body::before{content:"";position:fixed;left:61%;top:60%;width:min(760px,62vw);aspect-ratio:803/150;transform:translate(-50%,-50%);background:url("/wasserzeichen.png") center/contain no-repeat;opacity:.07;pointer-events:none;z-index:0}
+@media (prefers-color-scheme: dark){body::before{opacity:.10;filter:grayscale(.3) brightness(1.6)}}
+.wrap{position:relative;z-index:1}
 </style>
 </head>
 <body>
