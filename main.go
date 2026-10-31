@@ -53,6 +53,10 @@ func main() {
 		return false
 	}
 
+	if has("--urheber") {
+		msgBox(urheber, 0x40)
+		return
+	}
 	if has("--uninstall") {
 		uninstall()
 		return
