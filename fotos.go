@@ -26,8 +26,12 @@ func (a *app) handleFotos(w http.ResponseWriter, r *http.Request) {
 		Token string   `json:"token"`
 		ID    string   `json:"id"`
 		Ack   []string `json:"ack"`
+		// Vorschau einer Berichtsseite für die Kunden-Unterschrift
+		Nr    int    `json:"nr"`
+		Titel string `json:"titel"`
+		B64   string `json:"b64"`
 	}
-	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<14)).Decode(&req); err != nil {
+	if err := json.NewDecoder(io.LimitReader(r.Body, 6<<20)).Decode(&req); err != nil {
 		writeJSON(w, map[string]any{"ok": false, "error": "Ungültige Anfrage."})
 		return
 	}
@@ -35,7 +39,7 @@ func (a *app) handleFotos(w http.ResponseWriter, r *http.Request) {
 		req.Ack = req.Ack[:100]
 	}
 	switch req.Event {
-	case "fotostart", "fotoliste", "fotoholen", "fotoende":
+	case "fotostart", "fotoliste", "fotoholen", "fotoende", "fotovorschau":
 	default:
 		writeJSON(w, map[string]any{"ok": false, "error": "Unbekannte Anfrage."})
 		return
@@ -56,6 +60,7 @@ func (a *app) handleFotos(w http.ResponseWriter, r *http.Request) {
 	}
 	payload, _ := json.Marshal(map[string]any{
 		"key": ReportKey, "event": req.Event, "token": req.Token, "id": req.ID, "ack": req.Ack,
+		"nr": req.Nr, "titel": req.Titel, "b64": req.B64,
 		"email": s.User.Email, "version": Version,
 	})
 	c := &http.Client{Timeout: 90 * time.Second}

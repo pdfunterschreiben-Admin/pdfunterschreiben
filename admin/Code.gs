@@ -52,7 +52,7 @@ function doPost(e) {
     return ContentService.createTextOutput(t).setMimeType(ContentService.MimeType.TEXT);
   }
   // Handy-Seite (GitHub Pages, ohne Google-Anmeldung): nur mit gültigem QR-Code-Token
-  if (d && /^h_(check|foto|ts)$/.test(String(d.event || ''))) {
+  if (d && /^h_(check|foto|ts|vorschau|vorschaubild)$/.test(String(d.event || ''))) {
     let t;
     try { t = 'OK\n' + handyAnfrage(d); } catch (x) { t = 'FEHLER\n' + x.message; }
     return ContentService.createTextOutput(t).setMimeType(ContentService.MimeType.TEXT);
@@ -64,7 +64,7 @@ function doPost(e) {
     return ContentService.createTextOutput(t).setMimeType(ContentService.MimeType.TEXT);
   }
   // Fotos vom Handy (QR-Code) – ohne Sperre
-  if (d && d.key === KEY && /^foto(start|liste|holen|ende)$/.test(String(d.event || ''))) {
+  if (d && d.key === KEY && /^foto(start|liste|holen|ende|vorschau)$/.test(String(d.event || ''))) {
     try { return out(fotoAnfrage(d)); } catch (x) { return out({ ok: false, error: 'Fotos: ' + x.message }); }
   }
   // Texterkennung (Typenschilder) – ohne Sperre, damit andere Anfragen nicht warten müssen
@@ -474,7 +474,7 @@ function fotoAnfrage(d) {
       try { const f = DriveApp.getFileById(String(id)); if (f.getParents().next().getId() === s.folder) driveLoeschen(f.getId()); } catch (x) { }
     });
     const it = DriveApp.getFolderById(s.folder).getFiles(), a = [];
-    while (it.hasNext()) { const f = it.next(); a.push({ id: f.getId(), name: f.getName(), size: f.getSize() }); }
+    while (it.hasNext()) { const f = it.next(); if (/^vorschau-/.test(f.getName())) continue; a.push({ id: f.getId(), name: f.getName(), size: f.getSize() }); }
     return { ok: true, files: a, exp: s.exp };
   }
   if (d.event === 'fotoholen') {
@@ -485,6 +485,15 @@ function fotoAnfrage(d) {
     try { info = JSON.parse(f.getDescription() || '{}') || {}; } catch (x) { info = { lm: Number(f.getDescription()) || 0 }; }
     const r = { ok: true, name: f.getName(), mime: b.getContentType(), lm: info.lm || 0, exif: info.exif ? 1 : 0, b64: Utilities.base64Encode(b.getBytes()) };
     return r;   // gelöscht wird erst nach der Empfangsbestätigung (ack bei fotoliste) bzw. bei fotoende
+  }
+  // Vorschau für die Kunden-Unterschrift: das Programm legt die Seiten der Berichte als Bilder ab
+  if (d.event === 'fotovorschau') {
+    const b64 = String(d.b64 || '');
+    if (b64.length < 100 || b64.length > 4000000) return { ok: false, error: 'Vorschau zu groß.' };
+    const nr = ('000' + (Number(d.nr) || 0)).slice(-3);
+    const f = DriveApp.getFolderById(s.folder).createFile(Utilities.newBlob(Utilities.base64Decode(b64), 'image/jpeg', 'vorschau-' + nr + '.jpg'));
+    f.setDescription(JSON.stringify({ titel: clean(d.titel, 120) }));
+    return { ok: true };
   }
   if (d.event === 'fotoende') {
     driveLoeschen(s.folder);
@@ -527,6 +536,18 @@ function handyAnfrage(d) {
     return fotoSitzung(token, false) ? '1' : '0';
   }
   if (d.event === 'h_foto') { fotoHochladen(token, d.name, d.lm, d.mime, d.b64, d.exif); return '1'; }
+  // Vorschau der Berichte für die Kunden-Unterschrift
+  if (d.event === 'h_vorschau' || d.event === 'h_vorschaubild') {
+    const s = fotoSitzung(token, false);
+    if (!s) throw new Error('Der QR-Code ist abgelaufen.');
+    const it = DriveApp.getFolderById(s.folder).getFiles(), a = [];
+    while (it.hasNext()) { const f = it.next(); if (/^vorschau-/.test(f.getName())) a.push(f); }
+    a.sort(function (x, y) { return x.getName() < y.getName() ? -1 : 1; });
+    if (d.event === 'h_vorschau') return JSON.stringify(a.map(function (f) { let t = ''; try { t = JSON.parse(f.getDescription() || '{}').titel || ''; } catch (x) { } return { id: f.getId(), titel: t }; }));
+    const f = a.filter(function (x) { return x.getId() === String(d.id || ''); })[0];
+    if (!f) throw new Error('Nicht gefunden.');
+    return Utilities.base64Encode(f.getBlob().getBytes());
+  }
   if (d.event === 'h_ts') return tsFoto(token, d.b64, d.mime) ? '1' : '0';
   throw new Error('Unbekannte Anfrage.');
 }

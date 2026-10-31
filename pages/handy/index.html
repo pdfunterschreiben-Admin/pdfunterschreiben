@@ -15,6 +15,9 @@
   .z span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   #st,#fertig{margin-top:18px;font-weight:600}.ok{color:#1d7a35}.err{color:#c8102e}
   [hidden]{display:none!important}
+  #vorSeiten figure{margin:0 0 12px;background:#fff;border-radius:10px;padding:6px;box-shadow:0 2px 8px rgba(0,0,0,.08)}
+  #vorSeiten img{display:block;width:100%;height:auto;border-radius:6px}
+  #vorSeiten figcaption{font-size:13px;color:#666;padding:6px 4px 2px}
   #sig canvas{display:block;width:100%;aspect-ratio:2.2/1;background:#fff;border:2px dashed #bbb;border-radius:12px;touch-action:none}
   .reihe{display:flex;gap:10px;margin-top:12px}.reihe button{flex:1;padding:16px;border-radius:10px;font-size:17px;font-weight:600;border:2px solid #c8102e;background:#fff;color:#c8102e}
   .reihe button.voll{background:#c8102e;color:#fff}
@@ -36,6 +39,12 @@
 </div>
 
 <div id="sig" hidden>
+  <div id="vor" hidden>
+    <h2>Bitte prüfen</h2>
+    <p class="hint">Diese Berichte unterschreiben Sie. Zum Vergrößern mit zwei Fingern zoomen.</p>
+    <div id="vorSeiten"></div>
+    <p class="hint" style="margin-top:14px"><b>Mit Ihrer Unterschrift bestätigen Sie die oben gezeigten Berichte.</b></p>
+  </div>
   <h2>Unterschrift</h2>
   <p class="hint">Bitte im weißen Feld unterschreiben – am besten das Handy quer halten.</p>
   <canvas width="1100" height="500"></canvas>
@@ -86,6 +95,7 @@ function start(versuch) {
     if (r !== "1") { abgelaufen(); return; }
     $("laden").hidden = true;
     $(MODUS === "ts" ? "ts" : SIG ? "sig" : "fotos").hidden = false;
+    if (SIG) vorschauLaden();
     document.title = MODUS === "ts" ? "Typenschild fotografieren" : SIG ? "Unterschrift – Service-Mappe" : "Fotos senden – Service-Mappe";
   }).catch(function (e) {
     if (versuch < 3) { setTimeout(function () { start(versuch + 1); }, 1500 * versuch); return; }
@@ -191,6 +201,26 @@ function tsSenden(f) {
 }
 $("k").onchange = function (e) { tsSenden(e.target.files[0]); e.target.value = ""; };
 $("g").onchange = function (e) { tsSenden(e.target.files[0]); e.target.value = ""; };
+
+// ---- Vorschau der Berichte (vom Programm hochgeladen) ----
+function vorschauLaden() {
+  anfrage({ event: "h_vorschau" }).then(function (t) {
+    var l = []; try { l = JSON.parse(t) || []; } catch (e) {}
+    if (!l.length) return;
+    $("vor").hidden = false;
+    var box = $("vorSeiten"), i = 0;
+    l.forEach(function (s) {
+      var f = document.createElement("figure"), c = document.createElement("figcaption"), im = document.createElement("img");
+      c.textContent = s.titel || ""; im.alt = s.titel || "Bericht"; f.appendChild(c); f.appendChild(im); box.appendChild(f); s.img = im;
+      im.style.minHeight = "120px"; im.style.background = "#eee";
+    });
+    (function naechste() {
+      if (i >= l.length) return;
+      var s = l[i++];
+      anfrage({ event: "h_vorschaubild", id: s.id }).then(function (b) { s.img.src = "data:image/jpeg;base64," + b; s.img.style.minHeight = ""; naechste(); }).catch(naechste);
+    })();
+  }).catch(function () {});
+}
 
 // ---- Unterschrift des Kunden ----
 (function () {

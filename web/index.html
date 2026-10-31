@@ -1363,7 +1363,7 @@ async function kundeHandy(doc){
   d.querySelector("[data-a=abbr]").onclick = zu;
   const weg = d.querySelector("[data-a=weg]"); if(weg) weg.onclick = () => { for(const x of docs){ x.kunde = null; x.kStamp = null; x.saved = false; } zu(); renderAll(); };
   d.showModal();
-  const u = await handyUnterschrift(d.querySelector(".sig-handy"), () => !offen);
+  const u = await handyUnterschrift(d.querySelector(".sig-handy"), () => !offen, async () => (await Promise.all(docs.map(x => seitenBilder(x.pdf, x.name.replace(/\.(pdf|xlsx?|xlsm)$/i, ""), 6)))).flat());
   if(!u || !offen) return;
   const img = new Image(); img.src = u; await img.decode().catch(() => {});
   for(const x of docs){ x.kunde = {url: u, r: img.naturalWidth ? img.naturalHeight / img.naturalWidth : 0.4}; await kundePlatz(x); x.saved = false; }
@@ -3076,10 +3076,33 @@ async function auftragLesen(f, w, bytes, st, typ){
 
 /* ---- Unterschrift des Kunden auf dem Handy (QR-Code) ---- */
 // zeigt im Element „box“ einen QR-Code; liefert die Unterschrift als PNG-Data-URL (oder null bei Abbruch)
-async function handyUnterschrift(box, abbruch){
+// Seiten eines PDFs (pdf.js) als JPEG für die Vorschau auf dem Handy
+async function seitenBilder(pdf, titel, max = 8){
+  const out = [];
+  for(let n = 1; n <= Math.min(pdf.numPages, max); n++){
+    const pg = await pdf.getPage(n), vp1 = pg.getViewport({scale: 1}), sc = 1100 / vp1.width, vp = pg.getViewport({scale: sc});
+    const c = document.createElement("canvas"); c.width = Math.round(vp.width); c.height = Math.round(vp.height);
+    const g = c.getContext("2d"); g.fillStyle = "#fff"; g.fillRect(0, 0, c.width, c.height);
+    await pg.render({canvasContext: g, viewport: vp}).promise;
+    out.push({titel: titel + (pdf.numPages > 1 ? " – Seite " + n + " von " + pdf.numPages : ""), b64: c.toDataURL("image/jpeg", 0.72).split(",")[1]});
+  }
+  return out;
+}
+async function handyUnterschrift(box, abbruch, vorschau){
   const api = async (event, extra = {}) => (await fetch("/api/fotos", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({event, ...extra})})).json();
   box.innerHTML = '<span class="hint">QR-Code wird erstellt …</span>';
   let s; try{ s = await api("fotostart"); if(!s.ok) throw new Error(s.error); }catch(e){ box.innerHTML = '<span class="hint">Handy: ' + esc(e.message || String(e)) + '</span>'; return null; }
+  // Vorschau der Berichte hochladen, damit der Kunde sieht, was er unterschreibt
+  if(vorschau){
+    try{
+      box.innerHTML = '<span class="hint">Vorschau für das Handy wird vorbereitet …</span>';
+      const seiten = await vorschau();
+      for(let i = 0; i < seiten.length && !abbruch(); i++){
+        box.innerHTML = `<span class="hint">Vorschau wird übertragen (${i + 1} von ${seiten.length}) …</span>`;
+        await api("fotovorschau", {token: s.token, nr: i + 1, titel: seiten[i].titel, b64: seiten[i].b64});
+      }
+    }catch(e){ console.log("Vorschau", e); }
+  }
   const url = s.url + (s.url.includes("?") ? "&" : "?") + "u=1";
   box.innerHTML = '<div class="sig-qr"><img alt="QR-Code"><span class="hint">Den Kunden den QR-Code mit seinem Handy scannen lassen – oder mit deinem Handy scannen und dem Kunden geben. Die Unterschrift erscheint dann automatisch hier.</span></div>';
   box.querySelector("img").src = "/api/fotos/qr?u=" + encodeURIComponent(url);
@@ -3120,7 +3143,13 @@ function sigDialog(){
   d.querySelector("[data-a=abbr]").onclick = zu;
   const weg = d.querySelector("[data-a=weg]"); if(weg) weg.onclick = () => { delete w._sigKunde; formMerken(); sigKnopf(); zu(); formMeldung("Unterschrift entfernt.", 3000); };
   d.showModal();
-  handyUnterschrift(d.querySelector(".sig-handy"), () => !offen).then(u => {
+  const f = formDef();
+  handyUnterschrift(d.querySelector(".sig-handy"), () => !offen, async () => {
+    const r = await (await fetch("/api/formular", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(formAnfrage(f, w, {pdf: true, ohneKunde: true}))})).json();
+    if(!r.ok || !r.pdf) return [];
+    const b = atob(r.pdf), a = new Uint8Array(b.length); for(let i = 0; i < b.length; i++) a[i] = b.charCodeAt(i);
+    return seitenBilder(await openPdf(a), f.titel, 4);
+  }).then(u => {
     if(!u || !offen) return;
     w._sigKunde = u; formMerken(); sigKnopf(); zu(); formMeldung("Unterschrift vom Handy übernommen – sie kommt beim Speichern ins Formular.", 6000);
   });
@@ -3335,19 +3364,8 @@ function zusatz(f, w, werte){
   for(const k of Object.keys(werte)){ const m = /^([A-Z]+)(\d+)$/.exec(k); if(m && +m[2] > l + n && +m[2] <= l + w["#mehr"]) delete werte[k]; }
   return n ? {nach: l, anzahl: n} : {};
 }
-async function formSpeichern(drucken, dispo){
-  if(formState.akt[0] === "#"){ formMeldung("Bitte zuerst links ein Formular wählen."); return; }
-  const f = formDef(), w = formWerte();
-  const xlsx = dispo || (!drucken && $("#formAlsXlsx").checked), pdf = !dispo && !drucken && $("#formAlsPdf").checked;
-  if(!drucken && !xlsx && !pdf){ formMeldung("Bitte Excel und/oder PDF auswählen."); return; }
-  // 8) Pflichtangaben prüfen – beim zweiten Klick wird trotzdem gespeichert
-  const fehlt = pflichtFehlt(f, w), schl = f.id + "|" + fehlt.join("|");
-  if(fehlt.length && !(formState.pflichtOk === schl && Date.now() - formState.pflichtZeit < 30000)){
-    formState.pflichtOk = schl; formState.pflichtZeit = Date.now();
-    formMeldung("Es fehlt: " + fehlt.join(", ") + ". Zum trotzdem " + (drucken ? "Drucken" : "Speichern") + " noch einmal klicken.", 12000);
-    return;
-  }
-  formState.pflichtOk = null;
+// baut die Anfrage für Excel (Werte, Kreuze, Unterschriften)
+function formAnfrage(f, w, o){
   const werte = {}, kreuze = {};
   for(const [k, v] of Object.entries(w)){ if(k === "#mehr" || k[0] === "_") continue; if(k[0] === "#") kreuze[k.slice(1)] = !!v; else if(v !== "" && v != null) werte[k] = String(v); }
   for(const a of f.abschnitte) for(const x of a.felder){
@@ -3361,13 +3379,29 @@ async function formSpeichern(drucken, dispo){
   if(f.id === "reparatur" && werte.R6) werte.R56 = werte.R6;
   for(const a of f.abschnitte) for(const x of a.felder) for(const [z] of merkZellen(x)) if(!(z in werte)) werte[z] = "";
   if(f.id === "pruefung") werte.K13 = "A";   // Nennleistung immer in Ampere
-  const btn = $("#formSpeichern"); btn.disabled = true; const alt = btn.textContent; btn.textContent = "Bitte warten …"; formMeldung(drucken ? "Excel füllt das Formular aus und druckt …" : "Excel füllt das Formular aus – das dauert ein paar Sekunden …", 60000);
-  let r;
   const bilder = [];
   const sigBild = (url, pl) => pl && url && bilder.push({zelle: pl[0], png: url.split(",")[1], hoehe: pl[1], breite: 150, modus: pl[2] || ""});
-  sigBild(w._sigKunde, SIG_PLATZ.kunde[f.id]);
+  if(!o.ohneKunde) sigBild(w._sigKunde, SIG_PLATZ.kunde[f.id]);
   sigBild(state.sig && state.sig.url, SIG_PLATZ.technik[f.id]);   // eigene Unterschrift (aus „Deine Unterschrift“)
-  const anfrage = {bilder, ...zusatz(f, w, werte), blatt: f.blatt || "", quelle: f.quelle ? ((formState.register || []).find(g => g.name === f.quelle) || {}).id || "-" : "", werte, kreuze, xlsx, pdf, drucken: !!drucken};
+  const anfrage = {bilder, ...zusatz(f, w, werte), blatt: f.blatt || "", quelle: f.quelle ? ((formState.register || []).find(g => g.name === f.quelle) || {}).id || "-" : "", werte, kreuze, xlsx: !!o.xlsx, pdf: !!o.pdf, drucken: !!o.drucken};
+  return anfrage;
+}
+async function formSpeichern(drucken, dispo){
+  if(formState.akt[0] === "#"){ formMeldung("Bitte zuerst links ein Formular wählen."); return; }
+  const f = formDef(), w = formWerte();
+  const xlsx = dispo || (!drucken && $("#formAlsXlsx").checked), pdf = !dispo && !drucken && $("#formAlsPdf").checked;
+  if(!drucken && !xlsx && !pdf){ formMeldung("Bitte Excel und/oder PDF auswählen."); return; }
+  // 8) Pflichtangaben prüfen – beim zweiten Klick wird trotzdem gespeichert
+  const fehlt = pflichtFehlt(f, w), schl = f.id + "|" + fehlt.join("|");
+  if(fehlt.length && !(formState.pflichtOk === schl && Date.now() - formState.pflichtZeit < 30000)){
+    formState.pflichtOk = schl; formState.pflichtZeit = Date.now();
+    formMeldung("Es fehlt: " + fehlt.join(", ") + ". Zum trotzdem " + (drucken ? "Drucken" : "Speichern") + " noch einmal klicken.", 12000);
+    return;
+  }
+  formState.pflichtOk = null;
+  const btn = $("#formSpeichern"); btn.disabled = true; const alt = btn.textContent; btn.textContent = "Bitte warten …"; formMeldung(drucken ? "Excel füllt das Formular aus und druckt …" : "Excel füllt das Formular aus – das dauert ein paar Sekunden …", 60000);
+  let r;
+  const anfrage = formAnfrage(f, w, {xlsx, pdf, drucken});
   try{ r = await (await fetch("/api/formular", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(anfrage)})).json(); }
   catch(e){ r = {ok: false, error: "Keine Verbindung zum Programm."}; }
   btn.disabled = false; btn.textContent = alt;
