@@ -294,6 +294,16 @@ header.top .ver button:hover{background:rgba(255,255,255,.26)}
 body::before{content:"";position:fixed;left:61%;top:60%;width:min(760px,62vw);aspect-ratio:803/150;transform:translate(-50%,-50%);background:url("/wasserzeichen.png") center/contain no-repeat;opacity:.07;pointer-events:none;z-index:0}
 @media (prefers-color-scheme: dark){body::before{opacity:.10;filter:grayscale(.3) brightness(1.6)}}
 .wrap{position:relative;z-index:1}
+/* Gaudi: Fahrzeuge fahren unten durchs Bild */
+.strasse{position:relative;height:150px;margin-top:24px;overflow:hidden;border-bottom:2px dashed color-mix(in srgb,var(--muted) 35%,transparent)}
+.strasse .fz{position:absolute;bottom:2px;left:0;transform:translateX(-300px);animation:fahren 18s linear infinite;filter:drop-shadow(0 5px 4px rgba(0,0,0,.2))}
+.strasse .fz1{height:124px;animation-delay:0s}
+.strasse .fz2{height:136px;animation-delay:-6s}
+.strasse .fz3{height:70px;animation-delay:-12s}
+@keyframes fahren{0%{transform:translateX(-300px)}100%{transform:translateX(calc(100cqw + 40px))}}
+.strasse{container-type:inline-size}
+.strasse .fz:hover{animation-play-state:paused}
+@media (prefers-reduced-motion: reduce){.strasse .fz{animation:none;position:static;transform:none;margin-right:18px}.strasse{display:flex;align-items:flex-end;justify-content:center}}
 </style>
 </head>
 <body>
@@ -1111,7 +1121,8 @@ async function autoPlace(doc){
 function renderAll(){
   const box = $("#docs"); box.innerHTML = "";
   if(!state.docs.length){
-    box.innerHTML = '<p class="hint leer-hinweis">Tipp: Berichte (PDF oder Excel) kannst du auch einfach ins Fenster ziehen.</p>';
+    box.innerHTML = '<p class="hint leer-hinweis">Tipp: Berichte (PDF oder Excel) kannst du auch einfach ins Fenster ziehen.</p>'
+      + '<div class="strasse" aria-hidden="true"><img class="fz fz1" src="/fz-stapler.png" alt=""><img class="fz fz2" src="/fz-schubmast.png" alt=""><img class="fz fz3" src="/fz-hubwagen.png" alt=""></div>';
   }
   state.docs.forEach(d => box.appendChild(buildDoc(d)));
   updateSaveAll();
