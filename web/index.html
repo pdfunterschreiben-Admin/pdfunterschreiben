@@ -2500,23 +2500,23 @@ const FORMULARE = [
     {titel: "Monteur", felder: [{t: "datum", z: "G1", l: "Datum", d: HEUTE, echt: true}, {t: "text", z: "C3", l: "Servicetechniker", d: TECHNIKER}, {t: "text", z: "C4", l: "Kennzeichen", merken: true}, {t: "text", z: "C5", l: "Adresse", merken: true}, {t: "text", z: "C6", l: "Postleitzahl", merken: true}, {t: "text", z: "C7", l: "Wohnort", merken: true},
       {t: "xeins", l: "Versandart", o: [["F9", "Fach / Bereitstellungsraum"], ["F10", "Nachtversand"]]}]},
     {titel: "Ersatzteile", werkzeug: "tdoc", felder: [{t: "tabelle", l: "Teile", s: [["A", "Stück"], ["B", "Teile-Nr."], ["E", "Bezeichnung / Abmessungen"], ["I", "Lagerort"]], r: [15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30]}]}]},
-  {id: "garantie", titel: "Garantieteil-Rückgabe-Schein", blatt: "Garantieteil-Rückgabe-Schein", abschnitte: [
-    {titel: "Kunde", felder: [{t: "text", z: "B3", l: "Kundenname"}, {t: "text", z: "B4", l: "Straße / Hausnummer"}, {t: "text", z: "B5", l: "PLZ / Ort"}]},
-    {titel: "Auftrag und Gerät", felder: [{t: "text", z: "B7", l: "Servicetechniker", d: TECHNIKER}, {t: "datum", z: "B8", l: "Rückgabedatum"}, {t: "datum", z: "B9", l: "Servicedatum"}, {t: "text", z: "B10", l: "Montage-Auftrag-Nr."}, {t: "text", z: "B12", l: "Fabrikat"}, {t: "text", z: "B13", l: "Type"}, {t: "text", z: "B14", l: "Fahrgestell-Nr."},
-      {t: "text", z: "B15", l: "Antriebsart"}, {t: "text", z: "B16", l: "Baujahr"}, {t: "text", z: "B17", l: "Motor-Nr."}, {t: "text", z: "B18", l: "Getriebe-Nr."}, {t: "text", z: "B19", l: "Mast-Nr."}, {t: "text", z: "B20", l: "Betr. Std."}]},
+  {id: "garantie", titel: "Garantieteil-Rückgabe-Schein", blatt: "Garantieteil-Rückgabe-Schein", typenschild: true, abschnitte: [
+    {titel: "Kunde", werkzeug: "auftrag", felder: [{t: "text", z: "B3", l: "Kundenname"}, {t: "text", z: "B4", l: "Straße / Hausnummer"}, {t: "text", z: "B5", l: "PLZ / Ort"}]},
+    {titel: "Auftrag und Gerät", werkzeug: "typenschild", felder: [{t: "text", z: "B7", l: "Servicetechniker", d: TECHNIKER}, {t: "datum", z: "B8", l: "Rückgabedatum"}, {t: "datum", z: "B9", l: "Servicedatum"}, {t: "text", z: "B10", l: "Montage-Auftrag-Nr."}, {t: "text", z: "B12", l: "Fabrikat", ts: "HERSTELLER"}, {t: "text", z: "B13", l: "Type", ts: "TYP"}, {t: "text", z: "B14", l: "Fahrgestell-Nr.", ts: "FABRNR"},
+      {t: "text", z: "B15", l: "Antriebsart"}, {t: "text", z: "B16", l: "Baujahr", ts: "BAUJAHR"}, {t: "text", z: "B17", l: "Motor-Nr."}, {t: "text", z: "B18", l: "Getriebe-Nr."}, {t: "text", z: "B19", l: "Mast-Nr."}, {t: "text", z: "B20", l: "Betr. Std."}]},
     {titel: "Beschreibung", felder: [{t: "zeilen", l: "Ist-Zustand des Gerätes vor der Reparatur", z: ["A24", "A25", "A26", "A27"]}, {t: "zeilen", l: "Schadensursache", z: ["A30", "A31", "A32"]}, {t: "zeilen", l: "Schadensbeseitigung", z: ["A36", "A37", "A38", "A40"]}]}]},
   {id: "urlaub", titel: "Urlaubsantrag", blatt: "Urlaubsantrag", abschnitte: [
     {titel: "Mitarbeiter", felder: [{t: "datum", z: "B2", l: "Datum", d: HEUTE, echt: true}, {t: "text", z: "B4", l: "Nachname", d: NACHNAME}, {t: "text", z: "B6", l: "Vorname", d: VORNAME}]},
     {titel: "Urlaub", felder: [{t: "datum", z: "B9", l: "Urlaub vom"}, {t: "datum", z: "F9", l: "bis"}, {t: "text", z: "J9", l: "Arbeitstage"}, {t: "datum", z: "B11", l: "Urlaub vom"}, {t: "datum", z: "F11", l: "bis"}, {t: "text", z: "J11", l: "Arbeitstage"}, {t: "datum", z: "B13", l: "Urlaub vom"}, {t: "datum", z: "F13", l: "bis"}, {t: "text", z: "J13", l: "Arbeitstage"}, {t: "datum", z: "B15", l: "Urlaub vom"}, {t: "datum", z: "F15", l: "bis"}, {t: "text", z: "J15", l: "Arbeitstage"}, {t: "datum", z: "B17", l: "Urlaub vom"}, {t: "datum", z: "F17", l: "bis"}, {t: "text", z: "J17", l: "Arbeitstage"}]}]},
-  {id: "technisch", titel: "Technischer Bericht", blatt: "Technischer-Bericht", abschnitte: [
-    {titel: "Kunde", felder: [{t: "text", z: "B3", l: "Kundenname"}, {t: "text", z: "B4", l: "Straße / Hausnummer"}, {t: "text", z: "B5", l: "PLZ / Ort"}]},
-    {titel: "Auftrag und Gerät", felder: [{t: "text", z: "B7", l: "Servicetechniker", d: TECHNIKER}, {t: "datum", z: "B8", l: "Servicedatum"}, {t: "text", z: "B9", l: "Montage-Auftrag-Nr."}, {t: "text", z: "B11", l: "Fabrikat"}, {t: "text", z: "B12", l: "Type"}, {t: "text", z: "B13", l: "Fahrgestell-Nr."}, {t: "text", z: "B14", l: "Antriebsart"},
-      {t: "text", z: "B15", l: "Baujahr"}, {t: "text", z: "B16", l: "Motor-Nr."}, {t: "text", z: "B17", l: "Getriebe-Nr."}, {t: "text", z: "B18", l: "Mast-Nr."}, {t: "text", z: "B19", l: "Betr. Std."}, {t: "text", z: "B20", l: "Ladegut"}, {t: "text", z: "B21", l: "Ladegewicht"}]},
+  {id: "technisch", titel: "Technischer Bericht", blatt: "Technischer-Bericht", typenschild: true, abschnitte: [
+    {titel: "Kunde", werkzeug: "auftrag", felder: [{t: "text", z: "B3", l: "Kundenname"}, {t: "text", z: "B4", l: "Straße / Hausnummer"}, {t: "text", z: "B5", l: "PLZ / Ort"}]},
+    {titel: "Auftrag und Gerät", werkzeug: "typenschild", felder: [{t: "text", z: "B7", l: "Servicetechniker", d: TECHNIKER}, {t: "datum", z: "B8", l: "Servicedatum"}, {t: "text", z: "B9", l: "Montage-Auftrag-Nr."}, {t: "text", z: "B11", l: "Fabrikat", ts: "HERSTELLER"}, {t: "text", z: "B12", l: "Type", ts: "TYP"}, {t: "text", z: "B13", l: "Fahrgestell-Nr.", ts: "FABRNR"}, {t: "text", z: "B14", l: "Antriebsart"},
+      {t: "text", z: "B15", l: "Baujahr", ts: "BAUJAHR"}, {t: "text", z: "B16", l: "Motor-Nr."}, {t: "text", z: "B17", l: "Getriebe-Nr."}, {t: "text", z: "B18", l: "Mast-Nr."}, {t: "text", z: "B19", l: "Betr. Std."}, {t: "text", z: "B20", l: "Ladegut"}, {t: "text", z: "B21", l: "Ladegewicht"}]},
     {titel: "Beschreibung", felder: [{t: "zeilen", l: "1. Symptome", z: ["A24", "A25", "A26", "A27"]}, {t: "zeilen", l: "2. Mögliche Ursachen", z: ["A29", "A30", "A31", "A32"]}, {t: "zeilen", l: "3. Änderungen", z: ["A34", "A35", "A36", "A37"]}, {t: "zeilen", l: "4. Kommentare", z: ["A39", "A40", "A41", "A42"]},
       {t: "text", z: "B43", l: "5. Beigefügte Fotos (Anzahl)", stueck: true}]}]},
   {id: "ladegeraet", titel: "Rückgabe Ladegerät", quelle: "Rückgabe Ladegerät", typenschild: true, abschnitte: [
     {titel: "Angaben", felder: [{t: "text", z: "B3", l: "Servicetechniker", d: TECHNIKER}, {t: "datum", z: "B5", l: "Rückgabedatum"}, {t: "datum", z: "B7", l: "Servicedatum"}, {t: "text", z: "B9", l: "Monteurbericht"}]},
-    {titel: "Kunde / Kommission", felder: [{t: "text", z: "F4", l: "Name"}, {t: "text", z: "F6", l: "Adresse"}, {t: "text", z: "F8", l: "Ort"}]},
+    {titel: "Kunde / Kommission", werkzeug: "auftrag", felder: [{t: "text", z: "F4", l: "Name"}, {t: "text", z: "F6", l: "Adresse"}, {t: "text", z: "F8", l: "Ort"}]},
     {titel: "Ladegerät", werkzeug: "typenschild", felder: [{t: "text", z: "B11", l: "Hersteller", ts: "HERSTELLER"}, {t: "text", z: "B13", l: "Type", ts: "TYP"}, {t: "text", z: "B15", l: "Seriennummer", ts: "FABRNR", geraet: true}, {t: "text", z: "B17", l: "Fahrgestell-Nr."}, {t: "text", z: "B19", l: "Betr. Std."}]},
     {titel: "Rückgabegrund", felder: [{t: "x", z: "D23", l: "Defekt"}, {t: "x", z: "D25", l: "Gebraucht"}, {t: "x", z: "D27", l: "Batteriedienst beauftragen"}, {t: "x", z: "D29", l: "Garantie"},
       {t: "text", z: "B31", l: "Fehlercode"}, {t: "text", z: "B33", l: "Fehlerbeschreibung"}, {t: "text", z: "B35", l: "Weitere Gründe"}, {t: "zeilen", l: "Bemerkungen", z: ["B37", "B39"]}]}]},
@@ -2778,7 +2778,7 @@ async function tsLesen(f, w, bilder, st){
     const v = schilder[0].werte || {}; let n = 0;
     for(const a of f.abschnitte) for(const x of a.felder) if(x.ts){ const val = v[x.ts]; if(val){ w[x.z] = val; n++; } else if(x.ts !== "SCHUTZKLASSE" && x.ts !== "EINHEIT") w[x.z] = ""; }
     teile.push(n ? `Typenschild: ${n} Werte` : "Typenschild: keine Werte erkannt");
-    if(n) geraetSpeichern(f, w);
+    if(n && f.abschnitte.some(a => a.felder.some(x => x.geraet))) geraetSpeichern(f, w);
   }
   if(geraete.length){
     // Messgerät-Fotos ein zweites Mal kontrastverstärkt lesen; dort erkannte Werte haben Vorrang
@@ -2860,9 +2860,9 @@ function auftragWerkzeug(f, w){
   hb.onclick = () => tsHandy({...f, id: "auftrag"}, w, st, qr, hb, b => auftragLesen(f, w, b[0], st, "image/jpeg"));
   if(!window._auftragPaste){ window._auftragPaste = true;
     document.addEventListener("paste", e => {
-      if(!$("#formDlg").open || formState.akt !== "reparatur" || /^(INPUT|TEXTAREA)$/.test((document.activeElement || {}).tagName)) return;
+      if(!$("#formDlg").open || !(formState.akt in AUFTRAG_ZIEL) || /^(INPUT|TEXTAREA)$/.test((document.activeElement || {}).tagName)) return;
       const it = [...(e.clipboardData || {}).items || []].find(y => y.type.startsWith("image/")); if(!it) return;
-      e.preventDefault(); it.getAsFile().arrayBuffer().then(b => auftragLesen(FORMULARE.find(x => x.id === "reparatur"), formWerte(), new Uint8Array(b), $("#formStatus"), it.type));
+      e.preventDefault(); it.getAsFile().arrayBuffer().then(b => auftragLesen(formDef(), formWerte(), new Uint8Array(b), $("#formStatus"), it.type));
     }); }
   return d;
 }
@@ -2933,6 +2933,13 @@ function auftragWerte(text){
   }
   return res;
 }
+// Zielzellen je Formular (Schlüssel = Zellen im Reparaturauftrag)
+const AUFTRAG_ZIEL = {
+  reparatur: null,
+  garantie: {E4: "B10", D5: "B3", D6: "B4", D7: "B5", D15: "B12", D16: "B13", D17: "B14", D19: "B16", D23: "B20"},
+  technisch: {E4: "B9", D5: "B3", D6: "B4", D7: "B5", D15: "B11", D16: "B12", D17: "B13", D19: "B15", D23: "B19"},
+  ladegeraet: {E4: "B9", D5: "F4", D6: "F6", D7: "F8", D17: "B17", D23: "B19"}
+};
 async function auftragLesen(f, w, bytes, st, typ){
   st.textContent = "Wird gelesen …";
   let text = "";
@@ -2941,8 +2948,8 @@ async function auftragLesen(f, w, bytes, st, typ){
     else { const r = await (await fetch("/api/formular/typenschild", {method: "POST", body: bytes})).json(); if(!r.ok) throw new Error(r.error || "Nicht lesbar."); text = r.roh || ""; }
   }catch(e){ st.textContent = ""; formMeldung("Lesen fehlgeschlagen: " + (e.message || e), 7000); return; }
   st.textContent = "";
-  const v = auftragWerte(text); let n = 0;
-  for(const [z, x] of Object.entries(v)) if(x){ w[z] = x; n++; }
+  const v = auftragWerte(text), ziel = AUFTRAG_ZIEL[f.id]; let n = 0;
+  for(const [z, x] of Object.entries(v)){ const z2 = ziel ? ziel[z] : z; if(x && z2){ w[z2] = x; n++; } }
   formMerken(); formRender();
   formMeldung(n ? `${n} Angaben übernommen (Kunde und Gerät). Bitte kurz prüfen.` : "Es wurden keine Angaben erkannt.", 8000);
 }
@@ -2980,7 +2987,7 @@ async function geraeteAnsicht(){
   const such = document.createElement("input"); such.type = "search"; such.placeholder = "Suchen: Fabr. Nr., Hersteller, Typ …"; such.value = geraeteZuletzt;
   such.style.cssText = "flex:1;min-width:220px;font:inherit;padding:7px 10px;border:1px solid var(--line);border-radius:8px;background:var(--sheet);color:inherit";
   const ziel = document.createElement("select"); ziel.style.cssText = "font:inherit;padding:7px 8px;border:1px solid var(--line);border-radius:8px;background:var(--sheet);color:inherit";
-  for(const f of FORMULARE.filter(f => f.abschnitte.some(a => a.felder.some(x => x.ts)))){ const o = document.createElement("option"); o.value = f.id; o.textContent = "Übernehmen in: " + f.titel; ziel.appendChild(o); }
+  for(const f of FORMULARE.filter(f => f.abschnitte.some(a => a.felder.some(x => x.geraet)))){ const o = document.createElement("option"); o.value = f.id; o.textContent = "Übernehmen in: " + f.titel; ziel.appendChild(o); }
   const neu = document.createElement("button"); neu.type = "button"; neu.className = "ghost"; neu.textContent = "↻ Neu laden";
   r.append(such, ziel, neu); sek.appendChild(r);
   const info = document.createElement("span"); info.className = "hint"; info.textContent = "Wird geladen …"; sek.appendChild(info);
