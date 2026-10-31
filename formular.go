@@ -4,11 +4,13 @@ package main
 
 import (
 	"bytes"
-	"fmt"
-	"errors"
 	_ "embed"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"image"
+	_ "image/png"
 	"io"
 	"net/http"
 	"os"
@@ -86,12 +88,12 @@ try {
     foreach ($b in @($cfg.bilder)) {
       if (-not $b) { continue }
       try {
-        $c = $ws.Range([string]$b.zelle); $h = [double]$b.hoehe
-        $sh = $ws.Shapes.AddPicture([string]$b.pfad, 0, -1, $c.Left + 6, $c.Top - $h - 1, -1, -1)
-        $sh.LockAspectRatio = -1; $sh.Height = $h
-        if ($sh.Width -gt [double]$b.breite) { $sh.Width = [double]$b.breite }
-        $sh.Top = $c.Top - $sh.Height - 1
-        try { $sh.Placement = 1 } catch {}
+        $c = $ws.Range([string]$b.zelle).MergeArea; $bw = [double]$b.w; $bh = [double]$b.h
+        # „in“: oben in die Zelle (Beschriftung steht unten in der Zelle); sonst unten auf die Linie über der Beschriftung
+        if ($b.modus -eq 'in') { $top = $c.Top + 1 } else { $top = $c.Top - $bh - 0.5 }
+        $left = $c.Left + [Math]::Max(2, ($c.Width - $bw) / 2)
+        $sh = $ws.Shapes.AddPicture([string]$b.pfad, 0, -1, $left, $top, $bw, $bh)
+        try { $sh.Placement = 2 } catch {}
       } catch {}
     }
     $ws.Activate()
@@ -132,20 +134,21 @@ func (a *app) handleFormular(w http.ResponseWriter, r *http.Request) {
 	}
 	fehler := func(msg string) { writeJSON(w, map[string]any{"ok": false, "error": msg}) }
 	var req struct {
-		Blatt  string            `json:"blatt"`
-		Werte  map[string]string `json:"werte"`
-		Kreuze map[string]bool   `json:"kreuze"`
-		XLSX   bool              `json:"xlsx"`
-		PDF    bool              `json:"pdf"`
-		Drucken bool             `json:"drucken"` // direkt auf dem Standarddrucker ausgeben
-		Nach   int               `json:"nach"`   // zusätzliche Tabellenzeilen unter dieser Zeile einfügen
-		Anzahl int               `json:"anzahl"`
-		Quelle string            `json:"quelle"` // Vorlage aus dem Drive-Ordner statt der Allgemeinen Vorlagen
-		Bilder []struct {
+		Blatt   string            `json:"blatt"`
+		Werte   map[string]string `json:"werte"`
+		Kreuze  map[string]bool   `json:"kreuze"`
+		XLSX    bool              `json:"xlsx"`
+		PDF     bool              `json:"pdf"`
+		Drucken bool              `json:"drucken"` // direkt auf dem Standarddrucker ausgeben
+		Nach    int               `json:"nach"`    // zusätzliche Tabellenzeilen unter dieser Zeile einfügen
+		Anzahl  int               `json:"anzahl"`
+		Quelle  string            `json:"quelle"` // Vorlage aus dem Drive-Ordner statt der Allgemeinen Vorlagen
+		Bilder  []struct {
 			Zelle  string  `json:"zelle"`
 			PNG    string  `json:"png"`
 			Hoehe  float64 `json:"hoehe"`
 			Breite float64 `json:"breite"`
+			Modus  string  `json:"modus"`
 		} `json:"bilder"` // Unterschriften
 	}
 	if err := json.NewDecoder(io.LimitReader(r.Body, 4<<20)).Decode(&req); err != nil {
@@ -197,9 +200,19 @@ func (a *app) handleFormular(w http.ResponseWriter, r *http.Request) {
 				zelle = zelle[:j] + fmt.Sprint(zeile+min(req.Anzahl, 200))
 			}
 		}
+		// Größe aus dem Bild: höchstens „hoehe“ hoch und „breite“ breit, Seitenverhältnis bleibt
+		ic, _, err := image.DecodeConfig(bytes.NewReader(png))
+		if err != nil || ic.Width == 0 || ic.Height == 0 {
+			continue
+		}
+		hh, bb := max(10, min(b.Hoehe, 80)), max(40, min(b.Breite, 260))
+		bw := hh * float64(ic.Width) / float64(ic.Height)
+		if bw > bb {
+			bw, hh = bb, bb*float64(ic.Height)/float64(ic.Width)
+		}
 		p := filepath.Join(dir, fmt.Sprintf("unterschrift%d.png", i))
 		if os.WriteFile(p, png, 0o600) == nil {
-			bilder = append(bilder, map[string]any{"zelle": zelle, "pfad": p, "hoehe": max(20, min(b.Hoehe, 80)), "breite": max(60, min(b.Breite, 260))})
+			bilder = append(bilder, map[string]any{"zelle": zelle, "pfad": p, "w": bw, "h": hh, "modus": b.Modus})
 		}
 	}
 	cfg, _ := json.Marshal(map[string]any{"bilder": bilder, "blatt": req.Blatt, "nach": req.Nach, "anzahl": min(req.Anzahl, 200), "einseite": req.Quelle != "", "drucken": req.Drucken, "werte": req.Werte, "kreuze": req.Kreuze, "xlsx": req.XLSX, "pdf": req.PDF})

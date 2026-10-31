@@ -3078,6 +3078,11 @@ async function handyUnterschrift(box, abbruch){
 
 /* ---- Unterschrift des Kunden (kommt als Bild ins Excel-Blatt und damit auch in die PDF) ---- */
 const SIG_KUNDE = {reparatur: "B55", pruefung: "O65", bestkunde: "A43"};
+// Platz der Unterschriften im Excel-Blatt: Zelle der Beschriftung, Höhe in Punkt, „in“ = oben in der Zelle, sonst über der Beschriftung
+const SIG_PLATZ = {
+  kunde: {reparatur: ["B55", 17, "in"], pruefung: ["O65", 28], bestkunde: ["A43", 19]},
+  technik: {reparatur: ["O55", 17, "in"], pruefung: ["B65", 28], bestkunde: ["F43", 19], bestmonteur: ["F32", 19], rueckgabe: ["H39", 26], garantie: ["C43", 26], technisch: ["C44", 30]}
+};
 function sigKnopf(){
   const b = $("#formSig"), w = formState.akt[0] === "#" ? null : formWerte();
   b.hidden = !(formState.akt in SIG_KUNDE);
@@ -3336,7 +3341,10 @@ async function formSpeichern(drucken, dispo){
   if(f.id === "pruefung") werte.K13 = "A";   // Nennleistung immer in Ampere
   const btn = $("#formSpeichern"); btn.disabled = true; const alt = btn.textContent; btn.textContent = "Bitte warten …"; formMeldung(drucken ? "Excel füllt das Formular aus und druckt …" : "Excel füllt das Formular aus – das dauert ein paar Sekunden …", 60000);
   let r;
-  const bilder = w._sigKunde && SIG_KUNDE[f.id] ? [{zelle: SIG_KUNDE[f.id], png: w._sigKunde.split(",")[1], hoehe: 34, breite: 150}] : [];
+  const bilder = [];
+  const sigBild = (url, pl) => pl && url && bilder.push({zelle: pl[0], png: url.split(",")[1], hoehe: pl[1], breite: 150, modus: pl[2] || ""});
+  sigBild(w._sigKunde, SIG_PLATZ.kunde[f.id]);
+  sigBild(state.sig && state.sig.url, SIG_PLATZ.technik[f.id]);   // eigene Unterschrift (aus „Deine Unterschrift“)
   const anfrage = {bilder, ...zusatz(f, w, werte), blatt: f.blatt || "", quelle: f.quelle ? ((formState.register || []).find(g => g.name === f.quelle) || {}).id || "-" : "", werte, kreuze, xlsx, pdf, drucken: !!drucken};
   try{ r = await (await fetch("/api/formular", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(anfrage)})).json(); }
   catch(e){ r = {ok: false, error: "Keine Verbindung zum Programm."}; }
