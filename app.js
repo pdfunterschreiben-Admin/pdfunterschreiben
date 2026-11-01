@@ -329,7 +329,7 @@
     for (const [c, re] of NAME_RULES) if (re.test(name || "")) return c;
     return "";
   }
-  const BASE_ORDER = CATS.concat(["Backzutaten", "Süßwaren", "Snacks", "Nudeln & Reis", "Obst & Gemüse", "Saucen & Dressings", "Brotaufstriche", "Frühstück", "Fisch", "Tierbedarf", "Haushalt"]);
+  const BASE_ORDER = ["Gewürze", "HOLY"].concat(CATS.slice(1)).concat(["Backzutaten", "Süßwaren", "Snacks", "Nudeln & Reis", "Obst & Gemüse", "Saucen & Dressings", "Brotaufstriche", "Frühstück", "Fisch", "Tierbedarf", "Haushalt"]);
   const KNOWN = (c) => typeof c === "string" && c.trim() && c !== "Sonstiges";
   // Alle Ordner: feste in fester Reihenfolge, danach automatisch/selbst angelegte, „Sonstiges“ immer zuletzt
   function allCats() {
@@ -337,8 +337,23 @@
     for (const it of items) { const c = catOf(it); if (!BASE_ORDER.includes(c)) extra.add(c); }
     return BASE_ORDER.filter((c) => c !== "Sonstiges").concat([...extra].sort((a, b) => a.localeCompare(b, "de")), ["Sonstiges"]);
   }
+  // ---------- HOLY: eigener Ordner, Unterordner je Produktlinie, Name = Geschmack ----------
+  const isHoly = (it) => /\bholy\b/i.test((it.name || "") + " " + (it.brand || ""));
+  const HOLY_LINES = [["Energy", /energy|energie/i], ["Iced Tea", /iced\s*tea|eistee/i], ["Hydration", /hydration|elektrolyt/i],
+    ["Milkshake", /milk\s*shake|\bshake\b/i], ["Pump", /\bpump\b|pre.?workout/i], ["Coffee", /coffee|kaffee/i], ["Shaker & Zubehör", /shaker|flasche|bottle|becher|löffel/i]];
+  const HOLY_ORDER = ["Energy", "Iced Tea", "Hydration", "Milkshake", "Pump", "Coffee", "Shaker & Zubehör"];
+  const holyLine = (it) => { const n = it.name || ""; if (/shaker|flasche|bottle|becher|löffel/i.test(n)) return "Shaker & Zubehör"; for (const [l, re] of HOLY_LINES) if (re.test(n)) return l; return "Sonstige"; };
+  function holyFlavor(it) {
+    let n = (it.name || "").replace(/\bholy\b/ig, " ");
+    for (const [, re] of HOLY_LINES) n = n.replace(re, " ");
+    n = n.replace(/\b(drink|getränk|pulver|powder|tub|dose|sticks?|portionen|servings|sorte|geschmack|flavou?r|zuckerfrei|sugar.?free|vegan|mix)\b/ig, " ")
+      .replace(SIZE_RE, " ").replace(/\b\d+\s*(x|portionen|servings)?\b/ig, " ")
+      .replace(/[\-–|,:()]+/g, " ").replace(/\s{2,}/g, " ").trim();
+    return n ? n.replace(/(^|\s)\S/g, (c) => c.toUpperCase()) : (it.name || "HOLY");
+  }
   const catOf = (it) => {
     if (it.catFixed && KNOWN(it.cat)) return it.cat;       // vom Nutzer bewusst gewählt
+    if (isHoly(it)) return "HOLY";
     if (spiceEvidence(it)) return "Gewürze";
     if (KNOWN(it.cat)) return it.cat;
     return catFromName(it.name) || "Sonstiges";
@@ -419,6 +434,7 @@
   // Maggi bleibt „Maggi …“ (nur ohne Größe), sonst wäre nur „Würze“ übrig
   const displayName = (it) => {
     const n = it.name || "Unbekanntes Produkt";
+    if (catOf(it) === "HOLY" && isHoly(it)) return holyLine(it) === "Shaker & Zubehör" ? (it.name || "").replace(/\bholy\b/ig, "").trim() : holyFlavor(it);
     if (catOf(it) !== "Gewürze") return n;
     if (/^maggi/i.test(n)) return n.replace(SIZE_RE, " ").replace(/\s{2,}/g, " ").trim();
     return stripBrand(n, it.brand);
@@ -444,11 +460,13 @@
   const normKey = (k) => {
     if (!k || k.indexOf(":") < 0) return k;
     const [p, r] = [k.slice(0, k.indexOf(":")), k.slice(k.indexOf(":") + 1)];
+    if (p === "holy") return k;
     if (p !== "g" && p !== "anker") return k;
     const c = compact(r);
     return p + ":" + (SYNONYMS[c] || c);
   };
   const spiceKey = (it) => {
+    if (catOf(it) === "HOLY" && isHoly(it)) return "holy:" + holyLine(it) + ":" + compact(holyFlavor(it));
     if (catOf(it) !== "Gewürze" || /^maggi/i.test(it.name || "")) return null;
     return normKey((isAnker(it) ? "anker:" : "g:") + displayName(it));
   };
@@ -525,7 +543,7 @@
   };
   $("shop-copy").onclick = async () => {
     const groups = new Map(allCats().map((c) => [c, []]));
-    toBuy().forEach((i) => groups.get(catOf(i)).push(displayName(i) + (isAnker(i) ? " (Ankerkraut)" : "")));
+    toBuy().forEach((i) => groups.get(catOf(i)).push((isHoly(i) ? "HOLY " + holyLine(i) + " " : "") + displayName(i) + (isAnker(i) ? " (Ankerkraut)" : "")));
     let txt = "Einkaufsliste" + (hh ? " – " + hh.name : "") + "\n";
     for (const [c, l] of groups) if (l.length) txt += "\n" + c + ":\n" + l.sort((a, b) => a.localeCompare(b, "de")).map((n) => "• " + n).join("\n") + "\n";
     const b = $("shop-copy");
@@ -589,6 +607,13 @@
       det.appendChild(inner);
       ul.appendChild(det);
       const anker = cat === "Gewürze" ? list.filter(isAnker) : [];
+      if (cat === "HOLY") {
+        const lines = new Map();
+        for (const it of list) { const l = isHoly(it) ? holyLine(it) : "Sonstige"; if (!lines.has(l)) lines.set(l, []); lines.get(l).push(it); }
+        const order = HOLY_ORDER.concat(["Sonstige"]);
+        for (const l of order) if (lines.has(l)) inner.appendChild(subFolder("HOLY/" + l, l, lines.get(l)));
+        continue;
+      }
       for (const it of list) if (!anker.includes(it)) inner.appendChild(row(it));
       if (anker.length) {
         const sub = document.createElement("details");
@@ -606,6 +631,24 @@
         const wrap = document.createElement("li"); wrap.className = "subwrap"; wrap.appendChild(sub);
         inner.appendChild(wrap);
       }
+    }
+
+    function subFolder(key, title, arr) {
+      const sub = document.createElement("details");
+      sub.className = "folder subfolder";
+      sub.open = forceOpen || isOpen(key);
+      const ss = document.createElement("summary");
+      const pcs = arr.reduce((s, i) => s + (i.qty || 0), 0);
+      ss.innerHTML = '<span class="fname"></span><span class="fcount"></span>';
+      ss.querySelector(".fname").textContent = title;
+      ss.querySelector(".fcount").textContent = shop ? `${arr.length} zu kaufen` : `${arr.length} ${arr.length === 1 ? "Sorte" : "Sorten"} · ${pcs} Stk.`;
+      sub.appendChild(ss);
+      sub.addEventListener("toggle", () => { if (!forceOpen) setOpen(key, sub.open); });
+      const u = document.createElement("ul");
+      arr.forEach((it) => u.appendChild(row(it)));
+      sub.appendChild(u);
+      const wrap = document.createElement("li"); wrap.className = "subwrap"; wrap.appendChild(sub);
+      return wrap;
     }
 
     function row(it) {
