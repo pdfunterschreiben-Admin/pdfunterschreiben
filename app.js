@@ -349,8 +349,13 @@
     n = n.replace(/\b(drink|getränk|pulver|powder|tub|dose|sticks?|portionen|servings|sorte|geschmack|flavou?r|zuckerfrei|sugar.?free|vegan|mix)\b/ig, " ")
       .replace(SIZE_RE, " ").replace(/\b\d+\s*(x|portionen|servings)?\b/ig, " ")
       .replace(/[\-–|,:()]+/g, " ").replace(/\s{2,}/g, " ").trim();
-    return n ? n.replace(/(^|\s)\S/g, (c) => c.toUpperCase()) : (it.name || "HOLY");
+    return n ? n.replace(/(^|\s)\S/g, (c) => c.toUpperCase()) : "";
   }
+  // HOLY nur zusammenlegen, wenn ein echter Geschmack im Namen steht – sonst je Strichcode getrennt
+  const holyKey = (it) => {
+    const f = holyFlavor(it);
+    return f.length >= 3 ? "holy:" + holyLine(it) + ":" + compact(f) : null;
+  };
   const catOf = (it) => {
     if (it.catFixed && KNOWN(it.cat)) return it.cat;       // vom Nutzer bewusst gewählt
     if (isHoly(it)) return "HOLY";
@@ -434,7 +439,7 @@
   // Maggi bleibt „Maggi …“ (nur ohne Größe), sonst wäre nur „Würze“ übrig
   const displayName = (it) => {
     const n = it.name || "Unbekanntes Produkt";
-    if (catOf(it) === "HOLY" && isHoly(it)) return holyLine(it) === "Shaker & Zubehör" ? (it.name || "").replace(/\bholy\b/ig, "").trim() : holyFlavor(it);
+    if (catOf(it) === "HOLY" && isHoly(it)) return holyLine(it) === "Shaker & Zubehör" ? (it.name || "").replace(/\bholy\b/ig, "").trim() : (holyFlavor(it) || (it.name || "HOLY").replace(/\bholy\b/ig, "").replace(SIZE_RE, " ").trim() + " (Geschmack fehlt)");
     if (catOf(it) !== "Gewürze") return n;
     if (/^maggi/i.test(n)) return n.replace(SIZE_RE, " ").replace(/\s{2,}/g, " ").trim();
     return stripBrand(n, it.brand);
@@ -466,7 +471,7 @@
     return p + ":" + (SYNONYMS[c] || c);
   };
   const spiceKey = (it) => {
-    if (catOf(it) === "HOLY" && isHoly(it)) return "holy:" + holyLine(it) + ":" + compact(holyFlavor(it));
+    if (catOf(it) === "HOLY" || isHoly(it)) return isHoly(it) ? holyKey(it) : null;
     if (catOf(it) !== "Gewürze" || /^maggi/i.test(it.name || "")) return null;
     return normKey((isAnker(it) ? "anker:" : "g:") + displayName(it));
   };
@@ -934,7 +939,12 @@
       if (g.date) mhd = gs1Date(g.date);
     }
     code = code.replace(/\D/g, "") || code;
-    const known = findByCode(code);
+    let known = findByCode(code);
+    if (known && isHoly(known) && known.code !== code) {
+      // Fehler früherer Versionen: falsch zusammengelegt -> Code lösen, als eigenes Produkt erfassen
+      change({ t: "set", id: known.id, data: { codes: (known.codes || []).filter((c) => c !== code) } });
+      known = null;
+    }
     const mhdMsg = mhd ? " MHD aus dem Code gelesen." : "";
     if (known) {
       // Schon im Bestand: direkt +1, ohne Formular
