@@ -16,6 +16,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -39,6 +40,97 @@ type hgBrowser struct {
 	ziel    string // unser Tab
 	agent   string
 	aufTdoc bool // T-Doc-Anwendung ist im Tab geladen
+	abMu    sync.Mutex
+	abStart time.Time
+	anfr    map[string]*hgAnfrage
+	marken  []string
+}
+
+type hgAnfrage struct {
+	url, art   string
+	start, end time.Time
+}
+
+func (b *hgBrowser) netzEreignis(roh []byte) {
+	var e struct {
+		Method string `json:"method"`
+		Params struct {
+			RequestID string `json:"requestId"`
+			Type      string `json:"type"`
+			Request   struct {
+				URL    string `json:"url"`
+				Method string `json:"method"`
+			} `json:"request"`
+		} `json:"params"`
+	}
+	if json.Unmarshal(roh, &e) != nil || !strings.HasPrefix(e.Method, "Network.") {
+		return
+	}
+	b.abMu.Lock()
+	defer b.abMu.Unlock()
+	if b.anfr == nil {
+		return
+	}
+	switch e.Method {
+	case "Network.requestWillBeSent":
+		if e.Params.Type == "XHR" || e.Params.Type == "Fetch" || e.Params.Type == "Document" {
+			b.anfr[e.Params.RequestID] = &hgAnfrage{url: e.Params.Request.Method + " " + e.Params.Request.URL, art: e.Params.Type, start: time.Now()}
+		}
+	case "Network.loadingFinished", "Network.loadingFailed":
+		if a := b.anfr[e.Params.RequestID]; a != nil && a.end.IsZero() {
+			a.end = time.Now()
+		}
+	}
+}
+
+func (b *hgBrowser) marke(t string) {
+	b.abMu.Lock()
+	b.marken = append(b.marken, fmt.Sprintf("%6.1f s  %s", time.Since(b.abStart).Seconds(), t))
+	b.abMu.Unlock()
+}
+
+// ablaufText fasst die letzte Suche zusammen (Schritte + Anfragen an T-Doc mit Dauer).
+func (b *hgBrowser) ablaufText(nr string) string {
+	b.abMu.Lock()
+	defer b.abMu.Unlock()
+	z := []string{"Suche " + nr + " – " + b.abStart.Format("15:04:05")}
+	z = append(z, b.marken...)
+	var l []*hgAnfrage
+	for _, a := range b.anfr {
+		l = append(l, a)
+	}
+	sort.Slice(l, func(i, j int) bool { return l[i].start.Before(l[j].start) })
+	z = append(z, "Anfragen an den Server:")
+	for _, a := range l {
+		u := a.url
+		if i := strings.Index(u, "://"); i > 0 {
+			if j := strings.Index(u[i+3:], "/"); j > 0 {
+				u = u[:strings.Index(u, " ")+1] + u[i+3+j:]
+			}
+		}
+		if len(u) > 140 {
+			u = u[:140] + "…"
+		}
+		d := "offen"
+		if !a.end.IsZero() {
+			d = fmt.Sprintf("%.1f s", a.end.Sub(a.start).Seconds())
+		}
+		z = append(z, fmt.Sprintf("%6.1f s  %s (%s)", a.start.Sub(b.abStart).Seconds(), u, d))
+	}
+	b.anfr = nil
+	return strings.Join(z, "\n")
+}
+
+var (
+	hgAblaufMu sync.Mutex
+	hgAblauf   string
+)
+
+func (a *app) handleTdocAblauf(w http.ResponseWriter, r *http.Request) {
+	hgAblaufMu.Lock()
+	t := hgAblauf
+	hgAblaufMu.Unlock()
+	writeJSON(w, map[string]any{"text": t})
 }
 
 // hgUA: Kennung ohne „HeadlessChrome“ je Browser (wird beim ersten Start ermittelt).
@@ -187,8 +279,12 @@ func (b *hgBrowser) lesen(r io.Reader) {
 			ID int `json:"id"`
 			cdpAntwort
 		}
-		if json.Unmarshal(zeile[:len(zeile)-1], &m) != nil || m.ID == 0 {
-			continue // Ereignisse brauchen wir nicht
+		if json.Unmarshal(zeile[:len(zeile)-1], &m) != nil {
+			continue
+		}
+		if m.ID == 0 { // Ereignis – nur Netzwerk-Anfragen für den Zeitablauf merken
+			b.netzEreignis(zeile[:len(zeile)-1])
+			continue
 		}
 		b.mu.Lock()
 		c := b.warten[m.ID]
@@ -435,13 +531,30 @@ func (a *app) handleTdocVorwaermen(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]any{"ok": true})
 }
 
-func (b *hgBrowser) suche(nr, url string) (hgErgebnis, bool) {
+func (b *hgBrowser) suche(nr, url string) (e hgErgebnis, ok bool) {
+	b.abMu.Lock()
+	b.abStart, b.anfr, b.marken = time.Now(), map[string]*hgAnfrage{}, nil
+	b.abMu.Unlock()
+	defer func() {
+		b.klickMarken()
+		b.marke("Ende: " + map[bool]string{true: "gefunden „" + e.Name + "“", false: "nichts – " + e.Error}[e.Name != ""])
+		t := b.ablaufText(nr)
+		hgAblaufMu.Lock()
+		hgAblauf = t
+		hgAblaufMu.Unlock()
+		nativLog("Zeitablauf:\n%s", t)
+	}()
 	// Ist T-Doc schon geladen, nur die Adresse innerhalb der Anwendung wechseln (spart das Neuladen
 	// samt Anmeldung). Kommt so nichts, wird ganz normal neu geladen.
 	ohneNeuladen := false
 	if b.aufTdoc {
 		u, _ := json.Marshal(url)
 		ohneNeuladen = b.rufen("Runtime.evaluate", map[string]any{"expression": "globalThis.__kdfAufgeklappt=null;document.querySelectorAll('tr,[role=row]').forEach(e=>e.setAttribute('data-kdf-alt','1'));history.pushState({},''," + string(u) + ");dispatchEvent(new PopStateEvent('popstate',{state:{}}));true", "returnByValue": true}, true, 5*time.Second, nil) == nil
+	}
+	if ohneNeuladen {
+		b.marke("Wechsel innerhalb von T-Doc (ohne Neuladen)")
+	} else {
+		b.marke("T-Doc wird geladen")
 	}
 	if !ohneNeuladen {
 		if err := b.rufen("Page.navigate", map[string]any{"url": url}, true, 30*time.Second, nil); err != nil {
@@ -473,6 +586,7 @@ func (b *hgBrowser) suche(nr, url string) (hgErgebnis, bool) {
 		if ohneNeuladen && time.Since(start) > 6*time.Second {
 			ohneNeuladen = false
 			neuGeladen = true
+			b.marke("T-Doc hat nicht reagiert – neu laden")
 			globalThisZuruecksetzen := "globalThis.__kdfAufgeklappt=null"
 			_ = b.rufen("Runtime.evaluate", map[string]any{"expression": globalThisZuruecksetzen}, true, 3*time.Second, nil)
 			if b.rufen("Page.navigate", map[string]any{"url": url}, true, 30*time.Second, nil) != nil {
@@ -499,6 +613,9 @@ func (b *hgBrowser) suche(nr, url string) (hgErgebnis, bool) {
 			} `json:"result"`
 		}
 		if b.rufen("Runtime.evaluate", map[string]any{"expression": "({tabelle: !!document.querySelector('table, mat-table, [role=table], tr.example-element-row'), leer: /(keine (ergebnisse|treffer|daten|einträge)|nichts gefunden|no (results|data|records|items)( found)?|0 (ergebnisse|results))/i.test(document.body ? document.body.innerText : '')})", "returnByValue": true}, true, 5*time.Second, &seite) == nil && seite.Result.Value.Tabelle {
+			if !tabelleGesehen {
+				b.marke("erste Tabelle sichtbar")
+			}
 			tabelleGesehen = true
 		}
 		if seite.Result.Value.Leer && time.Since(start) > 3*time.Second {
@@ -693,4 +810,22 @@ func (a *app) handleTdocBild(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "image/jpeg")
 	w.Header().Set("Cache-Control", "no-store")
 	_, _ = w.Write(d)
+}
+
+// klickMarken übernimmt die Aufklapp-Zeitpunkte aus dem Leser in den Zeitablauf.
+func (b *hgBrowser) klickMarken() {
+	var r struct {
+		Result struct {
+			Value []float64 `json:"value"`
+		} `json:"result"`
+	}
+	if b.rufen("Runtime.evaluate", map[string]any{"expression": "(globalThis.__kdfAufgeklappt&&globalThis.__kdfAufgeklappt.zeiten)||[]", "returnByValue": true}, true, 3*time.Second, &r) != nil {
+		return
+	}
+	for i, ms := range r.Result.Value {
+		t := time.UnixMilli(int64(ms))
+		b.abMu.Lock()
+		b.marken = append(b.marken, fmt.Sprintf("%6.1f s  Fahrzeugzeile %d aufgeklappt", t.Sub(b.abStart).Seconds(), i+1))
+		b.abMu.Unlock()
+	}
 }

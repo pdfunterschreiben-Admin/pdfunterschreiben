@@ -13,7 +13,7 @@ async function readToyotaPart(requested,timeoutMs=45000){
  const koepfe=[...document.querySelectorAll('tr,[role="row"]')].filter(r=>cells(r).some(c=>/^(ersatzteilname|partname|description|beschreibung|bezeichnung)$/.test(normalize(c.innerText)))).length;
  if(st.letzter&&!st.detailSeit&&koepfe>st.koepfe)st.detailSeit=Date.now();
  const bereit=!st.letzter||Date.now()-st.letzter>15000||(st.detailSeit&&Date.now()-st.detailSeit>1500);
- if(st.count<30&&bereit){const candidates=[...document.querySelectorAll('tr.example-element-row,mat-expansion-panel-header[aria-expanded="false"],button[aria-expanded="false"],[role="button"][aria-expanded="false"]')];for(const el of candidates){if(clicked.has(el)||el.hasAttribute('data-kdf-alt')||!el.getClientRects().length)continue;clicked.add(el);st.koepfe=koepfe;st.detailSeit=0;el.click();st.count++;st.letzter=Date.now();break;}}
+ if(st.count<30&&bereit){const candidates=[...document.querySelectorAll('tr.example-element-row,mat-expansion-panel-header[aria-expanded="false"],button[aria-expanded="false"],[role="button"][aria-expanded="false"]')];for(const el of candidates){if(clicked.has(el)||el.hasAttribute('data-kdf-alt')||!el.getClientRects().length)continue;clicked.add(el);st.koepfe=koepfe;st.detailSeit=0;el.click();st.count++;st.letzter=Date.now();(st.zeiten=st.zeiten||[]).push(st.letzter);break;}}
  await new Promise(r=>setTimeout(r,250));}
  return {error:'Keine eindeutige Artikelbezeichnung gefunden. Prüfe Anmeldung, Suchergebnis und aufgeklappte Teileliste in T-Doc.'};
 }
