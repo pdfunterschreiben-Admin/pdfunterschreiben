@@ -42,7 +42,7 @@ pruefe('leerer Bestand + Speichern mit Nummernformat', () => {
   assert(r.ok && Array.isArray(r.teile) && r.teile.length === 0);
   r = u.post({ ...pc, event: 'wl_speichern', teil: { liste: 'bestand', nr: '67405t100071', name: 'Filter-Teilgruppe', ort: 'Fach A', menge: 3 } });
   assert(r.ok && r.teile.length === 1 && r.teile[0].nr === '67405-T1000-71' && r.teile[0].menge === 3, JSON.stringify(r));
-  r = u.post({ ...pc, event: 'wl_speichern', teil: { liste: 'bestand', nr: '7643266', name: 'Rad', ort: '', menge: 0 } });
+  r = u.post({ ...pc, event: 'wl_speichern', teil: { liste: 'bestand', nr: 'bt 7643266', name: 'Rad', ort: '', menge: 0 } });
   assert(r.teile.find(t => t.nr === 'BT7643266'));
   st = r.stand;
   assert(r.katalog.find(k => k.nr === 'BT7643266' && k.name === 'Rad'));
@@ -109,11 +109,13 @@ pruefe('Import: ersetzen und dazuzählen', () => {
     { liste: 'bestand', nr: '67405-T1000-71', name: '', ort: 'Fach A', menge: 4 },
     { liste: 'fehlt', nr: '12345ABCDE12', name: 'Sensor', ort: '', menge: 1 },
     { liste: 'bestand', nr: '0012345', name: 'Führende Null', ort: 'Kiste', menge: 1 },
+    { liste: 'bestand', nr: '4010-004', name: 'Batterie 12V 55Ah', ort: '', menge: 1 },
   ] });
-  assert(r.ok && r.neu === 2 && r.geaendert === 1, JSON.stringify(r));
+  assert(r.ok && r.neu === 3 && r.geaendert === 1, JSON.stringify(r));
   assert.strictEqual(r.teile.find(t => t.ort === 'Fach A' && t.liste === 'bestand').menge, 4);
   assert(r.teile.find(t => t.nr === '12345-ABCDE-12' && t.liste === 'fehlt'));
-  assert(r.teile.find(t => t.nr === 'BT0012345'));
+  assert(r.teile.find(t => t.nr === '0012345'));
+  assert(r.teile.find(t => t.nr === '4010-004'), 'Nummer aus der Ersatzteilliste bleibt unverändert');
   r = u.post({ ...pc, event: 'wl_import', modus: 'dazu', teile: [{ liste: 'bestand', nr: '67405-T1000-71', name: '', ort: 'Fach A', menge: 1 }] });
   assert.strictEqual(r.teile.find(t => t.ort === 'Fach A' && t.liste === 'bestand').menge, 5);
 });

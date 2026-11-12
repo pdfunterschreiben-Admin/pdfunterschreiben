@@ -138,8 +138,6 @@ func teileNr(v string) string {
 	switch {
 	case reBT.MatchString(c):
 		return c
-	case reBTKurz.MatchString(c):
-		return "BT" + c
 	}
 	if m := reToyota.FindStringSubmatch(c); m != nil {
 		return m[1] + "-" + m[2] + "-" + m[3]
@@ -150,13 +148,13 @@ func teileNr(v string) string {
 // tdocURL: Suchadresse in Toyota T-Doc für eine Teilenummer ("" = keine gültige Nummer).
 func tdocURL(nr string) string {
 	n := teileNr(nr)
-	bt := reBT.MatchString(n)
+	bt := reBT.MatchString(n) || reBTKurz.MatchString(n)
 	if !bt && !regexp.MustCompile(`^\d{5}-[A-Z0-9]{5}-\d{2}$`).MatchString(n) {
 		return ""
 	}
 	q := neturl.Values{}
 	if bt {
-		q.Set("partNumber", n[2:])
+		q.Set("partNumber", strings.TrimPrefix(n, "BT"))
 		q.Set("truckType", "warehouseTrucks")
 		q.Set("flag", "Standard,Special")
 	} else {

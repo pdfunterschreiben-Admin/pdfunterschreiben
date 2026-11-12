@@ -350,7 +350,7 @@ dialog::backdrop{background:rgba(10,15,30,.55)}
       </ul>
       <h3>Teile erfassen</h3>
       <ul>
-        <li><b>＋ Neues Teil</b>: Teilenummer eintragen. Toyota-Nummern (12345-ABCDE-12) und BT-Nummern (BT1234567 oder nur die 7 Ziffern) werden automatisch richtig geschrieben.</li>
+        <li><b>＋ Neues Teil</b>: Teilenummer eintragen. Toyota-Nummern (12345-ABCDE-12) und BT-Nummern (BT 1234567) werden einheitlich geschrieben, alle anderen Nummern (z. B. 4010-004) bleiben genau so, wie du sie einträgst.</li>
         <li>Ist die Nummer schon bekannt (bei dir oder bei Kollegen), wird die Bezeichnung automatisch eingetragen.</li>
         <li><b>📷 Vom Foto</b>: Foto vom Etikett wählen – die Teilenummer wird gelesen. Bitte die erkannte Nummer kurz prüfen.</li>
         <li><b>T-Doc ↗</b> öffnet die Nummer in Toyota T-Doc (im Browser, in dem du bei Toyota angemeldet bist). Dort auf das Lesezeichen „T-Doc → Excel“ klicken und zurück ins Programm – die Bezeichnung wird dann automatisch eingetragen.</li>
@@ -479,16 +479,16 @@ function toast(msg, ms = 4500, btn){
 }
 
 /* ---------- Teilenummern ---------- */
-// Toyota: 12345-ABCDE-12 · BT: BT1234567 (auch nur die 7 Ziffern)
+// Toyota: 12345-ABCDE-12 · BT: BT1234567 · alles andere bleibt, wie es ist (z. B. 4010-004)
 function teileNr(v){
   const roh = String(v || "").trim().toUpperCase(), c = roh.replace(/[\s-]/g, "");
   if(/^BT\d{7}$/.test(c)) return c;
-  if(/^\d{7}$/.test(c)) return "BT" + c;
   const m = c.match(/^(\d{5})([A-Z0-9]{5})(\d{2})$/);
   return m ? `${m[1]}-${m[2]}-${m[3]}` : roh;
 }
 const nrKey = n => teileNr(n).replace(/[\s-]/g, "");
-const nrGueltig = n => /^(BT\d{7}|\d{5}-[A-Z0-9]{5}-\d{2})$/.test(teileNr(n));
+// Für T-Doc: Toyota-Nummer, BT-Nummer oder 7 Ziffern ohne Trennzeichen (wird als BT-Nummer gesucht)
+const nrGueltig = n => /^(BT\d{7}|\d{7}|\d{5}-[A-Z0-9]{5}-\d{2})$/.test(teileNr(n));
 // Kandidaten aus erkanntem Text: zuerst vollständige Toyota-/BT-Nummern, dann sonstige Zeichenfolgen mit Ziffern
 function kandidaten(text){
   // O ↔ 0 verwechselt die Texterkennung oft – neben Ziffern ist es fast immer eine Null
@@ -496,7 +496,7 @@ function kandidaten(text){
   do{ vorher = t; t = t.replace(/O(?=\d)|(?<=\d)O/g, "0"); }while(t !== vorher);
   const gut = [...new Set([...(t.match(/\d{5}[\s-]*[A-Z0-9]{5}[\s-]*\d{2}/g) || []), ...(t.match(/BT[\s-]?\d{7}/g) || [])].map(teileNr))];
   const rest = [...new Set((t.match(/[A-Z0-9][A-Z0-9.\/-]{3,}/g) || []).filter(s => /\d/.test(s)).map(teileNr))].filter(s => !gut.includes(s));
-  if(!gut.length) for(const s of (t.match(/\b\d{7}\b/g) || [])) if(!gut.includes("BT" + s)) rest.unshift("BT" + s);
+  if(!gut.length) for(const s of (t.match(/\b\d{7}\b/g) || [])) if(!rest.includes(s)) rest.unshift(s);
   return {gut, rest: rest.slice(0, 12)};
 }
 

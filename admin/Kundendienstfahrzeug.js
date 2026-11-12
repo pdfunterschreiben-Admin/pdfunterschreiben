@@ -23,11 +23,11 @@ const WL_LISTEN = { bestand: 'Bestand', fehlt: 'Fehlt' };
 const WL_MAX = 999999;
 
 // Toyota- (12345-ABCDE-12) und BT-Nummern (BT1234567) einheitlich schreiben – wie im Programm.
+// Andere Nummern (z. B. „4010-004“ aus der Ersatzteilliste) bleiben, wie sie sind.
 function wlNr(v) {
   const roh = String(v == null ? '' : v).trim().toUpperCase().slice(0, 150);
   const c = roh.replace(/[\s-]/g, '');
   if (/^BT\d{7}$/.test(c)) return c;
-  if (/^\d{7}$/.test(c)) return 'BT' + c;
   const m = c.match(/^(\d{5})([A-Z0-9]{5})(\d{2})$/);
   return m ? m[1] + '-' + m[2] + '-' + m[3] : roh;
 }
