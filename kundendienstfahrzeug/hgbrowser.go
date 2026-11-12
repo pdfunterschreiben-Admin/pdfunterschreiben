@@ -35,7 +35,12 @@ type hgBrowser struct {
 	tot     chan struct{}
 	exe     string
 	ende    string
+	ziel    string // unser Tab
+	agent   string
 }
+
+// hgUA: Kennung ohne „HeadlessChrome“ je Browser (wird beim ersten Start ermittelt).
+var hgUA = map[string]string{}
 
 type cdpAntwort struct {
 	Result json.RawMessage `json:"result"`
@@ -124,13 +129,17 @@ func hgStarten(exe string) (*hgBrowser, error) {
 		return nil, errors.New(grund)
 	}
 	_ = os.MkdirAll(hgProfil(exe), 0o755)
-	r, w, p, err := hgProzessStarten(exe, []string{
+	args := []string{}
+	if ua := hgUA[exe]; ua != "" { // gilt auch für Popups (Anmeldung), nicht nur für unseren Tab
+		args = append(args, "--user-agent="+ua)
+	}
+	r, w, p, err := hgProzessStarten(exe, append(args,
 		"--headless=new", "--remote-debugging-pipe", "--enable-logging", "--log-level=1",
-		"--user-data-dir=" + hgProfil(exe),
+		"--user-data-dir="+hgProfil(exe),
 		"--no-first-run", "--no-default-browser-check", "--disable-extensions",
 		"--disable-popup-blocking", "--disable-features=Translate",
 		"--window-size=1280,900", "about:blank",
-	})
+	))
 	if err != nil {
 		return nil, err
 	}
@@ -274,12 +283,16 @@ func (b *hgBrowser) vorbereiten() error {
 	if err := b.rufen("Target.attachToTarget", map[string]any{"targetId": ziel, "flatten": true}, false, 10*time.Second, &s); err != nil {
 		return err
 	}
-	b.sitzung = s.SessionID
+	b.sitzung, b.ziel = s.SessionID, ziel
 	var v struct {
 		UserAgent string `json:"userAgent"`
 	}
 	if b.rufen("Browser.getVersion", map[string]any{}, false, 5*time.Second, &v) == nil && v.UserAgent != "" {
 		ua := strings.Replace(v.UserAgent, "HeadlessChrome", "Chrome", 1)
+		b.agent = v.UserAgent
+		if hgUA[b.exe] == "" {
+			hgUA[b.exe] = ua
+		}
 		_ = b.rufen("Network.setUserAgentOverride", map[string]any{"userAgent": ua, "acceptLanguage": "de-DE,de"}, true, 5*time.Second, nil)
 	}
 	return nil
@@ -307,6 +320,17 @@ func hgSuchen(nr, url string) hgErgebnis {
 				if err == nil {
 					if err = b.vorbereiten(); err != nil {
 						_ = b.proc.Kill()
+					}
+				}
+				if err == nil && strings.Contains(b.agent, "Headless") { // einmal mit getarnter Kennung neu starten
+					_ = b.rufen("Browser.close", map[string]any{}, false, 3*time.Second, nil)
+					_ = b.proc.Kill()
+					<-b.tot
+					time.Sleep(300 * time.Millisecond)
+					if b, err = hgStarten(exe); err == nil {
+						if err = b.vorbereiten(); err != nil {
+							_ = b.proc.Kill()
+						}
 					}
 				}
 				if err != nil {
@@ -342,11 +366,33 @@ func (b *hgBrowser) suche(nr, url string) (hgErgebnis, bool) {
 	}
 	leser, _ := erweiterungFS.ReadFile("chrome/reader.js")
 	nrJSON, _ := json.Marshal(nr)
-	ausdruck := string(leser) + "\n;readToyotaPart(" + string(nrJSON) + ", 8000)"
+	ausdruck := string(leser) + "\n;readToyotaPart(" + string(nrJSON) + ", 5000)"
 	start := time.Now()
 	letzter := hgErgebnis{Error: "T-Doc hat keine Bezeichnung zu dieser Nummer gefunden."}
 	loginSeit := time.Time{}
+	tabelleGesehen := false
+	defer b.fremdeTabsSchliessen()
+	anmelden := hgErgebnis{Error: "Einmal bei Toyota anmelden – danach geht es im Hintergrund.", Anmelden: true}
 	for time.Since(start) < 55*time.Second && b.laeuft() {
+		// Hängt eine Anmeldung (Weiterleitung oder Anmelde-Popup), braucht es die sichtbare Anmeldung
+		if b.anmeldungHaengt() {
+			if loginSeit.IsZero() {
+				loginSeit = time.Now()
+			}
+			if time.Since(loginSeit) > 12*time.Second {
+				return anmelden, true
+			}
+		}
+		var seite struct {
+			Result struct {
+				Value struct {
+					Tabelle bool `json:"tabelle"`
+				} `json:"value"`
+			} `json:"result"`
+		}
+		if b.rufen("Runtime.evaluate", map[string]any{"expression": "({tabelle: !!document.querySelector('table, mat-table, [role=table], tr.example-element-row')})", "returnByValue": true}, true, 5*time.Second, &seite) == nil && seite.Result.Value.Tabelle {
+			tabelleGesehen = true
+		}
 		var r struct {
 			Result struct {
 				Value json.RawMessage `json:"value"`
@@ -371,7 +417,7 @@ func (b *hgBrowser) suche(nr, url string) (hgErgebnis, bool) {
 				loginSeit = time.Now()
 			}
 			if time.Since(loginSeit) > 15*time.Second {
-				return hgErgebnis{Error: "Einmal bei Toyota anmelden – danach geht es im Hintergrund.", Anmelden: true}, true
+				return anmelden, true
 			}
 			time.Sleep(time.Second)
 			continue
@@ -383,7 +429,46 @@ func (b *hgBrowser) suche(nr, url string) (hgErgebnis, bool) {
 			}
 		}
 	}
+	if !tabelleGesehen { // T-Doc hat gar keine Ergebnisliste gezeigt – fast immer fehlt die Anmeldung
+		return hgErgebnis{Error: "T-Doc zeigt keine Ergebnisse – vermutlich fehlt die Toyota-Anmeldung.", Anmelden: true}, true
+	}
 	return letzter, true
+}
+
+type hgTabs struct {
+	TargetInfos []struct {
+		TargetID string `json:"targetId"`
+		Type     string `json:"type"`
+		URL      string `json:"url"`
+	} `json:"targetInfos"`
+}
+
+// anmeldungHaengt: Ist unser Tab auf eine Anmeldeseite umgeleitet oder offen ein Anmelde-Popup?
+func (b *hgBrowser) anmeldungHaengt() bool {
+	var t hgTabs
+	if b.rufen("Target.getTargets", map[string]any{}, false, 5*time.Second, &t) != nil {
+		return false
+	}
+	for _, x := range t.TargetInfos {
+		u := strings.ToLower(x.URL)
+		if x.Type == "page" && (strings.Contains(u, "login.microsoftonline") || strings.Contains(u, "b2clogin") || strings.Contains(u, "/oauth2/") || strings.Contains(u, "login.live")) {
+			return true
+		}
+	}
+	return false
+}
+
+// fremdeTabsSchliessen räumt Popups weg, damit sich nichts ansammelt.
+func (b *hgBrowser) fremdeTabsSchliessen() {
+	var t hgTabs
+	if b.rufen("Target.getTargets", map[string]any{}, false, 5*time.Second, &t) != nil {
+		return
+	}
+	for _, x := range t.TargetInfos {
+		if x.Type == "page" && x.TargetID != b.ziel {
+			_ = b.rufen("Target.closeTarget", map[string]any{"targetId": x.TargetID}, false, 5*time.Second, nil)
+		}
+	}
 }
 
 // hgAufraeumen beendet den Hintergrund-Browser nach 10 Minuten ohne Abfrage.
