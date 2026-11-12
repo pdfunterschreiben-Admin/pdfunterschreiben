@@ -5321,7 +5321,7 @@ function kdEditOeffnen(k){
   $("#kdEditDel").hidden = !(k && k.id); $("#kdEditFehler").hidden = true;
   $("#kdEditDlg").showModal(); setTimeout(() => $("#kdFirma").focus(), 50);
 }
-$("#kdOpen").onclick = async () => { if(!meineKunden) await meineKundenLaden(); kdZeigen(); $("#kdDlg").showModal(); };
+$("#kdOpen").onclick = async () => { kdScanVorladen(); if(!meineKunden) await meineKundenLaden(); kdZeigen(); $("#kdDlg").showModal(); };
 $("#kdZu").onclick = () => $("#kdDlg").close();
 $("#kdSuche").oninput = () => kdZeigen();
 $("#kdNeu").onclick = () => kdEditOeffnen(null);
@@ -5366,14 +5366,39 @@ async function vkLesen(bytes){
   if(daten.firma || daten.name || daten.email || daten.tel) kdEditOeffnen({id: "", ...daten});
   else toast("Es konnten keine Daten aus der Visitenkarte erkannt werden.");
 }
+// Der Server braucht für einen neuen QR-Code einige Sekunden. Deshalb wird er schon beim Öffnen der
+// Kundendaten im Hintergrund angefordert (und nach jedem Scan der nächste) – beim Klick ist er sofort da.
+const kdFotoApi = async (event, extra = {}) => (await fetch("/api/fotos", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({event, ...extra})})).json();
+let kdScanVor = null;   // {zeit, p: Promise<Sitzung>}
+function kdScanSitzung(){
+  return (async () => {
+    const s = await kdFotoApi("fotostart");
+    if(!s.ok) throw new Error(s.error || "Konnte nicht gestartet werden.");
+    if(!s.token || !s.url) throw new Error("Ungültige Antwort vom Server.");
+    new Image().src = "/api/fotos/qr?u=" + encodeURIComponent(s.url);   // QR-Bild vorab erzeugen
+    return s;
+  })();
+}
+function kdScanVorladen(){
+  if($("#kdScan").hidden) return;
+  if(kdScanVor && Date.now() - kdScanVor.zeit < 15 * 60000) return;
+  const v = {zeit: Date.now(), p: kdScanSitzung()};
+  kdScanVor = v; v.p.catch(() => { if(kdScanVor === v) kdScanVor = null; });
+}
 async function kdScanStarten(){
   kdScanAbbruch = false; const lauf = ++kdScanLauf;
-  const api = async (event, extra = {}) => (await fetch("/api/fotos", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({event, ...extra})})).json();
+  const api = kdFotoApi;
   $("#kdScanQr").removeAttribute("src"); $("#kdScanSt").textContent = "QR-Code wird erstellt …";
   $("#kdScanDlg").showModal();
   let s;
-  try{ s = await api("fotostart"); if(!s.ok) throw new Error(s.error || "Konnte nicht gestartet werden."); if(!s.token || !s.url) throw new Error("Ungültige Antwort vom Server."); }
+  try{
+    const vor = (kdScanVor && Date.now() - kdScanVor.zeit < 20 * 60000) ? kdScanVor.p : kdScanSitzung();
+    kdScanVor = null;   // jeder QR-Code nur einmal
+    s = await vor.catch(() => kdScanSitzung());   // vorab geholter fehlgeschlagen: nochmal versuchen
+  }
   catch(e){ $("#kdScanSt").textContent = "Fehler: " + (e.message || e) + " – du kannst stattdessen ein Bild der Visitenkarte wählen."; return; }
+  if(lauf !== kdScanLauf || !$("#kdScanDlg").open) return;
+  setTimeout(kdScanVorladen, 1500);   // nächsten QR-Code schon bereitlegen
   $("#kdScanQr").src = "/api/fotos/qr?u=" + encodeURIComponent(s.url);
   $("#kdScanSt").textContent = "Mit dem Handy scannen und die Visitenkarte fotografieren (ein Foto, gerade und formatfüllend) – das Ergebnis erscheint hier automatisch.";
   const ende = () => api("fotoende", {token: s.token}).catch(() => {});
