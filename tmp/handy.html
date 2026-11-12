@@ -15,6 +15,9 @@
   .z span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   #st,#fertig{margin-top:18px;font-weight:600}.ok{color:#1d7a35}.err{color:#c8102e}
   [hidden]{display:none!important}
+  #kam{position:fixed;inset:0;z-index:9;background:#000;display:flex;flex-direction:column;gap:10px;padding:12px}
+  #kam video{flex:1;min-height:0;width:100%;object-fit:contain;background:#000}
+  #kam .reihe{margin:0}#kam .reihe button{background:#fff}#kam .reihe button.voll{background:#c8102e;color:#fff}
   #vorSeiten figure{margin:0 0 12px;background:#fff;border-radius:10px;padding:6px;box-shadow:0 2px 8px rgba(0,0,0,.08)}
   #vorSeiten img{display:block;width:100%;height:auto;border-radius:6px}
   #vorSeiten figcaption{font-size:13px;color:#666;padding:6px 4px 2px}
@@ -55,7 +58,7 @@
 <div id="ts" hidden>
   <h2>Typenschild fotografieren</h2>
   <p class="hint">Das Foto wird gelesen und die Werte erscheinen gleich in Excel.</p>
-  <label class="btn">📷 Foto aufnehmen<input type="file" id="k" accept="image/*" capture="environment"></label>
+  <label class="btn" id="tsKam">📷 Foto aufnehmen<input type="file" id="k" accept="image/*" capture="environment"></label>
   <label class="btn zwei">Aus der Galerie wählen<input type="file" id="g" accept="image/*"></label>
   <div id="st"></div>
 </div>
@@ -63,9 +66,14 @@
 <div id="vk" hidden>
   <h2>Visitenkarte fotografieren</h2>
   <p class="hint">Das Foto wird gelesen. Die erkannten Daten erscheinen gleich in der Service-Mappe am PC zur Prüfung.</p>
-  <label class="btn">📷 Foto aufnehmen<input type="file" id="vkk" accept="image/*" capture="environment"></label>
+  <label class="btn" id="vkKam">📷 Foto aufnehmen<input type="file" id="vkk" accept="image/*" capture="environment"></label>
   <label class="btn zwei">Aus der Galerie wählen<input type="file" id="vkg" accept="image/*"></label>
   <div id="vkst"></div>
+</div>
+
+<div id="kam" hidden>
+  <video id="kamV" playsinline autoplay muted></video>
+  <div class="reihe"><button type="button" id="kamAb">Abbrechen</button><button type="button" class="voll" id="kamOk">📷 Auslösen</button></div>
 </div>
 
 <script>
@@ -209,6 +217,30 @@ function tsSenden(f) {
     senden();
   });
 }
+// ---- Eingebaute Kamera: manche Handys (z. B. Galaxy S26) bieten beim Datei-Feld nur „Bilder“ an, keine Kamera.
+// Deshalb wird die Kamera direkt in der Seite geöffnet; klappt das nicht, wie bisher über das Datei-Feld.
+var kamStrom = null, kamFertig = null;
+function kamZu() {
+  if (kamStrom) kamStrom.getTracks().forEach(function (t) { t.stop(); });
+  kamStrom = null; $("kamV").srcObject = null; $("kam").hidden = true;
+}
+function kamera(fertig, ersatz) {
+  if (!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)) { ersatz.click(); return; }
+  navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: { ideal: "environment" }, width: { ideal: 2560 }, height: { ideal: 1440 } } })
+    .then(function (s) { kamStrom = s; kamFertig = fertig; $("kamV").srcObject = s; $("kam").hidden = false; })
+    .catch(function () { ersatz.click(); });
+}
+$("kamAb").onclick = kamZu;
+$("kamOk").onclick = function () {
+  var v = $("kamV"), c = document.createElement("canvas");
+  if (!v.videoWidth) return;
+  c.width = v.videoWidth; c.height = v.videoHeight; c.getContext("2d").drawImage(v, 0, 0);
+  var f = kamFertig; kamZu();
+  c.toBlob(function (b) { if (b && f) f(b); }, "image/jpeg", 0.92);
+};
+$("tsKam").onclick = function (e) { if (e.target.id === "k") return; e.preventDefault(); kamera(tsSenden, $("k")); };
+$("vkKam").onclick = function (e) { if (e.target.id === "vkk") return; e.preventDefault(); kamera(vkSenden, $("vkk")); };
+
 $("k").onchange = function (e) { tsSenden(e.target.files[0]); e.target.value = ""; };
 $("g").onchange = function (e) { tsSenden(e.target.files[0]); e.target.value = ""; };
 
