@@ -36,8 +36,9 @@
 
 <div id="fotos" hidden>
   <h2>Fotos an die Service-Mappe senden</h2>
-  <p class="hint">Fotos aus der Galerie auswählen (Typenschild zuerst). Sie werden für die Übertragung verkleinert und erscheinen gleich im Programm am PC.</p>
-  <label class="btn">Fotos auswählen<input type="file" id="f" accept="image/*" multiple></label>
+  <p class="hint">Foto direkt aufnehmen oder aus der Galerie auswählen (Typenschild zuerst). Die Fotos werden für die Übertragung verkleinert und erscheinen gleich im Programm am PC.</p>
+  <label class="btn" id="fKam">📷 Foto aufnehmen<input type="file" id="fk" accept="image/*" capture="environment"></label>
+  <label class="btn zwei">Aus der Galerie auswählen<input type="file" id="f" accept="image/*" multiple></label>
   <div id="liste"></div><div id="fertig" class="ok"></div>
 </div>
 
@@ -163,15 +164,16 @@ function exifZeit(buf) {
 
 // ---- Fotos vom Handy (Service-Mappe) ----
 var q = [], aktiv = 0, n = 0, MAX = 3;
-$("f").onchange = function (e) {
-  for (var i = 0; i < e.target.files.length; i++) {
-    var f = e.target.files[i], z = document.createElement("div");
+function einreihen(dateien) {
+  for (var i = 0; i < dateien.length; i++) {
+    var f = dateien[i], z = document.createElement("div");
     z.className = "z"; z.innerHTML = "<span></span><span>wartet …</span>"; z.firstChild.textContent = f.name;
     $("liste").appendChild(z); q.push({ f: f, z: z });
   }
-  e.target.value = ""; $("fertig").textContent = "";
+  $("fertig").textContent = "";
   for (var k = 0; k < MAX; k++) weiter();
-};
+}
+$("f").onchange = $("fk").onchange = function (e) { einreihen(e.target.files); e.target.value = ""; };
 function weiter() {
   if (aktiv >= MAX) return;
   var j = q.shift();
@@ -239,6 +241,13 @@ $("kamOk").onclick = function () {
   c.toBlob(function (b) { if (b && f) f(b); }, "image/jpeg", 0.92);
 };
 $("tsKam").onclick = function (e) { if (e.target.id === "k") return; e.preventDefault(); kamera(tsSenden, $("k")); };
+$("fKam").onclick = function (e) {
+  if (e.target.id === "fk") return; e.preventDefault();
+  kamera(function (b) {
+    var d = new Date(), zz = function (x) { return (x < 10 ? "0" : "") + x; };
+    einreihen([new File([b], "Foto " + zz(d.getHours()) + "-" + zz(d.getMinutes()) + "-" + zz(d.getSeconds()) + ".jpg", { type: "image/jpeg", lastModified: d.getTime() })]);
+  }, $("fk"));
+};
 $("vkKam").onclick = function (e) { if (e.target.id === "vkk") return; e.preventDefault(); kamera(vkSenden, $("vkk")); };
 
 $("k").onchange = function (e) { tsSenden(e.target.files[0]); e.target.value = ""; };
