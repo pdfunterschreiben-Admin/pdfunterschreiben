@@ -141,14 +141,25 @@ const [app, mock, out = '.'] = process.argv.slice(2);
   await page.waitForSelector('#toastBtn:not([hidden])', { timeout: 5000 });
   assert.strictEqual(await page.textContent('#toastBtn'), 'Nachbestellen');
   await page.click('#toastBtn');
-  await page.waitForSelector('#teilDlg[open]');
-  assert.strictEqual(await page.getAttribute('#tlFehlt', 'aria-selected'), 'true');
-  await page.click('#teilOk'); await page.waitForSelector('#teilDlg[open]', { state: 'detached' });
-  ok('aufgebraucht → nachbestellt');
+  await page.waitForFunction(() => /Auf der Bestellliste/.test(document.querySelector('#toastText').textContent), null, { timeout: 5000 });
+  assert.strictEqual(await page.textContent('#nFehlt'), '1');
+  // nochmal Nachbestellen im Bestand → Stückzahl auf der Bestellliste +1
+  await page.locator('tr', { hasText: 'Rad (Lenkrad' }).locator('[data-a=nach]').click();
+  await page.waitForFunction(() => /jetzt 2 Stück/.test(document.querySelector('#toastText').textContent), null, { timeout: 5000 });
+  ok('Nachbestellen bucht gleich auf die Bestellliste');
 
   // Sensor ebenfalls auf die Fehlliste
   await neu('BT9876543', 'Hydraulikschlauch 1/4"', '', 2, 'fehlt');
   assert.strictEqual(await page.getAttribute('#tabFehlt', 'aria-selected'), 'true');
+  // Bestellung ans Lager
+  await page.click('#bestellBtn'); await page.waitForSelector('#bestellDlg[open]');
+  assert.strictEqual(await page.locator('#bestellRows tr').count(), 2);
+  await page.fill('#bestellAn', 't.tewes@schlueter-gabelstapler.de');
+  await page.click('#liefFach'); await page.fill('#bestellText', 'dringend');
+  await shot('05a-bestellung');
+  await page.click('#bestellOk'); await page.waitForSelector('#bestellDlg[open]', { state: 'detached' });
+  await page.waitForSelector('#rows .chip.ok:has-text("bestellt")');
+  ok('Bestellliste per E-Mail ans Lager (ins Fach), Teile als bestellt markiert');
   await shot('05-fehlteile');
   // eingetroffen
   await page.locator('tr', { hasText: 'Rad (Lenkrad' }).locator('[data-a=da]').click();

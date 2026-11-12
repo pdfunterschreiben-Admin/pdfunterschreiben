@@ -105,6 +105,7 @@ func uninstall() {
 	quitRunning()
 	removeShortcuts()
 	unregisterUninstall()
+	nativAbmelden()
 
 	paths := []string{installDir(), filepath.Join(os.Getenv("LOCALAPPDATA"), AppName)}
 	if ask("Sollen auch deine Einstellungen (Anmeldung, zwischengespeicherter Bestand) gelöscht werden?\n\nDein Bestand selbst bleibt auf dem Server erhalten.\n\nWähle „Nein“, wenn du das Programm später wieder installieren willst.") {

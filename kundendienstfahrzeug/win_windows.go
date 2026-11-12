@@ -165,3 +165,21 @@ func openExternal(u string) { _ = hidden("rundll32.exe", "url.dll,FileProtocolHa
 
 // ordnerZeigen öffnet einen Ordner im Explorer.
 func ordnerZeigen(p string) { _ = exec.Command("explorer.exe", p).Start() }
+
+// nativRegistrieren meldet die Hintergrund-Verbindung bei Chrome und Edge an (nur für diesen
+// Windows-Benutzer, ohne Administratorrechte).
+func nativRegistrieren() {
+	m := filepath.Join(installDir(), NativeName+".json")
+	if err := os.WriteFile(m, nativManifest(installedExe()), 0o644); err != nil {
+		return
+	}
+	for _, k := range []string{`HKCU\Software\Google\Chrome\NativeMessagingHosts\`, `HKCU\Software\Microsoft\Edge\NativeMessagingHosts\`} {
+		_ = hidden("reg.exe", "add", k+NativeName, "/ve", "/t", "REG_SZ", "/d", m, "/f").Run()
+	}
+}
+
+func nativAbmelden() {
+	for _, k := range []string{`HKCU\Software\Google\Chrome\NativeMessagingHosts\`, `HKCU\Software\Microsoft\Edge\NativeMessagingHosts\`} {
+		_ = hidden("reg.exe", "delete", k+NativeName, "/f").Run()
+	}
+}

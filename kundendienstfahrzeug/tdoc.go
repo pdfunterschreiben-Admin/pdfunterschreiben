@@ -69,7 +69,17 @@ func (a *app) handleTdocStart(w http.ResponseWriter, r *http.Request) {
 	tdocAuftraege[tok] = &tdocAuftrag{nr: teileNr(req.Nr), start: time.Now()}
 	gesehen := erweiterungGesehen
 	tdocMu.Unlock()
-	openExternal(u + "&kdf=" + fmt.Sprintf("%d_%s", Port, tok))
+	ziel := u + "&kdf=" + fmt.Sprintf("%d_%s", Port, tok)
+	// Ist die Erweiterung im Hintergrund verbunden, öffnet sie T-Doc unsichtbar – sonst sichtbarer Tab
+	if nativVerbunden() {
+		select {
+		case nativAuftraege <- map[string]string{"typ": "tdoc", "token": tok, "url": ziel}:
+			writeJSON(w, map[string]any{"ok": true, "token": tok, "erweiterung": gesehen, "hintergrund": true})
+			return
+		default:
+		}
+	}
+	openExternal(ziel)
 	writeJSON(w, map[string]any{"ok": true, "token": tok, "erweiterung": gesehen})
 }
 
@@ -118,16 +128,18 @@ func (a *app) handleTdocErgebnis(w http.ResponseWriter, r *http.Request) {
 
 func erweiterungOrdner() string { return filepath.Join(dataDir(), "T-Doc-Erweiterung") }
 
-// handleTdocErweiterung legt die Erweiterung als Ordner ab (zum Laden über „Entpackte Erweiterung laden“)
-// und öffnet ihn im Explorer.
-func (a *app) handleTdocErweiterung(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "POST", http.StatusMethodNotAllowed)
-		return
+// erweiterungAktualisieren schreibt die Dateien der Erweiterung neu, wenn der Ordner schon existiert
+// (nach einem Programm-Update genügt dann in Chrome „Aktualisieren“ bei der Erweiterung).
+func erweiterungAktualisieren() {
+	if _, err := os.Stat(erweiterungOrdner()); err == nil {
+		_ = erweiterungSchreiben()
 	}
+}
+
+func erweiterungSchreiben() error {
 	ziel := erweiterungOrdner()
 	sub, _ := fs.Sub(erweiterungFS, "chrome")
-	err := fs.WalkDir(sub, ".", func(p string, d fs.DirEntry, err error) error {
+	return fs.WalkDir(sub, ".", func(p string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return err
 		}
@@ -141,7 +153,17 @@ func (a *app) handleTdocErweiterung(w http.ResponseWriter, r *http.Request) {
 		}
 		return os.WriteFile(out, b, 0o644)
 	})
-	if err != nil {
+}
+
+// handleTdocErweiterung legt die Erweiterung als Ordner ab (zum Laden über „Entpackte Erweiterung laden“)
+// und öffnet ihn im Explorer.
+func (a *app) handleTdocErweiterung(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "POST", http.StatusMethodNotAllowed)
+		return
+	}
+	ziel := erweiterungOrdner()
+	if err := erweiterungSchreiben(); err != nil {
 		writeJSON(w, map[string]any{"ok": false, "error": "Der Ordner konnte nicht angelegt werden: " + err.Error()})
 		return
 	}

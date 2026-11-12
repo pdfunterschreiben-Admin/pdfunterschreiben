@@ -19,6 +19,11 @@ func main() {
 		return false
 	}
 
+	// Vom Browser als Hintergrund-Verbindung der T-Doc-Erweiterung gestartet
+	if istNativAufruf(args) {
+		nativHost()
+		return
+	}
 	if has("--urheber") {
 		info(urheber)
 		return
@@ -42,6 +47,7 @@ func main() {
 func platformStart(relaunch bool) {
 	cleanupOld()
 	_ = os.WriteFile(iconPath(), appIcon, 0o644)
+	go func() { nativRegistrieren(); erweiterungAktualisieren() }()
 	if relaunch {
 		registerUninstall() // neue Versionsnummer in „Apps & Features“
 	}

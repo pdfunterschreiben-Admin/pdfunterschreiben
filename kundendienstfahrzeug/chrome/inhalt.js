@@ -13,7 +13,7 @@
   function los() {
     readToyotaPart(a.nr, 45000).then(function (r) {
       // Nicht angemeldet: Auftrag behalten – nach der Anmeldung lädt T-Doc neu und es geht weiter
-      if (r && r.error && /anmelden/i.test(r.error)) return;
+      if (r && r.error && /anmelden/i.test(r.error)) { chrome.runtime.sendMessage({ kdf: a.kdf, nr: a.nr, anmelden: true }); return; }
       try { sessionStorage.removeItem(K); } catch (e) {}
       chrome.runtime.sendMessage({ kdf: a.kdf, nr: a.nr, name: r && r.name || '', error: r && r.error || '' });
     });

@@ -139,7 +139,7 @@ td.akt{white-space:nowrap;width:1%;text-align:right}
 dialog{border:0;border-radius:12px;padding:0;background:var(--sheet);color:var(--ink);width:min(460px,calc(100vw - 32px));max-height:calc(100vh - 32px);box-shadow:0 20px 60px rgba(0,0,0,.35)}
 dialog::backdrop{background:rgba(10,15,30,.55)}
 #teilDlg{width:min(600px,calc(100vw - 32px))}
-#helpDlg,#importDlg{width:min(680px,calc(100vw - 32px))}
+#helpDlg,#importDlg,#bestellDlg{width:min(680px,calc(100vw - 32px))}
 #etDlg{width:min(820px,calc(100vw - 32px))}
 .et-tabs{display:flex;flex-wrap:wrap;gap:6px}
 .et-tabs button[aria-pressed="true"]{background:var(--pen-soft);color:var(--pen);border-color:var(--pen);font-weight:600}
@@ -203,7 +203,7 @@ dialog::backdrop{background:rgba(10,15,30,.55)}
         <div class="stats">
           <div class="stat"><b id="stPos">–</b><span>Positionen</span></div>
           <div class="stat"><b id="stStk">–</b><span>Stück im Wagen</span></div>
-          <div class="stat"><b id="stFehlt">–</b><span>fehlen</span></div>
+          <div class="stat"><b id="stFehlt">–</b><span>zu bestellen</span></div>
         </div>
         <div class="row" style="justify-content:space-between"><span class="chip info" id="syncChip">Wird geladen …</span><button class="ghost" id="syncBtn" title="Jetzt mit dem Server abgleichen">↻ Abgleichen</button></div>
       </section>
@@ -235,7 +235,7 @@ dialog::backdrop{background:rgba(10,15,30,.55)}
       <div class="toolbar">
         <div class="tabs" role="tablist" aria-label="Liste">
           <button role="tab" id="tabBestand" aria-selected="true">Fahrzeugbestand <span class="n" id="nBestand">0</span></button>
-          <button role="tab" id="tabFehlt" aria-selected="false">Fehlende Ersatzteile <span class="n" id="nFehlt">0</span></button>
+          <button role="tab" id="tabFehlt" aria-selected="false">Bestellliste <span class="n" id="nFehlt">0</span></button>
         </div>
         <div class="such"><input type="search" id="such" placeholder="Nummer, Bezeichnung oder Lagerort suchen" aria-label="Suchen"></div>
         <select id="ortFilter" aria-label="Lagerort"><option value="">Alle Lagerorte</option></select>
@@ -245,6 +245,7 @@ dialog::backdrop{background:rgba(10,15,30,.55)}
         <div class="doc-head">
           <div class="col" style="gap:2px"><span class="doc-name" id="listTitle">Fahrzeugbestand</span><span class="hint" id="listInfo"></span></div>
           <div class="row"><span class="chip warn" id="offlineBox" hidden>Offline – nur Ansicht</span>
+            <button type="button" class="primary" id="bestellBtn" hidden>📧 Ans Lager schicken</button>
             <select id="sortSel" aria-label="Sortierung" style="width:auto;padding:5px 8px;font-size:13.5px;background:var(--sheet)">
               <option value="name">nach Bezeichnung</option>
               <option value="nr">nach Teilenummer</option>
@@ -311,7 +312,7 @@ dialog::backdrop{background:rgba(10,15,30,.55)}
     <div class="dlg-body col" style="gap:12px">
       <span class="hint" id="importInfo"></span>
       <label class="field" id="importZielBox">Eintragen in
-        <select id="importZiel"><option value="fehlt">Fehlende Ersatzteile</option><option value="bestand">Fahrzeugbestand</option><option value="datei">wie in der Datei (je Tabellenblatt)</option></select>
+        <select id="importZiel"><option value="fehlt">Bestellliste</option><option value="bestand">Fahrzeugbestand</option><option value="datei">wie in der Datei (je Tabellenblatt)</option></select>
       </label>
       <label class="field" id="importOrtBox">Lagerort (für alle, optional)
         <input type="text" id="importOrt" list="ortListe" placeholder="leer lassen = wie in der Liste">
@@ -339,6 +340,28 @@ dialog::backdrop{background:rgba(10,15,30,.55)}
   </form>
 </dialog>
 
+<dialog id="bestellDlg">
+  <form method="dialog" class="dlg" id="bestellForm" autocomplete="off">
+    <div class="dlg-head"><strong>Bestellung ans Lager</strong><button type="button" class="ghost" id="bestellZu">Schließen</button></div>
+    <div class="dlg-body col" style="gap:12px">
+      <label class="field">An (E-Mail, mehrere mit ; trennen)
+        <input type="text" id="bestellAn" list="bestellAnListe" placeholder="t.tewes@schlueter-gabelstapler.de">
+      </label>
+      <datalist id="bestellAnListe"></datalist>
+      <div class="field" style="font-size:13px;font-weight:500">Lieferung
+        <div class="tabs" role="radiogroup" style="margin-top:5px"><button type="button" id="liefNse" aria-selected="true">per NSE</button><button type="button" id="liefFach" aria-selected="false">ins Fach</button></div>
+      </div>
+      <label class="field">Bemerkung (optional)
+        <input type="text" id="bestellText" placeholder="z. B. dringend, Kunde wartet">
+      </label>
+      <label class="check"><input type="checkbox" id="bestellAlle"> Schon bestellte Teile noch einmal mitschicken</label>
+      <div class="preview"><table><thead><tr><th>Stk.</th><th>Teilenummer</th><th>Bezeichnung</th></tr></thead><tbody id="bestellRows"></tbody></table></div>
+      <p class="err" id="bestellErr" hidden></p>
+    </div>
+    <div class="dlg-foot"><span class="hint">Outlook öffnet die E-Mail mit der Excel-Mappe – du schickst sie selbst ab.</span><button class="primary" id="bestellOk">E-Mail erstellen</button></div>
+  </form>
+</dialog>
+
 <dialog id="erwDlg">
   <form method="dialog" class="dlg">
     <div class="dlg-head"><strong>T-Doc-Verbindung einrichten (einmalig)</strong><button class="ghost" value="x">Schließen</button></div>
@@ -348,7 +371,8 @@ dialog::backdrop{background:rgba(10,15,30,.55)}
         <li>Im Browser in die Adresszeile <b>chrome://extensions</b> eintippen (bei Edge: <b>edge://extensions</b>) und Enter drücken.</li>
         <li>Rechts oben bzw. links unten den <b>Entwicklermodus</b> einschalten.</li>
         <li><b>„Entpackte Erweiterung laden“</b> klicken und diesen Ordner wählen (er ist schon im Explorer geöffnet):<br><span class="val" id="erwOrdner" style="word-break:break-all"></span> <button type="button" class="link" id="erwKopieren">Pfad kopieren</button></li>
-        <li>Fertig. Ab jetzt reicht im Programm <b>T-Doc ↗</b> – die Bezeichnung wird eingetragen und der T-Doc-Tab schließt sich wieder.</li>
+        <li>Fertig. Ab jetzt reicht im Programm <b>T-Doc ↗</b> (danach sogar nur die Nummer) – T-Doc wird unsichtbar im Hintergrund gefragt und die Bezeichnung eingetragen.</li>
+        <li>Nach einem Programm-Update bei der Erweiterung einmal auf <b>↻ (Aktualisieren)</b> klicken.</li>
       </ol>
       <p class="hint">Falls „Entwicklermodus“ gesperrt ist (Firmenrichtlinie), geht es weiter wie bisher über das Lesezeichen „T-Doc → Excel“.</p>
     </div>
@@ -362,7 +386,7 @@ dialog::backdrop{background:rgba(10,15,30,.55)}
       <h3>Zwei Listen</h3>
       <ul>
         <li><b>Fahrzeugbestand</b> – was im Servicewagen liegt, mit Lagerort und Stückzahl.</li>
-        <li><b>Fehlende Ersatzteile</b> – was nachbestellt werden muss. Ist ein Teil da, auf <b>✓ Eingetroffen</b> klicken: es wandert mit seiner Stückzahl in den Bestand.</li>
+        <li><b>Bestellliste</b> – was nachbestellt werden muss. Im Bestand auf <b>Nachbestellen</b> klicken, dann steht das Teil gleich hier. Mit <b>📧 Ans Lager schicken</b> geht die Liste als Excel-Mappe per E-Mail (Outlook) ans Lager – mit Vermerk „per NSE“ oder „ins Fach“. Ist ein Teil da, auf <b>✓ Eingetroffen</b> klicken: es wandert mit seiner Stückzahl in den Bestand.</li>
       </ul>
       <h3>Teile erfassen</h3>
       <ul>
@@ -370,11 +394,11 @@ dialog::backdrop{background:rgba(10,15,30,.55)}
         <li>Ist die Nummer schon bekannt (bei dir oder bei Kollegen), wird die Bezeichnung automatisch eingetragen.</li>
         <li><b>📷 Vom Foto</b>: Foto vom Etikett wählen – die Teilenummer wird gelesen. Bitte die erkannte Nummer kurz prüfen.</li>
         <li><b>T-Doc ↗</b> öffnet die Nummer in Toyota T-Doc (im Browser, in dem du bei Toyota angemeldet bist). Dort auf das Lesezeichen „T-Doc → Excel“ klicken und zurück ins Programm – die Bezeichnung wird dann automatisch eingetragen.</li>
-        <li><b>📋 Ersatzteilliste</b>: dieselbe Liste wie im Reparaturauftrag der Service-Mappe (Außendienst &amp; Werkstatt, Batteriedienst). Mengen eintragen und übernehmen – in den Bestand oder auf die Fehlliste.</li>
+        <li><b>📋 Ersatzteilliste</b>: dieselbe Liste wie im Reparaturauftrag der Service-Mappe (Außendienst &amp; Werkstatt, Batteriedienst). Mengen eintragen und übernehmen – in den Bestand oder auf die Bestellliste.</li>
         <li><b>📋 Aus T-Doc</b>: In T-Doc die gewünschten Teile anklicken (rot markiert), das Lesezeichen „T-Doc → Excel“ drücken und dann hier auf „Aus T-Doc“. Das Lesezeichen ist dasselbe wie in der Service-Mappe.</li>
       </ul>
       <h3>Entnehmen und nachfüllen</h3>
-      <p>In der Liste mit <b>−</b> und <b>＋</b> die Stückzahl ändern. Mehrere Klicks hintereinander werden zusammen gespeichert. Ist ein Teil aufgebraucht, bietet das Programm an, es auf die Fehlliste zu setzen.</p>
+      <p>In der Liste mit <b>−</b> und <b>＋</b> die Stückzahl ändern. Mehrere Klicks hintereinander werden zusammen gespeichert. Ist ein Teil aufgebraucht, bietet das Programm an, es gleich auf die Bestellliste zu setzen.</p>
       <h3>Handy</h3>
       <p>Den QR-Code links mit dem Handy scannen und dort einmal mit derselben Arbeits-E-Mail anmelden. Änderungen auf dem Handy erscheinen hier nach spätestens einer halben Minute (oder sofort mit „↻ Abgleichen“).</p>
       <h3>Ohne Internet</h3>
@@ -476,12 +500,12 @@ const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({"&":"&amp
 /* Verbindung zum Programm halten: schließt man das Fenster, beendet sich das Programm. */
 try { new EventSource("/api/alive"); } catch(e) {}
 
-const state = {user: null, blocked: false, testChannel: true, people: {}, lastStart: null, tab: "bestand", sort: "name", handyZu: false, erwOk: false};
+const state = {user: null, blocked: false, testChannel: true, people: {}, lastStart: null, tab: "bestand", sort: "name", handyZu: false, erwOk: false, bestellAn: [], lieferung: "NSE"};
 let saveT;
 function persistNow(){
   clearTimeout(saveT);
-  const {user, blocked, testChannel, people, lastStart, tab, sort, handyZu, erwOk} = state;
-  return fetch("/api/settings", {method: "PUT", headers: {"Content-Type": "application/json"}, body: JSON.stringify({user, blocked, testChannel, people, lastStart, tab, sort, handyZu, erwOk})})
+  const {user, blocked, testChannel, people, lastStart, tab, sort, handyZu, erwOk, bestellAn, lieferung} = state;
+  return fetch("/api/settings", {method: "PUT", headers: {"Content-Type": "application/json"}, body: JSON.stringify({user, blocked, testChannel, people, lastStart, tab, sort, handyZu, erwOk, bestellAn, lieferung})})
     .catch(() => toast("Einstellungen konnten nicht gespeichert werden."));
 }
 function persist(){ clearTimeout(saveT); saveT = setTimeout(persistNow, 300); }
@@ -687,7 +711,8 @@ function render(){
   $("#ortListe").innerHTML = orte.map(o => `<option value="${esc(o)}">`).join("");
   $("#sortSel").value = state.sort;
 
-  $("#listTitle").textContent = state.tab === "bestand" ? "Fahrzeugbestand" : "Fehlende Ersatzteile";
+  $("#listTitle").textContent = state.tab === "bestand" ? "Fahrzeugbestand" : "Bestellliste";
+  $("#bestellBtn").hidden = state.tab !== "fehlt";
   const liste = sichtbare();
   const alle = state.tab === "bestand" ? b : f;
   $("#listInfo").textContent = !g ? "" : (liste.length === alle.length ? `${alle.length} ${alle.length === 1 ? "Eintrag" : "Einträge"}` : `${liste.length} von ${alle.length} Einträgen`)
@@ -710,11 +735,11 @@ function render(){
   $("#rows").innerHTML = liste.map(t => {
     const m = menge(t), o = offen.get(t.id);
     const akt = t.liste === "bestand"
-      ? `<button type="button" data-a="nach" title="Auf die Liste „Fehlende Ersatzteile“ setzen"${dis}>Nachbestellen</button>`
+      ? `<button type="button" data-a="nach" title="Gleich auf die Bestellliste setzen"${dis}>Nachbestellen</button>`
       : `<button type="button" data-a="da" title="Ist eingetroffen – in den Fahrzeugbestand übernehmen"${dis}>✓ Eingetroffen</button>`;
     return `<tr data-id="${esc(t.id)}" class="${neuMarkiert.has(t.id) ? "neu" : ""}">
       <td class="nr"><button type="button" data-a="edit" title="Bearbeiten">${esc(t.nr)}</button></td>
-      <td class="name">${esc(t.name)}${state.sort === "zeit" && t.zeit ? `<span class="zeit">${esc(zeitText(t.zeit))}</span>` : ""}</td>
+      <td class="name">${esc(t.name)}${t.liste === "fehlt" && t.bestellt ? ` <span class="chip ok" title="Bestellung ans Lager geschickt">bestellt ${esc(new Date(t.bestellt).toLocaleDateString("de-DE", {day: "2-digit", month: "2-digit"}))}</span>` : ""}${state.sort === "zeit" && t.zeit ? `<span class="zeit">${esc(zeitText(t.zeit))}</span>` : ""}</td>
       <td class="ort">${esc(t.ort || "–")}</td>
       <td class="menge"><span class="stepper${m === 0 && t.liste === "bestand" ? " leer" : ""}${o ? " wartet" : ""}"><button type="button" data-a="minus" aria-label="eins weniger"${dis}>−</button><output>${zahl(m)}</output><button type="button" data-a="plus" aria-label="eins mehr"${dis}>＋</button></span></td>
       <td class="akt">${akt} <button type="button" class="ghost" data-a="edit" title="Bearbeiten">✎</button></td></tr>`;
@@ -730,7 +755,7 @@ $("#rows").addEventListener("click", e => {
   if(nichtJetzt()) return;
   if(a === "minus") return mengeAendern(t, -1);
   if(a === "plus") return mengeAendern(t, +1);
-  if(a === "nach") return oeffneTeil({liste: "fehlt", nr: t.nr, name: t.name, ort: t.ort, menge: 1}, "Nachbestellen");
+  if(a === "nach") return nachbestellen(t);
   if(a === "da") return eingetroffen(t);
 });
 
@@ -750,7 +775,7 @@ async function mengeSenden(id){
   if(r.ok){
     const t = lager.teile.find(x => x.id === id);
     if(t && t.liste === "bestand" && t.menge === 0 && o.delta < 0)
-      toast(`„${t.name}“ ist aufgebraucht.`, 9000, {text: "Nachbestellen", run: () => oeffneTeil({liste: "fehlt", nr: t.nr, name: t.name, ort: t.ort, menge: 1}, "Nachbestellen")});
+      toast(`„${t.name}“ ist aufgebraucht.`, 9000, {text: "Nachbestellen", run: () => nachbestellen(t)});
   } else render();
 }
 async function offenSenden(){ await Promise.all([...offen.keys()].map(id => { clearTimeout(offen.get(id).timer); return mengeSenden(id); })); }
@@ -819,8 +844,8 @@ function pruefeTreffer(){
   const g = hier[0] || dort[0];
   const wo = t => `${menge(t)} Stück${t.ort ? " in „" + t.ort + "“" : ""}`;
   $("#trefferText").textContent = hier.length
-    ? `Schon ${teil.liste === "bestand" ? "im Wagen" : "auf der Fehlliste"}: ${hier.map(wo).join(", ")}.`
-    : `Steht ${g.liste === "bestand" ? "im Fahrzeugbestand" : "auf der Fehlliste"} (${wo(g)}).`;
+    ? `Schon ${teil.liste === "bestand" ? "im Wagen" : "auf der Bestellliste"}: ${hier.map(wo).join(", ")}.`
+    : `Steht ${g.liste === "bestand" ? "im Fahrzeugbestand" : "auf der Bestellliste"} (${wo(g)}).`;
   $("#trefferBtn").onclick = () => oeffneTeil(g);
   box.hidden = false;
 }
@@ -844,10 +869,11 @@ let tdocLauf = 0;
 async function tdocAbfrage(n){
   const lauf = ++tdocLauf;
   const hint = t => { $("#nameHint").innerHTML = t; $("#nameHint").hidden = !t; };
-  hint("T-Doc sucht die Bezeichnung im Browser …");
+  hint("T-Doc sucht die Bezeichnung …");
   let st;
   try{ st = await (await fetch("/api/tdoc/start", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({nr: n})})).json(); }catch(e){ return hint("T-Doc konnte nicht geöffnet werden."); }
   if(!st.ok) return hint(esc(st.error));
+  hint(st.hintergrund ? "T-Doc sucht die Bezeichnung im Hintergrund …" : "T-Doc sucht die Bezeichnung im Browser …");
   const t0 = Date.now();
   while(lauf === tdocLauf && $("#teilDlg").open && Date.now() - t0 < 75000){
     await new Promise(r => setTimeout(r, 700));
@@ -910,7 +936,7 @@ $("#teilForm").addEventListener("submit", async e => {
   uebernehmen(r);
   if(x.liste !== state.tab){ state.tab = x.liste; persist(); }
   render(); teilZu();
-  toast(x.id ? "Gespeichert." : `„${x.name}“ ${x.liste === "bestand" ? "ist im Bestand" : "steht auf der Fehlliste"}.`);
+  toast(x.id ? "Gespeichert." : `„${x.name}“ ${x.liste === "bestand" ? "ist im Bestand" : "steht auf der Bestellliste"}.`);
 });
 $("#teilDel").onclick = async () => {
   if(!teil || !teil.id || nichtJetzt()) return;
@@ -922,7 +948,12 @@ $("#teilDel").onclick = async () => {
     toast("Gelöscht.", 8000, {text: "Rückgängig", run: () => aendern("wl_speichern", {teil: {liste: t.liste, nr: t.nr, name: t.name, ort: t.ort, menge: t.menge}}, () => toast("Wiederhergestellt."))});
   }
 };
-$("#teilNachbestellen").onclick = () => { if(teil) oeffneTeil({liste: "fehlt", nr: teil.nr, name: teil.name, ort: teil.ort, menge: 1}, "Nachbestellen"); };
+$("#teilNachbestellen").onclick = () => { if(teil && teil.id){ const t = lager.teile.find(x => x.id === teil.id); teilZu(); if(t) nachbestellen(t); } };
+// Nachbestellen: gleich auf die Bestellliste (gleiche Nummer, noch nicht bestellt → Stückzahl +1)
+async function nachbestellen(t){
+  if(nichtJetzt()) return;
+  await aendern("wl_nachbestellen", {teilId: t.id}, r => toast(`Auf der Bestellliste: ${t.name}` + (r.menge > 1 ? ` (jetzt ${r.menge} Stück)` : ""), 6000, {text: "Zur Bestellliste", run: () => { state.tab = "fehlt"; persist(); render(); }}));
+}
 // Kleine Rückfrage im Stil des Programms (kein Browser-Dialog)
 function frage(titel, text, ja){
   return new Promise(res => {
@@ -1114,6 +1145,59 @@ $("#etForm").addEventListener("submit", e => {
   importOeffnen({quelle: "liste", blaetter: [{art: state.tab, titel: "Ersatzteilliste", zeilen}]}, () => { for(const k of Object.keys(etMengen)) delete etMengen[k]; });
 });
 
+/* ---------- Bestellung ans Lager ---------- */
+const LAGER_VORSCHLAEGE = ["t.tewes@schlueter-gabelstapler.de", "j.koch@schlueter-gabelstapler.de"];
+let lieferung = "NSE";
+function lief(w){ lieferung = w; $("#liefNse").setAttribute("aria-selected", w === "NSE"); $("#liefFach").setAttribute("aria-selected", w === "Fach"); }
+$("#liefNse").onclick = () => lief("NSE"); $("#liefFach").onclick = () => lief("Fach");
+const bestellErr = m => { $("#bestellErr").textContent = m || ""; $("#bestellErr").hidden = !m; };
+const bestellTeile = () => lager.teile.filter(t => t.liste === "fehlt" && ($("#bestellAlle").checked || !t.bestellt)).sort((a, b) => a.name.localeCompare(b.name, "de"));
+function bestellRender(){
+  const z = bestellTeile();
+  $("#bestellRows").innerHTML = z.map(t => `<tr><td>${zahl(menge(t))}</td><td class="nr">${esc(t.nr)}</td><td>${esc(t.name)}</td></tr>`).join("") || '<tr><td colspan="3" class="hint">Nichts zu bestellen – alles schon bestellt.</td></tr>';
+  $("#bestellOk").disabled = !z.length || !kannAendern();
+  $("#bestellOk").textContent = z.length ? `E-Mail mit ${z.length} ${z.length === 1 ? "Teil" : "Teilen"} erstellen` : "E-Mail erstellen";
+}
+$("#bestellAlle").onchange = bestellRender;
+$("#bestellBtn").onclick = () => {
+  if(nichtJetzt()) return;
+  const liste = [...new Set([...(state.bestellAn || []), ...LAGER_VORSCHLAEGE])];
+  $("#bestellAnListe").innerHTML = liste.map(a => `<option value="${esc(a)}">`).join("");
+  $("#bestellAn").value = (state.bestellAn || [])[0] || "";
+  lief(state.lieferung || "NSE"); $("#bestellText").value = ""; $("#bestellAlle").checked = false; bestellErr("");
+  bestellRender(); $("#bestellDlg").showModal();
+};
+$("#bestellZu").onclick = () => $("#bestellDlg").close();
+$("#bestellForm").addEventListener("submit", async e => {
+  e.preventDefault();
+  if(nichtJetzt()) return;
+  const an = $("#bestellAn").value.split(/[;, ]+/).map(x => x.trim().toLowerCase()).filter(Boolean);
+  if(!an.length || an.some(x => !/^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/.test(x))) return bestellErr("Bitte eine gültige E-Mail-Adresse eintragen.");
+  const teile = bestellTeile(); if(!teile.length) return;
+  const f = lager.fahrzeug || {}, wer = (f.fahrer || (state.user && state.user.name) || "").trim();
+  const wie = lieferung === "NSE" ? "per NSE" : "ins Fach";
+  const datum = new Date().toLocaleDateString("de-DE");
+  const bem = $("#bestellText").value.trim();
+  const info = [["Kennzeichen", f.kennzeichen || ""], ["Fahrer", wer], ["Datum", datum], ["Lieferung", wie]].concat(bem ? [["Bemerkung", bem]] : []);
+  const zeilen = teile.map(t => ({nr: t.nr, name: t.name, ort: t.ort || "", menge: menge(t)}));
+  const text = `Hallo,\n\nbitte folgende Ersatzteile ${wie} liefern` + (f.kennzeichen ? ` (Kundendienstfahrzeug ${f.kennzeichen})` : "") + ":\n\n"
+    + zeilen.map(z => `${z.menge} × ${z.nr}  ${z.name}`).join("\n") + (bem ? `\n\nBemerkung: ${bem}` : "") + `\n\nDie Liste hängt auch als Excel-Datei an.\n\nViele Grüße\n${wer}`;
+  $("#bestellOk").disabled = true; bestellErr("");
+  let r;
+  try{
+    r = await (await fetch("/api/bestellung", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({
+      an: an.join("; "), betreff: `Ersatzteilbestellung ${f.kennzeichen || wer} – ${wie}`, text,
+      datei: `Bestellung-${(f.kennzeichen || "").replace(/[^A-Za-z0-9ÄÖÜäöü]+/g, "-")}-${new Date().toISOString().slice(0, 10)}.xlsx`.replace("--", "-"),
+      info, blaetter: [{titel: "Bestellung", art: "fehlt", zeilen}]})})).json();
+  }catch(err){ r = {ok: false, error: "Keine Verbindung zum Programm."}; }
+  $("#bestellOk").disabled = false;
+  if(!r.ok) return bestellErr(r.error || "Die E-Mail konnte nicht erstellt werden.");
+  state.bestellAn = [an.join("; "), ...(state.bestellAn || []).filter(x => x !== an.join("; "))].slice(0, 8); state.lieferung = lieferung; persist();
+  $("#bestellDlg").close();
+  await aendern("wl_bestellt", {ids: teile.map(t => t.id)});
+  toast(r.via === "explorer" ? "Kein Outlook gefunden – die Excel-Datei liegt im geöffneten Ordner." : "E-Mail ist geöffnet – bitte in Outlook abschicken. Die Teile sind als bestellt markiert.", 8000);
+});
+
 /* ---------- Excel-Export ---------- */
 async function saveBlob(blob, name){
   const types = [{description: "Excel-Arbeitsmappe", accept: {"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [".xlsx"]}}];
@@ -1136,7 +1220,7 @@ $("#exportBtn").onclick = async () => {
   try{
     const f = lager.fahrzeug || {};
     const info = [["Kennzeichen", f.kennzeichen || ""], ["Fahrer", f.fahrer || ""], ["Stand", new Date().toLocaleString("de-DE", {dateStyle: "medium", timeStyle: "short"})]];
-    const r = await fetch("/api/excel/export", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({info, blaetter: [blatt("bestand", "Bestand"), blatt("fehlt", "Fehlende Ersatzteile")]})});
+    const r = await fetch("/api/excel/export", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({info, blaetter: [blatt("bestand", "Bestand"), blatt("fehlt", "Bestellliste")]})});
     if(!r.ok) throw new Error((await r.text()).trim() || "Die Excel-Datei konnte nicht erstellt werden.");
     const saved = await saveBlob(await r.blob(), `Kundendienstfahrzeug-${(f.kennzeichen || "").replace(/[^A-Z0-9ÄÖÜ]+/gi, "") ? (f.kennzeichen.replace(/[^A-Z0-9ÄÖÜ]+/gi, "-") + "-") : ""}${new Date().toISOString().slice(0, 10)}.xlsx`);
     if(saved) toast(`Gespeichert: ${saved}`);
@@ -1364,7 +1448,7 @@ async function refreshBlock(event){
 (async () => {
   try{
     const s = await (await fetch("/api/settings", {cache: "no-store"})).json();
-    for(const k of ["user", "blocked", "testChannel", "people", "lastStart", "tab", "sort", "handyZu", "erwOk"]) if(s[k] !== undefined && s[k] !== null) state[k] = s[k];
+    for(const k of ["user", "blocked", "testChannel", "people", "lastStart", "tab", "sort", "handyZu", "erwOk", "bestellAn", "lieferung"]) if(s[k] !== undefined && s[k] !== null) state[k] = s[k];
   }catch(e){}
   handyFold(!!state.handyZu);
   renderUser(); render();

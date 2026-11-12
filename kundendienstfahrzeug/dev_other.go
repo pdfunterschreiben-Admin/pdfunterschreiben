@@ -11,6 +11,10 @@ import (
 )
 
 func main() {
+	if istNativAufruf(os.Args[1:]) {
+		nativHost()
+		return
+	}
 	// Prüfserver (z. B. die Apps-Script-Nachbildung in test/) statt Google
 	if u := os.Getenv("KDF_TEST_SERVER"); u != "" {
 		ReportURL, ReportKey, serverPrefix = u, os.Getenv("KDF_TEST_KEY"), "http://127.0.0.1:"
@@ -18,7 +22,7 @@ func main() {
 	runApp(false)
 }
 
-func platformStart(relaunch bool) {}
+func platformStart(relaunch bool) { go erweiterungAktualisieren() }
 func registerUninstall()          {}
 func info(text string)            { fmt.Println("INFO:", text) }
 func fail(text string)            { fmt.Println("FEHLER:", text) }
@@ -40,3 +44,8 @@ func windowsOCR(img []byte) (string, error) {
 }
 
 func ordnerZeigen(p string) { fmt.Println("ORDNER:", p) }
+
+func mailOeffnen(an, betreff, text, datei string) (string, error) {
+	fmt.Println("MAIL an", an, "|", betreff, "|", datei)
+	return "test", nil
+}

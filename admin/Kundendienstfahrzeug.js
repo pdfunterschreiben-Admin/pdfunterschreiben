@@ -14,7 +14,7 @@
 //   „Kundendienstfahrzeuge“         – je Nutzer Kennzeichen und Fahrer
 
 const WL_BLATT = 'Kundendienstfahrzeug';
-const WL_HEAD = ['ID', 'E-Mail', 'Liste', 'Teilenummer', 'Bezeichnung', 'Lagerort', 'Stückzahl', 'Version', 'Geändert', 'Geändert über'];
+const WL_HEAD = ['ID', 'E-Mail', 'Liste', 'Teilenummer', 'Bezeichnung', 'Lagerort', 'Stückzahl', 'Version', 'Geändert', 'Geändert über', 'Bestellt am'];
 const WL_KATALOG = 'Kundendienstfahrzeug Katalog';
 const WL_FAHRZEUGE = 'Kundendienstfahrzeuge';
 const WL_FAHRZEUG_HEAD = ['E-Mail', 'Kennzeichen', 'Fahrer', 'Geändert', 'Geändert über'];
@@ -50,6 +50,7 @@ function wlNutzer(ss, d) {
 
 function wlLaden(ss) {
   const s = sheet(ss, WL_BLATT, WL_HEAD);
+  if (s.getLastColumn() < WL_HEAD.length) s.getRange(1, 1, 1, WL_HEAD.length).setValues([WL_HEAD]).setFontWeight('bold');
   const last = s.getLastRow();
   const rows = last < 2 ? [] : s.getRange(2, 1, last - 1, WL_HEAD.length).getValues();
   return { s: s, rows: rows.filter(r => r[0] !== '') };
@@ -58,14 +59,15 @@ function wlLaden(ss) {
 // Schreibt alle Zeilen zurück (die Datenmenge ist klein, so bleiben Löschen und Umbuchen einfach).
 function wlSchreiben(t) {
   const s = t.s, alt = Math.max(0, s.getLastRow() - 1);
-  const werte = t.rows.map(r => [r[0], r[1], r[2], wlZelle(String(r[3])), wlZelle(String(r[4])), wlZelle(String(r[5])), Number(r[6]) || 0, Number(r[7]) || 1, r[8], r[9]]);
+  const werte = t.rows.map(r => [r[0], r[1], r[2], wlZelle(String(r[3])), wlZelle(String(r[4])), wlZelle(String(r[5])), Number(r[6]) || 0, Number(r[7]) || 1, r[8], r[9], r[10] || '']);
   if (werte.length) s.getRange(2, 1, werte.length, WL_HEAD.length).setValues(werte);
   if (alt > werte.length) s.getRange(werte.length + 2, 1, alt - werte.length, WL_HEAD.length).clearContent();
 }
 
 function wlTeil(r) {
   return { id: String(r[0]), liste: r[2] === WL_LISTEN.fehlt ? 'fehlt' : 'bestand', nr: String(r[3]), name: String(r[4]),
-    ort: String(r[5]), menge: Number(r[6]) || 0, v: Number(r[7]) || 1, zeit: r[8] instanceof Date ? r[8].toISOString() : String(r[8] || '') };
+    ort: String(r[5]), menge: Number(r[6]) || 0, v: Number(r[7]) || 1, zeit: r[8] instanceof Date ? r[8].toISOString() : String(r[8] || ''),
+    bestellt: r[10] instanceof Date ? r[10].toISOString() : String(r[10] || '') };
 }
 
 function wlStand(mail, neu) {
@@ -222,6 +224,29 @@ function wagenlagerAnfrage(d) {
       t.rows[i] = [r[0], mail, ziel, r[3], r[4], ort, menge, (Number(r[7]) || 1) + 1, jetzt, ueber];
     }
     return fertig({ umgebucht: true });
+  }
+
+  // Nachbestellen: Teil aus dem Bestand gleich auf die Bestellliste (gleiche Nummer, noch nicht bestellt → +1)
+  if (ev === 'wl_nachbestellen') {
+    const i = finde(d.teilId);
+    if (i < 0) return { ok: false, error: 'Der Eintrag wurde inzwischen gelöscht.' };
+    const q = t.rows[i], menge = Math.max(1, Math.min(WL_MAX, Math.round(Number(d.menge) || 1)));
+    const j = t.rows.findIndex((r, k) => meine(k) && r[2] === WL_LISTEN.fehlt && wlKey(r[3]) === wlKey(q[3]) && !r[10]);
+    if (j >= 0) {
+      t.rows[j][6] = Math.min(WL_MAX, (Number(t.rows[j][6]) || 0) + menge);
+      t.rows[j][7] = (Number(t.rows[j][7]) || 1) + 1; t.rows[j][8] = jetzt; t.rows[j][9] = ueber;
+    } else {
+      t.rows.push([Utilities.getUuid(), mail, WL_LISTEN.fehlt, q[3], q[4], q[5], menge, 1, jetzt, ueber, '']);
+    }
+    return fertig({ nachbestellt: true, menge: j >= 0 ? Number(t.rows[j][6]) : menge });
+  }
+
+  // Bestellung ans Lager geschickt: diese Teile der Bestellliste als bestellt markieren
+  if (ev === 'wl_bestellt') {
+    const ids = Array.isArray(d.ids) ? d.ids.map(String) : [];
+    let n = 0;
+    t.rows.forEach((r, k) => { if (meine(k) && r[2] === WL_LISTEN.fehlt && ids.indexOf(String(r[0])) >= 0) { r[10] = jetzt; r[7] = (Number(r[7]) || 1) + 1; n++; } });
+    return fertig({ markiert: n });
   }
 
   // Excel-Import: gleiche Nummer + Lagerort → Stückzahl übernehmen (oder dazuzählen), sonst neu

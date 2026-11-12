@@ -150,6 +150,22 @@ pruefe('Kennzeichen und Fahrer', () => {
   r = u.post({ ...fremd, event: 'wl_liste' });
   assert.strictEqual(r.fahrzeug.kennzeichen, '');
 });
+pruefe('Nachbestellen und als bestellt markieren', () => {
+  let r = u.post({ ...pc, event: 'wl_liste' });
+  const b = r.teile.find(t => t.liste === 'bestand' && t.nr === '67405-T1000-71');
+  r = u.post({ ...pc, event: 'wl_nachbestellen', teilId: b.id });
+  let f = r.teile.filter(t => t.liste === 'fehlt' && t.nr === b.nr);
+  assert(r.ok && f.length === 1 && f[0].menge === 1 && f[0].name === b.name, JSON.stringify(f));
+  r = u.post({ ...pc, event: 'wl_nachbestellen', teilId: b.id });
+  f = r.teile.filter(t => t.liste === 'fehlt' && t.nr === b.nr);
+  assert.strictEqual(f[0].menge, 2);
+  r = u.post({ ...pc, event: 'wl_bestellt', ids: [f[0].id] });
+  assert(r.ok && r.markiert === 1 && r.teile.find(t => t.id === f[0].id).bestellt);
+  // schon bestellt → neue Zeile statt dazuzählen
+  r = u.post({ ...pc, event: 'wl_nachbestellen', teilId: b.id });
+  assert.strictEqual(r.teile.filter(t => t.liste === 'fehlt' && t.nr === b.nr).length, 2);
+  assert.strictEqual(u.sheets['Kundendienstfahrzeug'].rows[0][10], 'Bestellt am');
+});
 pruefe('Service-Mappe-Anmeldung bleibt unberührt', () => {
   const r = u.post({ key: KEY, id: 'sm-1', name: 'Max Muster', email: 'm.muster@schlueter-gabelstapler.de', event: 'register', version: '1.20.14' });
   assert(r.ok && r.sent && u.sheets['Nutzer'] && /Service-Mappe/.test(u.mails[u.mails.length - 1].subject));

@@ -1,16 +1,32 @@
 {
   "manifest_version": 3,
   "name": "Kundendienstfahrzeug – T-Doc",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Holt für das Programm „Kundendienstfahrzeug“ die Ersatzteilbezeichnung aus Toyota T-Doc. Liest nur die Teileliste, die das Programm gezielt öffnet.",
-  "icons": { "48": "icon48.png", "128": "icon128.png" },
-  "host_permissions": ["http://127.0.0.1/*"],
-  "background": { "service_worker": "background.js" },
+  "icons": {
+    "48": "icon48.png",
+    "128": "icon128.png"
+  },
+  "host_permissions": [
+    "http://127.0.0.1/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
   "content_scripts": [
     {
-      "matches": ["https://tdoc.toyota-forklifts.eu/*"],
-      "js": ["reader.js", "inhalt.js"],
+      "matches": [
+        "https://tdoc.toyota-forklifts.eu/*"
+      ],
+      "js": [
+        "reader.js",
+        "inhalt.js"
+      ],
       "run_at": "document_start"
     }
+  ],
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA7TrcAiuwX1lpaffFmkiks2EOZTMFsGA5N4StGUjdtODtbipLXLai1QQQvGm+m+2+NvxnGSCeDHcsl8L7NIgKTv9czbV1zjczsoaLtd4IOjU1oOUVtZkgTh3kz79BsYFDmjLmbgzDw/4kFa92O9CHdr053tWU/2XRTyN+37mKuvWs1RcPzgTH1FOVQP3ARPXRQp+ust2PFruFzwkagHQPlVJdjDb5ilFMrZZUnK5fblwrqWLIQ7WxzTHiMcr4VstdcsIJs6gHE2PY8s9tD+LMYO4bwq7hine9RUpsT+hgUJEcHOMtFD/JsdsGG+zx18Zub1xWddyiLjPWXAAJepKsiwIDAQAB",
+  "permissions": [
+    "nativeMessaging"
   ]
 }
