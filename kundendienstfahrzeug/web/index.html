@@ -886,6 +886,12 @@ async function tdocAbfrage(n){
       else hint(esc(s.error || "T-Doc hat keine Bezeichnung zu dieser Nummer gefunden."));
       return;
     }
+    // Im Hintergrund nichts gekommen: einmal sichtbar versuchen (z. B. Toyota-Anmeldung nötig)
+    if(st.hintergrund && !st.nochmal && s.sekunden >= 20){
+      hint("Im Hintergrund kam nichts – T-Doc wird sichtbar geöffnet …");
+      try{ const n2 = await (await fetch("/api/tdoc/start", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({nr: n, sichtbar: true})})).json(); if(n2.ok){ st.token = n2.token; st.nochmal = true; st.hintergrund = false; } }catch(e){}
+      continue;
+    }
     if(!s.erweiterung && s.sekunden >= 12 && s.sekunden < 14)
       hint('Keine Antwort aus dem Browser. Ist die <b>T-Doc-Verbindung</b> eingerichtet? <button type="button" class="link" id="erwBtn">Jetzt einrichten</button> – oder in T-Doc das Lesezeichen „T-Doc → Excel“ klicken.');
   }

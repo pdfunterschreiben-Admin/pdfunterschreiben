@@ -11,7 +11,9 @@
   try { a = JSON.parse(sessionStorage.getItem(K) || 'null'); } catch (e) {}
   if (!a || Date.now() - a.t > 10 * 60 * 1000) return;
   function los() {
+    console.log('[KDF] suche', a.nr);
     readToyotaPart(a.nr, 45000).then(function (r) {
+      console.log('[KDF] Ergebnis', r);
       // Nicht angemeldet: Auftrag behalten – nach der Anmeldung lädt T-Doc neu und es geht weiter
       if (r && r.error && /anmelden/i.test(r.error)) { chrome.runtime.sendMessage({ kdf: a.kdf, nr: a.nr, anmelden: true }); return; }
       try { sessionStorage.removeItem(K); } catch (e) {}

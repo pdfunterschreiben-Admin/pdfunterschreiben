@@ -51,7 +51,8 @@ func (a *app) handleTdocStart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
-		Nr string `json:"nr"`
+		Nr       string `json:"nr"`
+		Sichtbar bool   `json:"sichtbar"`
 	}
 	_ = json.NewDecoder(io.LimitReader(r.Body, 4096)).Decode(&req)
 	u := tdocURL(req.Nr)
@@ -71,7 +72,7 @@ func (a *app) handleTdocStart(w http.ResponseWriter, r *http.Request) {
 	tdocMu.Unlock()
 	ziel := u + "&kdf=" + fmt.Sprintf("%d_%s", Port, tok)
 	// Ist die Erweiterung im Hintergrund verbunden, öffnet sie T-Doc unsichtbar – sonst sichtbarer Tab
-	if nativVerbunden() {
+	if nativVerbunden() && !req.Sichtbar {
 		select {
 		case nativAuftraege <- map[string]string{"typ": "tdoc", "token": tok, "url": ziel}:
 			writeJSON(w, map[string]any{"ok": true, "token": tok, "erweiterung": gesehen, "hintergrund": true})
