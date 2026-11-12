@@ -125,6 +125,7 @@ func (a *app) routes() http.Handler {
 	mux.HandleFunc("/api/tdoc/naechster", a.handleTdocNaechster)
 	mux.HandleFunc("/api/tdoc/log", a.handleTdocLog)
 	mux.HandleFunc("/api/tdoc/anmelden", a.handleTdocAnmelden)
+	mux.HandleFunc("/api/tdoc/vorwaermen", a.handleTdocVorwaermen)
 	mux.HandleFunc("/api/tdoc/erweiterung", a.handleTdocErweiterung)
 	mux.HandleFunc("/api/open", func(w http.ResponseWriter, r *http.Request) {
 		// Nur feste Adressen im Standardbrowser öffnen (dort ist man bei Google angemeldet)

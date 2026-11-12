@@ -37,10 +37,27 @@ type hgBrowser struct {
 	ende    string
 	ziel    string // unser Tab
 	agent   string
+	aufTdoc bool // T-Doc-Anwendung ist im Tab geladen
 }
 
 // hgUA: Kennung ohne „HeadlessChrome“ je Browser (wird beim ersten Start ermittelt).
-var hgUA = map[string]string{}
+var hgUA = hgUALaden()
+
+func hgUADatei() string { return filepath.Join(dataDir(), "t-doc-kennung.json") }
+
+func hgUALaden() map[string]string {
+	m := map[string]string{}
+	if b, err := os.ReadFile(hgUADatei()); err == nil {
+		_ = json.Unmarshal(b, &m)
+	}
+	return m
+}
+
+func hgUASpeichern() {
+	if b, err := json.Marshal(hgUA); err == nil {
+		_ = os.WriteFile(hgUADatei(), b, 0o644)
+	}
+}
 
 type cdpAntwort struct {
 	Result json.RawMessage `json:"result"`
@@ -294,6 +311,10 @@ func (b *hgBrowser) vorbereiten() error {
 			hgUA[b.exe] = ua
 		}
 		_ = b.rufen("Network.setUserAgentOverride", map[string]any{"userAgent": ua, "acceptLanguage": "de-DE,de"}, true, 5*time.Second, nil)
+		hgUASpeichern()
+	}
+	if b.rufen("Network.enable", map[string]any{}, true, 5*time.Second, nil) == nil {
+		_ = b.rufen("Network.setBlockedURLs", map[string]any{"urls": []string{"*.png", "*.jpg", "*.jpeg", "*.gif", "*.webp", "*.woff", "*.woff2", "*.ttf", "*.mp4"}}, true, 5*time.Second, nil)
 	}
 	return nil
 }
@@ -313,43 +334,10 @@ func hgSuchen(nr, url string) hgErgebnis {
 		return hgErgebnis{Error: "Das Toyota-Anmeldefenster ist noch offen – dort anmelden und das Fenster schließen.", Anmelden: true}
 	}
 	for versuch := 0; versuch < 2; versuch++ {
-		if hg == nil || !hg.laeuft() {
-			var gruende []string
-			for _, exe := range hgKandidaten() {
-				b, err := hgStarten(exe)
-				if err == nil {
-					if err = b.vorbereiten(); err != nil {
-						_ = b.proc.Kill()
-					}
-				}
-				if err == nil && strings.Contains(b.agent, "Headless") { // einmal mit getarnter Kennung neu starten
-					_ = b.rufen("Browser.close", map[string]any{}, false, 3*time.Second, nil)
-					_ = b.proc.Kill()
-					<-b.tot
-					time.Sleep(300 * time.Millisecond)
-					if b, err = hgStarten(exe); err == nil {
-						if err = b.vorbereiten(); err != nil {
-							_ = b.proc.Kill()
-						}
-					}
-				}
-				if err != nil {
-					gruende = append(gruende, filepath.Base(exe)+": "+err.Error()+hgBrowserLog(exe))
-					continue
-				}
-				hg, hgGewaehlt = b, exe
-				nativLog("Unsichtbarer Browser läuft: %s", exe)
-				break
-			}
-			if hg == nil || !hg.laeuft() {
-				if versuch == 0 {
-					continue
-				}
-				if len(gruende) == 0 {
-					gruende = []string{"Kein Edge/Chrome gefunden"}
-				}
-				return hgAusfall(errors.New(strings.Join(gruende, " | ")))
-			}
+		if f, nochmal := hgSicherstellen(versuch); f != nil {
+			return *f
+		} else if nochmal {
+			continue
 		}
 		e, ok := hg.suche(nr, hgURL(url))
 		hgLetzte = time.Now()
@@ -360,13 +348,107 @@ func hgSuchen(nr, url string) hgErgebnis {
 	return hgErgebnis{Error: "T-Doc im Hintergrund ging nicht."}
 }
 
+// hgSicherstellen startet den unsichtbaren Browser, falls er nicht läuft (hgMu muss gesperrt sein).
+func hgSicherstellen(versuch int) (*hgErgebnis, bool) {
+	if hg == nil || !hg.laeuft() {
+		var gruende []string
+		for _, exe := range hgKandidaten() {
+			b, err := hgStarten(exe)
+			if err == nil {
+				if err = b.vorbereiten(); err != nil {
+					_ = b.proc.Kill()
+				}
+			}
+			if err == nil && strings.Contains(b.agent, "Headless") { // einmal mit getarnter Kennung neu starten
+				_ = b.rufen("Browser.close", map[string]any{}, false, 3*time.Second, nil)
+				_ = b.proc.Kill()
+				<-b.tot
+				time.Sleep(300 * time.Millisecond)
+				if b, err = hgStarten(exe); err == nil {
+					if err = b.vorbereiten(); err != nil {
+						_ = b.proc.Kill()
+					}
+				}
+			}
+			if err != nil {
+				gruende = append(gruende, filepath.Base(exe)+": "+err.Error()+hgBrowserLog(exe))
+				continue
+			}
+			hg, hgGewaehlt = b, exe
+			nativLog("Unsichtbarer Browser läuft: %s", exe)
+			break
+		}
+		if hg == nil || !hg.laeuft() {
+			if versuch == 0 {
+				return nil, true
+			}
+			if len(gruende) == 0 {
+				gruende = []string{"Kein Edge/Chrome gefunden"}
+			}
+			e := hgAusfall(errors.New(strings.Join(gruende, " | ")))
+			return &e, false
+		}
+	}
+	return nil, false
+}
+
+// hgVorwaermen startet den Browser schon und lädt T-Doc samt Anmeldung, während die Nummer noch getippt wird.
+func hgVorwaermen() {
+	if !hgVerfuegbar() || hgAnmeldungOffen() || !hgMu.TryLock() {
+		return
+	}
+	defer hgMu.Unlock()
+	if hg != nil && hg.laeuft() && hg.aufTdoc {
+		return
+	}
+	if f, nochmal := hgSicherstellen(0); f != nil {
+		return
+	} else if nochmal {
+		if f, _ := hgSicherstellen(1); f != nil {
+			return
+		}
+	}
+	hgLetzte = time.Now()
+	if hg.rufen("Page.navigate", map[string]any{"url": hgURL("https://tdoc.toyota-forklifts.eu/")}, true, 30*time.Second, nil) != nil {
+		return
+	}
+	// warten, bis die Angular-Anwendung steht (danach geht die Suche ohne Neuladen)
+	for i := 0; i < 40; i++ {
+		var r struct {
+			Result struct {
+				Value bool `json:"value"`
+			} `json:"result"`
+		}
+		if hg.rufen("Runtime.evaluate", map[string]any{"expression": "document.readyState==='complete' && /tdoc|127\\.0\\.0\\.1/.test(location.host) && !!document.querySelector('app-root *, [ng-version]')", "returnByValue": true}, true, 5*time.Second, &r) == nil && r.Result.Value {
+			hg.aufTdoc = true
+			return
+		}
+		time.Sleep(250 * time.Millisecond)
+	}
+}
+
+func (a *app) handleTdocVorwaermen(w http.ResponseWriter, r *http.Request) {
+	go hgVorwaermen()
+	writeJSON(w, map[string]any{"ok": true})
+}
+
 func (b *hgBrowser) suche(nr, url string) (hgErgebnis, bool) {
-	if err := b.rufen("Page.navigate", map[string]any{"url": url}, true, 30*time.Second, nil); err != nil {
-		return hgErgebnis{Error: "T-Doc lädt nicht: " + err.Error()}, false
+	// Ist T-Doc schon geladen, nur die Adresse innerhalb der Anwendung wechseln (spart das Neuladen
+	// samt Anmeldung). Kommt so nichts, wird ganz normal neu geladen.
+	ohneNeuladen := false
+	if b.aufTdoc {
+		u, _ := json.Marshal(url)
+		ohneNeuladen = b.rufen("Runtime.evaluate", map[string]any{"expression": "globalThis.__kdfAufgeklappt=null;history.pushState({},''," + string(u) + ");dispatchEvent(new PopStateEvent('popstate',{state:{}}));true", "returnByValue": true}, true, 5*time.Second, nil) == nil
+	}
+	if !ohneNeuladen {
+		if err := b.rufen("Page.navigate", map[string]any{"url": url}, true, 30*time.Second, nil); err != nil {
+			b.aufTdoc = false
+			return hgErgebnis{Error: "T-Doc lädt nicht: " + err.Error()}, false
+		}
 	}
 	leser, _ := erweiterungFS.ReadFile("chrome/reader.js")
 	nrJSON, _ := json.Marshal(nr)
-	ausdruck := string(leser) + "\n;readToyotaPart(" + string(nrJSON) + ", 10000)"
+	ausdruck := string(leser) + "\n;readToyotaPart(" + string(nrJSON) + ", 6000)"
 	start := time.Now()
 	letzter := hgErgebnis{Error: "T-Doc hat keine Bezeichnung zu dieser Nummer gefunden."}
 	loginSeit := time.Time{}
@@ -374,6 +456,16 @@ func (b *hgBrowser) suche(nr, url string) (hgErgebnis, bool) {
 	defer b.fremdeTabsSchliessen()
 	anmelden := hgErgebnis{Error: "Einmal bei Toyota anmelden – danach geht es im Hintergrund.", Anmelden: true}
 	for time.Since(start) < 55*time.Second && b.laeuft() {
+		if ohneNeuladen && time.Since(start) > 6*time.Second { // Anwendung hat nicht reagiert: richtig laden
+			ohneNeuladen = false
+			globalThisZuruecksetzen := "globalThis.__kdfAufgeklappt=null"
+			_ = b.rufen("Runtime.evaluate", map[string]any{"expression": globalThisZuruecksetzen}, true, 3*time.Second, nil)
+			if b.rufen("Page.navigate", map[string]any{"url": url}, true, 30*time.Second, nil) != nil {
+				b.aufTdoc = false
+				return hgErgebnis{Error: "T-Doc lädt nicht."}, false
+			}
+			start = time.Now()
+		}
 		// Hängt eine Anmeldung (Weiterleitung oder Anmelde-Popup), braucht es die sichtbare Anmeldung
 		if b.anmeldungHaengt() {
 			if loginSeit.IsZero() {
@@ -409,6 +501,7 @@ func (b *hgBrowser) suche(nr, url string) (hgErgebnis, bool) {
 		var e hgErgebnis
 		_ = json.Unmarshal(r.Result.Value, &e)
 		if e.Name != "" {
+			b.aufTdoc = true
 			return e, true
 		}
 		if strings.Contains(strings.ToLower(e.Error), "anmelden") {
@@ -475,7 +568,7 @@ func (b *hgBrowser) fremdeTabsSchliessen() {
 func hgAufraeumen() {
 	for range time.Tick(time.Minute) {
 		if hgMu.TryLock() {
-			if hg != nil && time.Since(hgLetzte) > 10*time.Minute {
+			if hg != nil && time.Since(hgLetzte) > 20*time.Minute {
 				_ = hg.rufen("Browser.close", map[string]any{}, false, 3*time.Second, nil)
 				time.Sleep(time.Second)
 				_ = hg.proc.Kill()

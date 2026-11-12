@@ -9,7 +9,7 @@ async function readToyotaPart(requested,timeoutMs=45000){
  if(names.size===1)return {name:[...names][0]};if(names.size>1)return {error:'T-Doc liefert mehrere Bezeichnungen für diese Nummer: '+[...names].join(' / ')+'. Bitte im Katalog prüfen.'};return null;}
  while(Date.now()<deadline){const found=find();if(found)return found;const text=document.body?.innerText||'';if(/(sign in to your account|bei ihrem konto anmelden|microsoft.*anmelden|retry login|blocked the popup)/i.test(text)&&!document.querySelector('table'))return {error:'Bitte zuerst auf diesem Gerät bei Toyota T-Doc anmelden.'};
  if(st.count<30){const candidates=[...document.querySelectorAll('tr.example-element-row,mat-expansion-panel-header[aria-expanded="false"],button[aria-expanded="false"],[role="button"][aria-expanded="false"]')];for(const el of candidates){if(clicked.has(el)||!el.getClientRects().length)continue;clicked.add(el);el.click();st.count++;break;}}
- await new Promise(r=>setTimeout(r,700));}
+ await new Promise(r=>setTimeout(r,250));}
  return {error:'Keine eindeutige Artikelbezeichnung gefunden. Prüfe Anmeldung, Suchergebnis und aufgeklappte Teileliste in T-Doc.'};
 }
 if(typeof globalThis!=='undefined')globalThis.readToyotaPart=readToyotaPart;

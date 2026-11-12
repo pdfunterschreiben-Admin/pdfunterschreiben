@@ -820,6 +820,8 @@ function oeffneTeil(t, titel){
   teilListe(teil.liste || "bestand");
   const ro = !kannAendern();
   for(const id of ["#teilOk", "#teilDel", "#teilNachbestellen"]) $(id).disabled = ro;
+  // T-Doc schon im Hintergrund vorbereiten, während die Nummer getippt wird
+  if(tdocEigen && !teil.name && !ro) fetch("/api/tdoc/vorwaermen", {method: "POST"}).catch(() => {});
   if(!$("#teilDlg").open) $("#teilDlg").showModal();
   setTimeout(() => (teil.nr ? (teil.name ? $("#fMenge") : $("#fName")) : $("#fNr")).focus(), 30);
   if(ro) teilErr(lager.offline ? "Offline – Änderungen sind erst wieder mit Verbindung möglich." : "");
