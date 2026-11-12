@@ -5332,30 +5332,53 @@ let kdScanAbbruch = false, kdScanLauf = 0;
 // Visitenkarte lesen: Foto -> Texterkennung (/api/ocr, wie beim Typenschild) -> Felder raten.
 // Nutzt nur die Fotos-vom-Handy-Funktion des Servers, die schon läuft (kein Server-Update nötig).
 function vkAuswerten(text){
-  const zeilen = String(text || "").replace(/\r/g, "").split("\n").map(z => z.replace(/\s+/g, " ").trim()).filter(Boolean);
-  const EMAIL_RE = /[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}/;
-  const TEL_RE = /(?:\+|00)?\d[\d \/\-().]{5,}\d/;
-  const FIRMA_RE = /\b(GmbH|mbH|AG|KG|e\.?\s?K\.?|GbR|OHG|Inc\.?|Ltd\.?|& Co|UG)\b/i;
-  const TEL_LABEL = /^(tel|telefon|fon|mobil|handy|mob)\.?\s*[:.]?\s*/i;
-  const FAX_LABEL = /^fax[:.]?\s*/i;
-  const PLZ_ORT_RE = /^(D[- ])?\d{4,5}\s+\S+/;
-  const STRASSE_RE = /(straße|strasse|str\.|weg \d|allee|platz\b|gasse)/i;
-  const WEB_RE = /^(www\.|https?:)/i;
-  const NAME_RE = /^[A-ZÄÖÜ][a-zäöüß\-]+(\s+[A-ZÄÖÜ][a-zäöüß\-]+){1,2}$/;
-  let email = "", tel = "", strasse = "", ort = ""; const rest = [];
-  for(const z of zeilen){
-    const em = z.match(EMAIL_RE);
-    if(em && !email){ email = em[0]; continue; }
-    if(FAX_LABEL.test(z) || WEB_RE.test(z)) continue;
-    if(!tel){ const m = z.match(TEL_RE); if(m && (TEL_LABEL.test(z) || m[0].replace(/\D/g, "").length >= 7)){ tel = TEL_LABEL.test(z) ? z.replace(TEL_LABEL, "").trim() : m[0].trim(); continue; } }
-    if(!ort && PLZ_ORT_RE.test(z)){ ort = z; continue; }
-    if(!strasse && STRASSE_RE.test(z)){ strasse = z; continue; }
-    rest.push(z);
+  // Zeilen in Teile zerlegen: viele Karten schreiben „Firma | Straße | PLZ Ort“ in eine Zeile
+  const teile = [];
+  for(const z0 of String(text || "").replace(/\r/g, "").split("\n")){
+    const z = z0.replace(/\s+/g, " ").trim(); if(!z) continue;
+    for(const t of z.split(/\s*[|¦•·]\s*|\s+[Il]\s+(?=[A-ZÄÖÜ+\d(])/)) if(t.trim()) teile.push(t.trim());
   }
+  // E-Mail: Texterkennung liest „@“ oft als „(a“, „(@“, „©“ oder „[at]“
+  const EMAIL_RE = /([A-Za-z0-9._%+\-]+)\s*(?:@|\(\s*[a@]\s*\)?|\[\s*at\s*\]|\(\s*at\s*\)|©|®)\s*([A-Za-z0-9\-]+(?:\.[A-Za-z0-9\-]+)*\.[A-Za-z]{2,})/;
+  const TEL_RE = /(?:\+|00)?\d[\d \/\-().]{5,}\d/;
+  const FIRMA_RE = /\b(GmbH|mbH|AG|KG|e\.?\s?K\.?|GbR|OHG|Inc\.?|Ltd\.?|& Co|UG|SE)\b/i;
+  const TEL_LABEL = /^(tel(efon)?|fon|phone|mobil|handy|mob|t|m)\b\.?\s*[:.]?\s*/i;
+  const FAX_LABEL = /^(fax|f)\b\.?\s*[:.]?\s*/i;
+  const PLZ_ORT_RE = /^((D|A|CH)[- ])?\d{4,5}\s+[A-Za-zÄÖÜäöüß]/;
+  const STRASSE_RE = /(straße|strasse|str\.|\bstr\b|weg\b|allee|platz\b|gasse|ring\b|damm\b|ufer\b|chaussee)\s*\d/i;
+  const HAUSNR_RE = /^[A-ZÄÖÜ][A-Za-zÄÖÜäöüß.\- ]{2,}\s\d{1,4}\s?[a-z]?(\s*[-–]\s*\d{1,4}[a-z]?)?$/;
+  const LAND_RE = /^(deutschland|germany|österreich|austria|schweiz|switzerland|niederlande|netherlands)$/i;
+  const WEB_RE = /^(www\.|https?:)/i;
+  const NAME_RE = /^((Dr|Prof|Dipl)\.?[- ]?[\wäöüß.\-]*\s+)?[A-ZÄÖÜ][a-zäöüß\-]+(\s+[A-ZÄÖÜ][a-zäöüß\-]+){1,2}$/;
+  const telSchoen = t => t.replace(/\(0\)/, " ").replace(/(\d)\.(?=\d)/g, "$1 ").replace(/\s+/g, " ").trim();
+  let email = "", tel = "", mobil = "", strasse = "", ort = ""; const rest = [];
+  for(const t of teile){
+    const em = t.match(EMAIL_RE);
+    if(em && !email){ email = (em[1] + "@" + em[2]).replace(/\.+$/, "").toLowerCase(); continue; }
+    if(WEB_RE.test(t) || LAND_RE.test(t)) continue;
+    if(FAX_LABEL.test(t) && /\d{4}/.test(t)) continue;
+    const m = t.match(TEL_RE);
+    if(m && (TEL_LABEL.test(t) || m[0].replace(/\D/g, "").length >= 7) && !PLZ_ORT_RE.test(t) && !HAUSNR_RE.test(t)){
+      const nr = telSchoen(TEL_LABEL.test(t) ? t.replace(TEL_LABEL, "") : m[0]);
+      if(/^(mobil|handy|mob|m)\b/i.test(t)){ if(!mobil) mobil = nr; } else if(!tel) tel = nr;
+      continue;
+    }
+    if(!ort && PLZ_ORT_RE.test(t)){ ort = t; continue; }
+    if(!strasse && (STRASSE_RE.test(t) || HAUSNR_RE.test(t)) && !FIRMA_RE.test(t)){ strasse = t; continue; }
+    rest.push(t);
+  }
+  // Firmenname in GROSSBUCHSTABEN lesbar machen: „SDG MODULTECHNIK GMBH“ -> „SDG Modultechnik GmbH“
+  const FORM = {gmbh: "GmbH", mbh: "mbH", ag: "AG", kg: "KG", gbr: "GbR", ohg: "OHG", ug: "UG", se: "SE", co: "Co."};
+  const schoen = f => f === f.toUpperCase() && /[A-ZÄÖÜ]{4}/.test(f)
+    ? f.split(" ").map(w => FORM[w.toLowerCase().replace(/\.$/, "")] || (w.replace(/[^A-Za-zÄÖÜäöü]/g, "").length <= 3 ? w : w.charAt(0) + w.slice(1).toLowerCase())).join(" ")
+    : f;
   const firmaZeile = rest.find(z => FIRMA_RE.test(z));
   const nameZeile = rest.find(z => z !== firmaZeile && NAME_RE.test(z));
-  const firma = firmaZeile || rest.find(z => z !== nameZeile) || "";
-  return {firma: firma.slice(0, 120), name: (nameZeile || "").slice(0, 120), email: email.slice(0, 150), tel: tel.slice(0, 60), strasse: strasse.slice(0, 150), ort: ort.slice(0, 150)};
+  let firma = firmaZeile || "";
+  if(!firma && email) firma = (email.split("@")[1] || "").split(".")[0].replace(/-/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+  if(!firma) firma = rest.find(z => z !== nameZeile && /[a-zäöü]/.test(z)) || "";
+  return {firma: schoen(firma).slice(0, 120), name: (nameZeile || "").slice(0, 120), email: email.slice(0, 150), tel: (tel || mobil).slice(0, 60),
+    strasse: strasse.slice(0, 150), ort: ort.replace(/^(D|A|CH)[- ](?=\d)/, "").slice(0, 150)};
 }
 async function vkLesen(bytes){
   $("#kdScanSt").textContent = "Visitenkarte wird gelesen …";
