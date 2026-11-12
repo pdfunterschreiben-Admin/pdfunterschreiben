@@ -1,0 +1,1312 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Kundendienstfahrzeug</title>
+<link rel="icon" href="/icon.png">
+<style>
+/* Gleiches Erscheinungsbild wie die Service-Mappe: links die Werkzeuge, rechts der Bestand */
+:root{
+  --paper:#f3f5f9; --sheet:#ffffff; --ink:#18233a; --muted:#5b6880; --line:#d8deea;
+  --pen:#1d3fb8; --pen-soft:#e5ebfb; --ok:#13703a; --ok-soft:#e3f4ea; --warn:#9a4a07; --warn-soft:#fbefdf;
+  --bad:#b42318; --bad-soft:#fdecea; --row:#f7f9fc;
+  --f-display:"Segoe UI Variable Display","Segoe UI",system-ui,sans-serif;
+  --f-body:"Segoe UI Variable Text","Segoe UI",system-ui,sans-serif;
+  --f-mono:"Cascadia Mono",Consolas,ui-monospace,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){:root{
+  --paper:#0f131b; --sheet:#171d29; --ink:#e5e9f2; --muted:#98a3b8; --line:#2a3345;
+  --pen:#86a6ff; --pen-soft:#1c2a4d; --ok:#5ad38c; --ok-soft:#14301f; --warn:#f0b35a; --warn-soft:#352610;
+  --bad:#ff8a7a; --bad-soft:#3a1714; --row:#1b2230; color-scheme:dark}}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0}
+body{background:var(--paper);color:var(--ink);font:15px/1.5 var(--f-body);padding:20px 20px 48px}
+.wrap{max-width:1280px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+.top{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;justify-content:space-between}
+h1{font:700 30px/1.1 var(--f-display);margin:0;letter-spacing:-.01em}
+.lead{margin:6px 0 0;color:var(--muted);max-width:68ch}
+.ver{font:12.5px var(--f-mono);color:var(--muted);display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.ver button{font:12.5px var(--f-body);padding:4px 8px}
+.banner{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;background:var(--pen);color:#fff;border-radius:10px;padding:12px 16px}
+.banner b{font:600 16px var(--f-display)}
+.banner .notes{font-size:13.5px;opacity:.9;white-space:pre-line;margin-top:2px}
+.banner button{background:#fff;color:#1d3fb8;border-color:#fff;font-weight:600}
+.grid{display:grid;grid-template-columns:340px minmax(0,1fr);gap:20px;align-items:start}
+@media (max-width:960px){.grid{grid-template-columns:minmax(0,1fr)}}
+.panel{background:var(--sheet);border:1px solid var(--line);border-radius:10px;padding:18px;display:flex;flex-direction:column;gap:12px}
+aside{display:flex;flex-direction:column;gap:18px;position:sticky;top:12px}
+@media (max-width:960px){aside{position:static}}
+.step{display:flex;align-items:baseline;gap:10px}
+.step b{font:500 12px var(--f-mono);color:var(--pen);letter-spacing:.06em}
+.step h2{font:600 18px var(--f-display);margin:0}
+.step.fold{cursor:pointer;user-select:none;border-radius:6px}
+.step.fold:focus-visible{outline:2px solid var(--pen);outline-offset:4px}
+.step .chev{margin-left:auto;align-self:center;font-size:14px;line-height:1;opacity:.6;transition:transform .15s}
+.step.fold:hover .chev{opacity:1}
+.panel.closed .chev{transform:rotate(-90deg)}
+.panel.closed > :not(.step){display:none !important}
+.hint{font-size:13px;color:var(--muted);margin:0}
+button,.btn{font:500 14px var(--f-body);border-radius:7px;border:1px solid var(--line);background:var(--sheet);color:var(--ink);
+  padding:8px 13px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;line-height:1.2}
+button:hover,.btn:hover{border-color:var(--pen)}
+button:focus-visible,.btn:focus-within,input:focus-visible,select:focus-visible{outline:2px solid var(--pen);outline-offset:2px}
+button.primary,.btn.primary{background:var(--pen);border-color:var(--pen);color:var(--sheet)}
+button.primary:hover{filter:brightness(1.08)}
+button:disabled{opacity:.45;cursor:not-allowed}
+button.ghost{border-color:transparent;background:transparent;color:var(--muted);padding:6px 8px}
+button.ghost:hover{color:var(--ink)}
+button.link{border:0;background:none;padding:0;color:var(--pen);font-size:13px;text-decoration:underline;cursor:pointer}
+button.wide,.btn.wide{width:100%;justify-content:center}
+button.danger{color:var(--bad)}
+button.danger:hover{border-color:var(--bad)}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.col{display:flex;flex-direction:column;gap:10px}
+.tabs{display:flex;border:1px solid var(--line);border-radius:8px;padding:3px;gap:3px;background:var(--sheet)}
+.tabs button{flex:1;justify-content:center;border:0;padding:8px 10px}
+.tabs button[aria-selected="true"]{background:var(--pen-soft);color:var(--pen);font-weight:600}
+.tabs .n{font:500 12px var(--f-mono);background:var(--paper);color:var(--muted);border-radius:99px;padding:1px 8px}
+.tabs button[aria-selected="true"] .n{background:var(--sheet);color:var(--pen)}
+label.field{display:flex;flex-direction:column;gap:5px;font-size:13px;font-weight:500}
+input[type=text],input[type=search],input[type=number],select{font:15px var(--f-body);padding:8px 10px;border:1px solid var(--line);border-radius:7px;background:var(--paper);color:var(--ink);width:100%}
+input.mono{font-family:var(--f-mono);letter-spacing:.02em}
+.check{display:flex;gap:8px;align-items:center;font-size:14px}
+.check input{accent-color:var(--pen);width:16px;height:16px}
+.val{font:13px var(--f-mono);color:var(--muted);font-variant-numeric:tabular-nums}
+.file-btn{position:relative}
+.file-btn input{position:absolute;width:1px;height:1px;opacity:0}
+.chip{display:inline-flex;align-items:center;gap:5px;font-size:12.5px;padding:2px 9px;border-radius:99px;width:fit-content}
+.chip.ok{background:var(--ok-soft);color:var(--ok)}
+.chip.warn{background:var(--warn-soft);color:var(--warn)}
+.chip.info{background:var(--pen-soft);color:var(--pen)}
+.chip.bad{background:var(--bad-soft);color:var(--bad)}
+main{display:flex;flex-direction:column;gap:14px;min-width:0}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.stat{background:var(--paper);border-radius:8px;padding:8px 10px;display:flex;flex-direction:column}
+.stat b{font:600 20px var(--f-display);font-variant-numeric:tabular-nums}
+.stat span{font-size:12px;color:var(--muted)}
+.toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.toolbar .tabs{flex:1 1 380px}
+.toolbar .such{flex:1 1 220px;position:relative}
+.toolbar .such input{padding-left:32px;background:var(--sheet)}
+.toolbar .such::before{content:"⌕";position:absolute;left:11px;top:50%;transform:translateY(-52%);color:var(--muted);font-size:17px;pointer-events:none}
+.toolbar select{width:auto;background:var(--sheet)}
+.doc{background:var(--sheet);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.doc-head{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid var(--line)}
+.doc-name{font-weight:600}
+table{width:100%;border-collapse:collapse}
+th{font:600 12px var(--f-body);text-transform:uppercase;letter-spacing:.05em;color:var(--muted);text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);background:var(--sheet);position:sticky;top:0;z-index:1}
+td{padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:middle}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:hover td{background:var(--row)}
+tbody tr.neu td{animation:neu 1.6s ease-out}
+@keyframes neu{from{background:var(--pen-soft)}to{background:transparent}}
+td.nr{font:13.5px var(--f-mono);white-space:nowrap}
+td.nr button{font:inherit;border:0;background:none;padding:0;color:var(--ink);cursor:pointer;text-align:left}
+td.nr button:hover{color:var(--pen);text-decoration:underline}
+td.name{overflow-wrap:anywhere}
+td.name .zeit{display:block;font-size:12px;color:var(--muted)}
+td.ort{color:var(--muted);white-space:nowrap}
+td.menge{white-space:nowrap;width:1%}
+td.akt{white-space:nowrap;width:1%;text-align:right}
+.stepper{display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--sheet)}
+.stepper button{border:0;border-radius:0;padding:6px 11px;font-size:16px;line-height:1;background:transparent}
+.stepper button:hover{background:var(--pen-soft);color:var(--pen)}
+.stepper output{min-width:44px;text-align:center;font:600 15px var(--f-mono);font-variant-numeric:tabular-nums;padding:0 4px}
+.stepper.leer output{color:var(--bad)}
+.stepper.wartet output{color:var(--pen)}
+.akt button{padding:6px 9px;font-size:13px}
+.empty{padding:48px 28px;text-align:center;color:var(--muted);display:flex;flex-direction:column;gap:8px;align-items:center}
+.empty b{font:600 17px var(--f-display);color:var(--ink)}
+.qr{display:flex;gap:14px;align-items:center}
+.qr canvas{width:108px;height:108px;border-radius:6px;background:#fff;flex:none;image-rendering:pixelated}
+.qr .val{word-break:break-all;font-size:12px}
+.cands{display:flex;flex-wrap:wrap;gap:6px}
+.cands button{font:13px var(--f-mono);padding:5px 9px;border-radius:99px}
+.cands button.gut{border-color:var(--pen);color:var(--pen);background:var(--pen-soft)}
+.treffer{background:var(--pen-soft);color:var(--ink);border-radius:8px;padding:10px 12px;font-size:13.5px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}
+.mengen{display:flex;gap:6px;align-items:center}
+.mengen input{text-align:center;font:600 16px var(--f-mono);width:110px}
+.mengen button{width:40px;justify-content:center;font-size:17px;padding:7px 0}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media (max-width:520px){.grid2{grid-template-columns:1fr}}
+.preview{max-height:280px;overflow:auto;border:1px solid var(--line);border-radius:8px;background:var(--sheet)}
+.preview td,.preview th{padding:6px 10px;font-size:13px}
+#toast{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;background:var(--ink);color:var(--paper);padding:10px 16px;border-radius:8px;font-size:14px;max-width:min(560px,calc(100% - 32px));box-shadow:0 6px 20px rgba(0,0,0,.2);z-index:30;display:flex;gap:12px;align-items:center}
+#toast button{background:transparent;color:var(--paper);border-color:rgba(255,255,255,.4);padding:4px 10px;font-size:13px}
+dialog{border:0;border-radius:12px;padding:0;background:var(--sheet);color:var(--ink);width:min(460px,calc(100vw - 32px));max-height:calc(100vh - 32px);box-shadow:0 20px 60px rgba(0,0,0,.35)}
+dialog::backdrop{background:rgba(10,15,30,.55)}
+#teilDlg{width:min(600px,calc(100vw - 32px))}
+#helpDlg,#importDlg{width:min(680px,calc(100vw - 32px))}
+#etDlg{width:min(820px,calc(100vw - 32px))}
+.et-tabs{display:flex;flex-wrap:wrap;gap:6px}
+.et-tabs button[aria-pressed="true"]{background:var(--pen-soft);color:var(--pen);border-color:var(--pen);font-weight:600}
+.et-tab{max-height:min(52vh,520px);overflow:auto;border:1px solid var(--line);border-radius:8px;background:var(--sheet)}
+.et-tab td{padding:6px 10px}
+.et-tab tr.gr td{background:var(--paper);font:600 12px var(--f-body);text-transform:uppercase;letter-spacing:.05em;color:var(--muted);position:sticky;top:0}
+.et-tab input{width:72px;text-align:center;font:600 14px var(--f-mono);padding:5px 6px}
+.et-tab tr.an td{background:var(--pen-soft)}
+.help h3{font:600 15px var(--f-display);margin:14px 0 4px}
+.help h3:first-child{margin-top:0}
+.help p,.help li{margin:0 0 4px;line-height:1.5}
+.help ul{margin:0 0 4px;padding-left:20px}
+.dlg{display:flex;flex-direction:column;max-height:calc(100vh - 32px)}
+.dlg-head,.dlg-foot{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--line)}
+.dlg-foot{border-bottom:0;border-top:1px solid var(--line)}
+.dlg-body{overflow:auto;padding:16px;background:var(--paper)}
+.err{font-size:13px;color:var(--bad);margin:0}
+.fz{margin-top:12px;display:inline-flex;align-items:center;gap:14px;padding:8px 14px 8px 8px;border-radius:10px;background:var(--sheet)}
+.schild{display:inline-flex;align-items:stretch;border:2px solid #111;border-radius:6px;background:#fff;color:#111;overflow:hidden;font:700 20px/1 "DIN 1451 Mittelschrift","Bahnschrift","Arial Narrow",var(--f-body);letter-spacing:.04em}
+.schild .eu{background:#003399;color:#fc0;font:700 12px/1 var(--f-body);display:flex;align-items:flex-end;padding:0 5px 4px}
+.schild span:last-child{padding:6px 12px 5px;white-space:nowrap}
+#fzDlg .schild{font-size:26px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <div>
+      <h1>Kundendienstfahrzeug</h1>
+      <p class="lead">Ersatzteile im Fahrzeug: was im Wagen liegt und was fehlt. Der Bestand gehört zu deiner Arbeits-E-Mail und ist auch auf dem Handy da.</p>
+      <button type="button" class="fz" id="fzBtn" title="Kennzeichen und Fahrer ändern" hidden>
+        <span class="schild"><span class="eu">D</span><span id="fzKz">–</span></span>
+        <span class="col" style="gap:0;align-items:flex-start"><span class="hint">Fahrer</span><b id="fzFahrer">–</b></span>
+        <span class="hint" style="margin-left:4px">✎</span>
+      </button>
+    </div>
+    <div class="ver"><span id="verText">Version …</span><button class="ghost" id="checkBtn" hidden>Nach Updates suchen</button><button id="helpBtn">Anleitung</button></div>
+  </div>
+
+  <div class="banner" id="banner" hidden>
+    <div><b id="bannerTitle"></b><div class="notes" id="bannerNotes"></div></div>
+    <button id="updateBtn">Jetzt aktualisieren</button>
+  </div>
+
+  <div class="grid">
+    <aside>
+      <section class="panel" aria-labelledby="h-neu">
+        <div class="step"><b>01</b><h2 id="h-neu">Teil erfassen</h2></div>
+        <button class="primary wide" id="neuBtn">＋ Neues Teil</button>
+        <div class="grid2" style="gap:8px">
+          <label class="btn file-btn" style="justify-content:center" title="Foto vom Etikett oder der Verpackung – die Teilenummer wird gelesen">📷 Vom Foto<input type="file" id="fotoIn" accept="image/*"></label>
+          <button id="tdocBtn" style="justify-content:center" title="Teile, die in T-Doc mit dem Lesezeichen gesammelt wurden">📋 Aus T-Doc</button>
+        </div>
+        <button id="etBtn" class="wide" title="Dieselbe Ersatzteilliste wie im Reparaturauftrag der Service-Mappe">📋 Ersatzteilliste</button>
+        <p class="hint">In T-Doc die Teile anklicken und das Lesezeichen „T-Doc → Excel“ drücken – dann hier „Aus T-Doc“. <button class="link" id="lesezeichenBtn">Lesezeichen einrichten</button></p>
+        <p class="hint" id="userLine" hidden></p>
+      </section>
+
+      <section class="panel" aria-labelledby="h-stand">
+        <div class="step"><b>02</b><h2 id="h-stand">Überblick</h2></div>
+        <div class="stats">
+          <div class="stat"><b id="stPos">–</b><span>Positionen</span></div>
+          <div class="stat"><b id="stStk">–</b><span>Stück im Wagen</span></div>
+          <div class="stat"><b id="stFehlt">–</b><span>fehlen</span></div>
+        </div>
+        <div class="row" style="justify-content:space-between"><span class="chip info" id="syncChip">Wird geladen …</span><button class="ghost" id="syncBtn" title="Jetzt mit dem Server abgleichen">↻ Abgleichen</button></div>
+      </section>
+
+      <section class="panel" id="handyPanel" aria-labelledby="h-handy">
+        <div class="step fold" id="handyFold" tabindex="0" role="button" aria-expanded="true"><b>03</b><h2 id="h-handy">Auf dem Handy</h2><span class="chev">▾</span></div>
+        <div class="qr"><canvas id="qrCanvas" width="29" height="29" aria-label="QR-Code zur Handy-Seite"></canvas>
+          <div class="col" style="gap:6px"><span class="hint">Mit der Handy-Kamera scannen und einmal mit derselben Arbeits-E-Mail anmelden.</span><span class="val" id="handyUrl"></span><button class="link" id="handyCopy" style="align-self:flex-start">Link kopieren</button></div></div>
+      </section>
+
+      <section class="panel" aria-labelledby="h-excel">
+        <div class="step"><b>04</b><h2 id="h-excel">Excel</h2></div>
+        <div class="grid2" style="gap:8px">
+          <button id="exportBtn" style="justify-content:center">⬇ Exportieren</button>
+          <label class="btn file-btn" style="justify-content:center">⬆ Importieren<input type="file" id="importIn" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"></label>
+        </div>
+        <p class="hint">Exportiert Bestand und Fehlteile in eine Excel-Mappe. Beim Import werden Tabellen mit den Spalten Ersatzteilnummer, Bezeichnung, Stückzahl und Lagerort übernommen – auch die Excel-Datei aus dem früheren Wagenlager. Kennzeichen und Fahrer stehen oben in der Mappe.</p>
+      </section>
+
+      <section class="panel" id="adminPanel" aria-labelledby="h-adm" hidden>
+        <div class="step"><b>ADMIN</b><h2 id="h-adm">Testkanal</h2></div>
+        <label class="check"><input type="checkbox" id="testChannel"> Testversionen vor allen anderen bekommen</label>
+        <p class="hint">Neue Funktionen kommen hier zuerst an. Erst wenn du sie freigibst, bekommen alle anderen das Update.</p>
+        <p class="hint">Nutzer, Sperren und alle Lager: <button class="link" id="openSheet">Google-Tabelle öffnen</button></p>
+      </section>
+    </aside>
+
+    <main>
+      <div class="toolbar">
+        <div class="tabs" role="tablist" aria-label="Liste">
+          <button role="tab" id="tabBestand" aria-selected="true">Fahrzeugbestand <span class="n" id="nBestand">0</span></button>
+          <button role="tab" id="tabFehlt" aria-selected="false">Fehlende Ersatzteile <span class="n" id="nFehlt">0</span></button>
+        </div>
+        <div class="such"><input type="search" id="such" placeholder="Nummer, Bezeichnung oder Lagerort suchen" aria-label="Suchen"></div>
+        <select id="ortFilter" aria-label="Lagerort"><option value="">Alle Lagerorte</option></select>
+      </div>
+
+      <div class="doc">
+        <div class="doc-head">
+          <div class="col" style="gap:2px"><span class="doc-name" id="listTitle">Fahrzeugbestand</span><span class="hint" id="listInfo"></span></div>
+          <div class="row"><span class="chip warn" id="offlineBox" hidden>Offline – nur Ansicht</span>
+            <select id="sortSel" aria-label="Sortierung" style="width:auto;padding:5px 8px;font-size:13.5px;background:var(--sheet)">
+              <option value="name">nach Bezeichnung</option>
+              <option value="nr">nach Teilenummer</option>
+              <option value="ort">nach Lagerort</option>
+              <option value="menge">nach Stückzahl</option>
+              <option value="zeit">zuletzt geändert</option>
+            </select></div>
+        </div>
+        <div id="tableBox">
+          <table>
+            <thead><tr><th>Teilenummer</th><th>Bezeichnung</th><th>Lagerort</th><th>Stück</th><th><span class="hint" style="font-weight:400;text-transform:none;letter-spacing:0"></span></th></tr></thead>
+            <tbody id="rows"></tbody>
+          </table>
+        </div>
+        <div class="empty" id="emptyBox" hidden><b id="emptyTitle"></b><span id="emptyText"></span></div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<dialog id="teilDlg">
+  <form method="dialog" class="dlg" id="teilForm" autocomplete="off">
+    <div class="dlg-head"><strong id="teilTitle">Neues Teil</strong><button type="button" class="ghost" id="teilClose">Schließen</button></div>
+    <div class="dlg-body col" style="gap:12px">
+      <div class="tabs" role="tablist" aria-label="Liste">
+        <button type="button" role="tab" id="tlBestand" aria-selected="true">Im Wagen</button>
+        <button type="button" role="tab" id="tlFehlt" aria-selected="false">Fehlt / nachbestellen</button>
+      </div>
+      <label class="field">Teilenummer
+        <span class="row" style="flex-wrap:nowrap">
+          <input type="text" id="fNr" class="mono" placeholder="67405-T1000-71 oder BT7643266" required>
+          <label class="btn file-btn" title="Teilenummer vom Foto lesen">📷<input type="file" id="fFoto" accept="image/*"></label>
+          <button type="button" id="fTdoc" title="Diese Nummer in Toyota T-Doc nachschlagen">T-Doc ↗</button>
+        </span>
+      </label>
+      <div class="col" id="ocrBox" style="gap:6px" hidden><span class="hint" id="ocrInfo"></span><div class="cands" id="cands"></div></div>
+      <div class="treffer" id="trefferBox" hidden><span id="trefferText"></span><button type="button" id="trefferBtn">Eintrag öffnen</button></div>
+      <label class="field">Bezeichnung
+        <input type="text" id="fName" placeholder="z. B. Filter-Teilgruppe" required list="nameListe">
+      </label>
+      <span class="hint" id="nameHint" hidden></span>
+      <div class="grid2">
+        <label class="field">Lagerort
+          <input type="text" id="fOrt" placeholder="z. B. Fach A, Kiste 3" list="ortListe">
+        </label>
+        <label class="field">Stückzahl
+          <span class="mengen"><button type="button" id="fMinus" aria-label="weniger">−</button><input type="number" id="fMenge" min="0" max="999999" step="1" value="1" inputmode="numeric"><button type="button" id="fPlus" aria-label="mehr">＋</button></span>
+        </label>
+      </div>
+      <p class="err" id="teilErr" hidden></p>
+    </div>
+    <div class="dlg-foot">
+      <div class="row"><button type="button" class="ghost danger" id="teilDel" hidden>Löschen</button><button type="button" class="ghost" id="teilNachbestellen" hidden>Nachbestellen</button></div>
+      <div class="row"><button type="button" class="ghost" id="teilAbbr">Abbrechen</button><button class="primary" id="teilOk">Speichern</button></div>
+    </div>
+  </form>
+</dialog>
+<datalist id="ortListe"></datalist>
+<datalist id="nameListe"></datalist>
+
+<dialog id="importDlg">
+  <form method="dialog" class="dlg" id="importForm">
+    <div class="dlg-head"><strong id="importTitle">Übernehmen</strong><button type="button" class="ghost" id="importClose">Schließen</button></div>
+    <div class="dlg-body col" style="gap:12px">
+      <span class="hint" id="importInfo"></span>
+      <label class="field" id="importZielBox">Eintragen in
+        <select id="importZiel"><option value="fehlt">Fehlende Ersatzteile</option><option value="bestand">Fahrzeugbestand</option><option value="datei">wie in der Datei (je Tabellenblatt)</option></select>
+      </label>
+      <label class="field" id="importOrtBox">Lagerort (für alle, optional)
+        <input type="text" id="importOrt" list="ortListe" placeholder="leer lassen = wie in der Liste">
+      </label>
+      <label class="field">Wenn ein Teil an diesem Lagerort schon eingetragen ist
+        <select id="importModus"><option value="dazu">Stückzahl dazuzählen</option><option value="ersetzen">Stückzahl übernehmen (ersetzen)</option></select>
+      </label>
+      <div class="preview"><table><thead><tr><th>Liste</th><th>Teilenummer</th><th>Bezeichnung</th><th>Ort</th><th>Stk.</th></tr></thead><tbody id="importRows"></tbody></table></div>
+      <p class="err" id="importErr" hidden></p>
+    </div>
+    <div class="dlg-foot"><span></span><div class="row"><button type="button" class="ghost" id="importAbbr">Abbrechen</button><button class="primary" id="importOk">Übernehmen</button></div></div>
+  </form>
+</dialog>
+
+<dialog id="etDlg">
+  <form method="dialog" class="dlg" id="etForm" autocomplete="off">
+    <div class="dlg-head"><strong>Ersatzteilliste</strong><button type="button" class="ghost" id="etZu">Schließen</button></div>
+    <div class="dlg-body col" style="gap:10px">
+      <span class="hint">Dieselbe Liste wie beim Reparaturauftrag in der Service-Mappe. Menge hinter den Artikel schreiben und übernehmen.</span>
+      <div class="et-tabs" id="etTabs"></div>
+      <input type="search" id="etSuche" placeholder="Artikel oder Nummer suchen" aria-label="Suchen">
+      <div class="et-tab"><table><tbody id="etListe"></tbody></table></div>
+    </div>
+    <div class="dlg-foot"><span class="hint" id="etSumme">Nichts ausgewählt</span><div class="row"><button type="button" class="ghost" id="etLeeren">Mengen leeren</button><button class="primary" id="etOk" disabled>Übernehmen …</button></div></div>
+  </form>
+</dialog>
+
+<dialog id="helpDlg">
+  <form method="dialog" class="dlg">
+    <div class="dlg-head"><strong>Anleitung</strong><button class="ghost" value="x">Schließen</button></div>
+    <div class="dlg-body help">
+      <h3>Zwei Listen</h3>
+      <ul>
+        <li><b>Fahrzeugbestand</b> – was im Servicewagen liegt, mit Lagerort und Stückzahl.</li>
+        <li><b>Fehlende Ersatzteile</b> – was nachbestellt werden muss. Ist ein Teil da, auf <b>✓ Eingetroffen</b> klicken: es wandert mit seiner Stückzahl in den Bestand.</li>
+      </ul>
+      <h3>Teile erfassen</h3>
+      <ul>
+        <li><b>＋ Neues Teil</b>: Teilenummer eintragen. Toyota-Nummern (12345-ABCDE-12) und BT-Nummern (BT1234567 oder nur die 7 Ziffern) werden automatisch richtig geschrieben.</li>
+        <li>Ist die Nummer schon bekannt (bei dir oder bei Kollegen), wird die Bezeichnung automatisch eingetragen.</li>
+        <li><b>📷 Vom Foto</b>: Foto vom Etikett wählen – die Teilenummer wird gelesen. Bitte die erkannte Nummer kurz prüfen.</li>
+        <li><b>T-Doc ↗</b> öffnet die Nummer in Toyota T-Doc (im Browser, in dem du bei Toyota angemeldet bist).</li>
+        <li><b>📋 Ersatzteilliste</b>: dieselbe Liste wie im Reparaturauftrag der Service-Mappe (Außendienst &amp; Werkstatt, Batteriedienst). Mengen eintragen und übernehmen – in den Bestand oder auf die Fehlliste.</li>
+        <li><b>📋 Aus T-Doc</b>: In T-Doc die gewünschten Teile anklicken (rot markiert), das Lesezeichen „T-Doc → Excel“ drücken und dann hier auf „Aus T-Doc“. Das Lesezeichen ist dasselbe wie in der Service-Mappe.</li>
+      </ul>
+      <h3>Entnehmen und nachfüllen</h3>
+      <p>In der Liste mit <b>−</b> und <b>＋</b> die Stückzahl ändern. Mehrere Klicks hintereinander werden zusammen gespeichert. Ist ein Teil aufgebraucht, bietet das Programm an, es auf die Fehlliste zu setzen.</p>
+      <h3>Handy</h3>
+      <p>Den QR-Code links mit dem Handy scannen und dort einmal mit derselben Arbeits-E-Mail anmelden. Änderungen auf dem Handy erscheinen hier nach spätestens einer halben Minute (oder sofort mit „↻ Abgleichen“).</p>
+      <h3>Ohne Internet</h3>
+      <p>Der zuletzt geladene Bestand wird angezeigt, ändern geht erst wieder mit Verbindung.</p>
+      <h3>Excel</h3>
+      <p>„Exportieren“ speichert Bestand und Fehlteile als Excel-Mappe (zwei Tabellenblätter). „Importieren“ übernimmt eine solche Mappe – praktisch zum Umziehen aus dem früheren Wagenlager: dort „Excel exportieren“, hier importieren. Oben in der Mappe stehen Kennzeichen und Fahrer.</p>
+      <h3>Fahrzeug</h3>
+      <p>Oben neben der Überschrift stehen Kennzeichen und Fahrer. Ein Klick darauf ändert sie, zum Beispiel bei einem anderen Fahrzeug.</p>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="fzDlg">
+  <form method="dialog" class="dlg" id="fzForm" autocomplete="off">
+    <div class="dlg-head"><strong>Dein Kundendienstfahrzeug</strong><button type="button" class="ghost" id="fzZu">Später</button></div>
+    <div class="dlg-body col" style="gap:12px">
+      <span class="hint">Kennzeichen und Fahrer stehen im Programm, auf dem Handy und oben in der Excel-Mappe.</span>
+      <label class="field">Kennzeichen
+        <input type="text" id="fzKzIn" class="mono" placeholder="z. B. OL-SG 123" maxlength="20" style="text-transform:uppercase;font-size:18px">
+      </label>
+      <label class="field">Fahrer (Vor- und Nachname)
+        <input type="text" id="fzFahrerIn" autocomplete="name" placeholder="Max Mustermann" maxlength="100">
+      </label>
+      <div class="row" style="justify-content:center"><span class="schild"><span class="eu">D</span><span id="fzVorschau">OL-SG 123</span></span></div>
+      <p class="err" id="fzErr" hidden></p>
+    </div>
+    <div class="dlg-foot"><span></span><button class="primary" id="fzOk">Speichern</button></div>
+  </form>
+</dialog>
+
+<dialog id="regDlg">
+  <form method="dialog" class="dlg" id="regForm">
+    <div class="dlg-head"><strong>Einmalige Anmeldung</strong></div>
+    <div class="dlg-body col" style="gap:12px">
+      <span class="hint">Dein Bestand wird unter deiner Arbeits-E-Mail gespeichert – so siehst du ihn auch auf dem Handy und an jedem anderen Rechner.</span>
+      <label class="field">Vor- und Nachname
+        <input type="text" id="regName" autocomplete="name" required placeholder="Max Mustermann">
+      </label>
+      <label class="field">Arbeits-E-Mail
+        <span class="row" style="gap:0;flex-wrap:nowrap">
+          <input type="text" id="regMail" autocomplete="off" required placeholder="m.mustermann" style="border-top-right-radius:0;border-bottom-right-radius:0;min-width:0">
+          <span class="val" id="regDomain" style="border:1px solid var(--line);border-left:0;border-radius:0 7px 7px 0;padding:8px 10px;background:var(--sheet);white-space:nowrap">@schlueter-gabelstapler.de</span>
+        </span>
+      </label>
+      <span class="err" id="regErr" hidden></span>
+    </div>
+    <div class="dlg-foot">
+      <span></span>
+      <button class="primary" value="ok" id="regOk">Anmelden</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="codeDlg">
+  <form method="dialog" class="dlg" id="codeForm">
+    <div class="dlg-head"><strong>Freischaltcode eingeben</strong></div>
+    <div class="dlg-body col" style="gap:12px">
+      <span class="hint" id="codeInfo"></span>
+      <label class="field">Code aus der E-Mail
+        <input type="text" id="codeInput" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="123456" style="font:600 22px var(--f-mono);letter-spacing:.3em">
+      </label>
+      <span class="err" id="codeErr" hidden></span>
+    </div>
+    <div class="dlg-foot">
+      <div class="row"><button type="button" class="ghost" id="codeBack">E-Mail ändern</button><button type="button" class="ghost" id="codeResend">Code neu senden</button></div>
+      <button class="primary" id="codeOk">Freischalten</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="logoutDlg">
+  <form method="dialog" class="dlg">
+    <div class="dlg-head"><strong>Abmelden</strong></div>
+    <div class="dlg-body"><span class="hint">Nach dem Abmelden muss sich jemand neu anmelden, bevor das Programm wieder benutzt werden kann. Der Bestand bleibt auf dem Server gespeichert.</span></div>
+    <div class="dlg-foot">
+      <button class="ghost" value="cancel">Abbrechen</button>
+      <button class="primary" value="ok">Abmelden</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="blockDlg">
+  <form method="dialog" class="dlg">
+    <div class="dlg-head"><strong>Programm gesperrt</strong></div>
+    <div class="dlg-body"><span class="hint">Dein Zugang zum Kundendienstfahrzeug wurde gesperrt. Bitte wende dich an den Administrator.</span></div>
+    <div class="dlg-foot"><span></span><button type="button" class="primary" id="blockRetry">Erneut prüfen</button></div>
+  </form>
+</dialog>
+
+<div id="toast" role="status" aria-live="polite" hidden><span id="toastText"></span><button type="button" id="toastBtn" hidden></button></div>
+
+<script>var Utilities = {newBlob: s => ({getBytes: () => Array.from(new TextEncoder().encode(s))})};</script>
+<script src="/qr.js"></script>
+<script>
+(() => {
+const $ = s => document.querySelector(s);
+const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+/* Verbindung zum Programm halten: schließt man das Fenster, beendet sich das Programm. */
+try { new EventSource("/api/alive"); } catch(e) {}
+
+const state = {user: null, blocked: false, testChannel: true, people: {}, lastStart: null, tab: "bestand", sort: "name", handyZu: false};
+let saveT;
+function persistNow(){
+  clearTimeout(saveT);
+  const {user, blocked, testChannel, people, lastStart, tab, sort, handyZu} = state;
+  return fetch("/api/settings", {method: "PUT", headers: {"Content-Type": "application/json"}, body: JSON.stringify({user, blocked, testChannel, people, lastStart, tab, sort, handyZu})})
+    .catch(() => toast("Einstellungen konnten nicht gespeichert werden."));
+}
+function persist(){ clearTimeout(saveT); saveT = setTimeout(persistNow, 300); }
+
+let toastT;
+function toast(msg, ms = 4500, btn){
+  const t = $("#toast"); $("#toastText").textContent = msg; t.hidden = false;
+  const b = $("#toastBtn"); b.hidden = !btn;
+  if(btn){ b.textContent = btn.text; b.onclick = () => { t.hidden = true; btn.run(); }; }
+  clearTimeout(toastT); toastT = setTimeout(() => t.hidden = true, btn ? Math.max(ms, 8000) : ms);
+}
+
+/* ---------- Teilenummern ---------- */
+// Toyota: 12345-ABCDE-12 · BT: BT1234567 (auch nur die 7 Ziffern)
+function teileNr(v){
+  const roh = String(v || "").trim().toUpperCase(), c = roh.replace(/[\s-]/g, "");
+  if(/^BT\d{7}$/.test(c)) return c;
+  if(/^\d{7}$/.test(c)) return "BT" + c;
+  const m = c.match(/^(\d{5})([A-Z0-9]{5})(\d{2})$/);
+  return m ? `${m[1]}-${m[2]}-${m[3]}` : roh;
+}
+const nrKey = n => teileNr(n).replace(/[\s-]/g, "");
+const nrGueltig = n => /^(BT\d{7}|\d{5}-[A-Z0-9]{5}-\d{2})$/.test(teileNr(n));
+// Kandidaten aus erkanntem Text: zuerst vollständige Toyota-/BT-Nummern, dann sonstige Zeichenfolgen mit Ziffern
+function kandidaten(text){
+  // O ↔ 0 verwechselt die Texterkennung oft – neben Ziffern ist es fast immer eine Null
+  let t = String(text || "").toUpperCase(), vorher;
+  do{ vorher = t; t = t.replace(/O(?=\d)|(?<=\d)O/g, "0"); }while(t !== vorher);
+  const gut = [...new Set([...(t.match(/\d{5}[\s-]*[A-Z0-9]{5}[\s-]*\d{2}/g) || []), ...(t.match(/BT[\s-]?\d{7}/g) || [])].map(teileNr))];
+  const rest = [...new Set((t.match(/[A-Z0-9][A-Z0-9.\/-]{3,}/g) || []).filter(s => /\d/.test(s)).map(teileNr))].filter(s => !gut.includes(s));
+  if(!gut.length) for(const s of (t.match(/\b\d{7}\b/g) || [])) if(!gut.includes("BT" + s)) rest.unshift("BT" + s);
+  return {gut, rest: rest.slice(0, 12)};
+}
+
+/* ---------- Bestand ---------- */
+const lager = {fahrzeug: null, teile: [], katalog: new Map(), stand: "", kstand: "", geladen: false, offline: false, zeit: null, fehler: ""};
+const offen = new Map();   // teilId -> {delta, timer} – Mengenänderungen, die noch nicht beim Server sind
+let neuMarkiert = new Set();
+
+function katalogNamen(liste){ lager.katalog = new Map((liste || []).map(k => [nrKey(k.nr), k.name])); }
+function nameZu(nr){
+  const k = nrKey(nr); if(!k) return "";
+  const eigen = lager.teile.find(t => nrKey(t.nr) === k && t.name);
+  return (eigen && eigen.name) || lager.katalog.get(k) || (etKatalog && etKatalog.get(k)) || "";
+}
+
+async function server(event, extra = {}){
+  try{
+    const r = await (await fetch("/api/lager", {method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({event, stand: lager.stand, kstand: lager.kstand, ...extra})})).json();
+    return r;
+  }catch(e){ return {ok: false, offline: true, error: "Keine Verbindung zum Programm."}; }
+}
+function uebernehmen(r){
+  if(!r || !r.ok) return false;
+  if(r.unveraendert){ lager.offline = !!r.offline; lager.zeit = new Date(); return true; }
+  if(Array.isArray(r.teile)){
+    const alt = new Set(lager.teile.map(t => t.id));
+    lager.teile = r.teile;
+    if(lager.geladen) neuMarkiert = new Set(r.teile.filter(t => !alt.has(t.id)).map(t => t.id));
+    lager.stand = r.stand || "";
+  }
+  if(Array.isArray(r.katalog)){ katalogNamen(r.katalog); lager.kstand = r.kstand || ""; }
+  if(r.fahrzeug) lager.fahrzeug = r.fahrzeug;
+  lager.geladen = true; lager.offline = !!r.offline; lager.fehler = r.offline ? (r.error || "") : "";
+  lager.zeit = r.offline && r.zeit ? new Date(r.zeit) : new Date();
+  return true;
+}
+let ladeLaeuft = null;
+async function laden(manuell){
+  if(locked() || !state.user || !state.user.verified) return;
+  if(offen.size) return; // erst die offenen Mengen senden
+  if(ladeLaeuft) return ladeLaeuft;
+  ladeLaeuft = (async () => {
+    if(manuell){ lager.stand = ""; }
+    const r = await server("wl_liste");
+    if(r.ok){ uebernehmen(r); fzNachfragen(); }
+    else if(/neu anmelden/i.test(r.error || "")){ state.user.verified = false; persist(); checkAccess(); }
+    else if(/gesperrt/i.test(r.error || "")){ state.blocked = true; persist(); $("#blockDlg").showModal(); }
+    else { lager.offline = true; lager.fehler = r.error || "Keine Verbindung."; if(manuell) toast(lager.fehler, 6000); }
+    render();
+  })();
+  try{ await ladeLaeuft; } finally { ladeLaeuft = null; }
+}
+// Alle 30 Sekunden abgleichen, solange das Fenster sichtbar ist; beim Zurückkehren sofort.
+setInterval(() => { if(!document.hidden) laden(false); }, 30000);
+addEventListener("focus", () => laden(false));
+document.addEventListener("visibilitychange", () => { if(!document.hidden) laden(false); });
+
+const kannAendern = () => !locked() && state.user && state.user.verified && lager.geladen && !lager.offline;
+function nichtJetzt(){
+  if(locked()){ checkAccess(); return true; }
+  if(lager.offline){ toast("Ohne Verbindung zum Server kann nichts geändert werden.", 5000); return true; }
+  if(!lager.geladen){ toast("Der Bestand wird noch geladen …"); return true; }
+  return false;
+}
+async function aendern(event, extra, ok){
+  const r = await server(event, extra);
+  if(!r.ok){
+    if(r.offline){ lager.offline = true; render(); }
+    toast(r.error || "Speichern fehlgeschlagen.", 7000);
+    if(r.konflikt) laden(true);
+    return r;
+  }
+  uebernehmen(r); render();
+  if(ok) ok(r);
+  return r;
+}
+
+/* ---------- Kennzeichen und Fahrer ---------- */
+const kzForm = v => String(v || "").toUpperCase().replace(/\s+/g, " ").replace(/\s*-\s*/g, "-").trim();
+const fzErr = m => { $("#fzErr").textContent = m || ""; $("#fzErr").hidden = !m; };
+let fzGefragt = false;
+function fzNachfragen(){
+  // Einmal je Start nachfragen, solange Kennzeichen oder Fahrer fehlen
+  if(fzGefragt || lager.offline || document.querySelector("dialog[open]")) return;
+  const f = lager.fahrzeug || {};
+  if(f.kennzeichen && f.fahrer) return;
+  fzGefragt = true; fzOeffnen();
+}
+function fzOeffnen(){
+  if(locked()) return checkAccess();
+  const f = lager.fahrzeug || {};
+  $("#fzKzIn").value = f.kennzeichen || ""; $("#fzFahrerIn").value = f.fahrer || (state.user ? state.user.name : "");
+  $("#fzVorschau").textContent = kzForm($("#fzKzIn").value) || "OL-SG 123"; fzErr("");
+  $("#fzOk").disabled = !kannAendern();
+  if(lager.offline) fzErr("Offline – ändern geht erst wieder mit Verbindung.");
+  $("#fzDlg").showModal(); setTimeout(() => (f.kennzeichen ? $("#fzFahrerIn") : $("#fzKzIn")).focus(), 30);
+}
+$("#fzBtn").onclick = fzOeffnen;
+$("#fzZu").onclick = () => $("#fzDlg").close();
+$("#fzKzIn").addEventListener("input", () => { $("#fzVorschau").textContent = kzForm($("#fzKzIn").value) || "OL-SG 123"; });
+$("#fzForm").addEventListener("submit", async e => {
+  e.preventDefault();
+  if(nichtJetzt()) return;
+  const kennzeichen = kzForm($("#fzKzIn").value), fahrer = $("#fzFahrerIn").value.trim().replace(/\s+/g, " ");
+  if(kennzeichen.replace(/[\s-]/g, "").length < 3) return fzErr("Bitte das Kennzeichen eintragen (z. B. OL-SG 123).");
+  if(fahrer.split(" ").length < 2) return fzErr("Bitte Vor- und Nachnamen des Fahrers eintragen.");
+  $("#fzOk").disabled = true;
+  const r = await server("wl_fahrzeug", {kennzeichen, fahrer});
+  $("#fzOk").disabled = false;
+  if(!r.ok) return fzErr(r.error || "Speichern fehlgeschlagen.");
+  uebernehmen(r); render(); $("#fzDlg").close(); toast("Fahrzeug gespeichert.");
+});
+
+/* ---------- Anzeige ---------- */
+const zahl = n => Number(n || 0).toLocaleString("de-DE");
+function zeitText(iso){
+  const d = new Date(iso); if(isNaN(d)) return "";
+  const heute = new Date(); const gestern = new Date(Date.now() - 864e5);
+  const hm = d.toLocaleTimeString("de-DE", {hour: "2-digit", minute: "2-digit"});
+  if(d.toDateString() === heute.toDateString()) return "heute " + hm;
+  if(d.toDateString() === gestern.toDateString()) return "gestern " + hm;
+  return d.toLocaleDateString("de-DE", {day: "2-digit", month: "2-digit", year: "2-digit"});
+}
+function menge(t){ const o = offen.get(t.id); return t.menge + (o ? o.delta : 0); }
+
+function sichtbare(){
+  const q = $("#such").value.trim().toLowerCase(), qk = q.replace(/[\s-]/g, "");
+  const ort = $("#ortFilter").value;
+  let a = lager.teile.filter(t => t.liste === state.tab);
+  if(ort) a = a.filter(t => (t.ort || "") === ort);
+  if(q) a = a.filter(t => [t.nr, t.name, t.ort].join(" ").toLowerCase().includes(q) || (qk && nrKey(t.nr).toLowerCase().includes(qk)));
+  const cmp = {
+    name: (x, y) => x.name.localeCompare(y.name, "de") || x.nr.localeCompare(y.nr),
+    nr: (x, y) => x.nr.localeCompare(y.nr, "de", {numeric: true}),
+    ort: (x, y) => (x.ort || "~").localeCompare(y.ort || "~", "de", {numeric: true}) || x.name.localeCompare(y.name, "de"),
+    menge: (x, y) => menge(x) - menge(y) || x.name.localeCompare(y.name, "de"),
+    zeit: (x, y) => String(y.zeit).localeCompare(String(x.zeit)),
+  }[state.sort] || (() => 0);
+  return a.sort(cmp);
+}
+
+function fzRender(){
+  const f = lager.fahrzeug, da = !!(state.user && state.user.verified && lager.geladen);
+  $("#fzBtn").hidden = !da;
+  $("#fzKz").textContent = (f && f.kennzeichen) || "Kennzeichen?";
+  $("#fzFahrer").textContent = (f && f.fahrer) || "bitte eintragen";
+  document.title = f && f.kennzeichen ? `Kundendienstfahrzeug ${f.kennzeichen}` : "Kundendienstfahrzeug";
+}
+function render(){
+  fzRender();
+  const b = lager.teile.filter(t => t.liste === "bestand"), f = lager.teile.filter(t => t.liste === "fehlt");
+  $("#nBestand").textContent = b.length; $("#nFehlt").textContent = f.length;
+  $("#tabBestand").setAttribute("aria-selected", state.tab === "bestand");
+  $("#tabFehlt").setAttribute("aria-selected", state.tab === "fehlt");
+  const g = lager.geladen;
+  $("#stPos").textContent = g ? zahl(b.length) : "–";
+  $("#stStk").textContent = g ? zahl(b.reduce((s, t) => s + menge(t), 0)) : "–";
+  $("#stFehlt").textContent = g ? zahl(f.length) : "–";
+  const chip = $("#syncChip");
+  if(locked() || !state.user || !state.user.verified){ chip.className = "chip info"; chip.textContent = "Nicht angemeldet"; }
+  else if(!g){ chip.className = "chip info"; chip.textContent = "Wird geladen …"; }
+  else if(lager.offline){ chip.className = "chip warn"; chip.textContent = "Offline" + (lager.zeit ? " · Stand " + zeitText(lager.zeit) : ""); chip.title = lager.fehler || ""; }
+  else { chip.className = "chip ok"; chip.title = ""; chip.textContent = "Abgeglichen um " + (lager.zeit || new Date()).toLocaleTimeString("de-DE", {hour: "2-digit", minute: "2-digit"}); }
+  $("#offlineBox").hidden = !(g && lager.offline);
+
+  // Lagerorte für Filter und Eingabe
+  const orte = [...new Set(lager.teile.map(t => (t.ort || "").trim()).filter(Boolean))].sort((x, y) => x.localeCompare(y, "de", {numeric: true}));
+  const sel = $("#ortFilter"), war = sel.value;
+  sel.innerHTML = '<option value="">Alle Lagerorte</option>' + orte.map(o => `<option>${esc(o)}</option>`).join("");
+  sel.value = orte.includes(war) ? war : "";
+  $("#ortListe").innerHTML = orte.map(o => `<option value="${esc(o)}">`).join("");
+  $("#sortSel").value = state.sort;
+
+  $("#listTitle").textContent = state.tab === "bestand" ? "Fahrzeugbestand" : "Fehlende Ersatzteile";
+  const liste = sichtbare();
+  const alle = state.tab === "bestand" ? b : f;
+  $("#listInfo").textContent = !g ? "" : (liste.length === alle.length ? `${alle.length} ${alle.length === 1 ? "Eintrag" : "Einträge"}` : `${liste.length} von ${alle.length} Einträgen`)
+    + (state.tab === "bestand" && b.some(t => menge(t) === 0) ? ` · ${b.filter(t => menge(t) === 0).length} aufgebraucht` : "");
+
+  const leer = !liste.length;
+  $("#tableBox").hidden = leer; $("#emptyBox").hidden = !leer;
+  if(leer){
+    let ti, tx;
+    if(!state.user || !state.user.verified){ ti = "Bitte anmelden"; tx = "Nach der Anmeldung erscheint hier dein Bestand."; }
+    else if(!g){ ti = "Bestand wird geladen …"; tx = ""; }
+    else if(alle.length){ ti = "Nichts gefunden"; tx = "Suche oder Lagerort-Filter ändern."; }
+    else if(state.tab === "bestand"){ ti = "Noch keine Teile im Wagen"; tx = "Mit „＋ Neues Teil“ links das erste Teil erfassen – oder den alten Bestand per Excel importieren."; }
+    else { ti = "Es fehlt nichts"; tx = "Teile, die nachbestellt werden müssen, hier sammeln – oder in T-Doc markieren und „Aus T-Doc“ einfügen."; }
+    $("#emptyTitle").textContent = ti; $("#emptyText").textContent = tx;
+    $("#rows").innerHTML = "";
+    return;
+  }
+  const dis = kannAendern() ? "" : " disabled";
+  $("#rows").innerHTML = liste.map(t => {
+    const m = menge(t), o = offen.get(t.id);
+    const akt = t.liste === "bestand"
+      ? `<button type="button" data-a="nach" title="Auf die Liste „Fehlende Ersatzteile“ setzen"${dis}>Nachbestellen</button>`
+      : `<button type="button" data-a="da" title="Ist eingetroffen – in den Fahrzeugbestand übernehmen"${dis}>✓ Eingetroffen</button>`;
+    return `<tr data-id="${esc(t.id)}" class="${neuMarkiert.has(t.id) ? "neu" : ""}">
+      <td class="nr"><button type="button" data-a="edit" title="Bearbeiten">${esc(t.nr)}</button></td>
+      <td class="name">${esc(t.name)}${state.sort === "zeit" && t.zeit ? `<span class="zeit">${esc(zeitText(t.zeit))}</span>` : ""}</td>
+      <td class="ort">${esc(t.ort || "–")}</td>
+      <td class="menge"><span class="stepper${m === 0 && t.liste === "bestand" ? " leer" : ""}${o ? " wartet" : ""}"><button type="button" data-a="minus" aria-label="eins weniger"${dis}>−</button><output>${zahl(m)}</output><button type="button" data-a="plus" aria-label="eins mehr"${dis}>＋</button></span></td>
+      <td class="akt">${akt} <button type="button" class="ghost" data-a="edit" title="Bearbeiten">✎</button></td></tr>`;
+  }).join("");
+  neuMarkiert = new Set();
+}
+
+$("#rows").addEventListener("click", e => {
+  const b = e.target.closest("button[data-a]"); if(!b) return;
+  const id = b.closest("tr").dataset.id, t = lager.teile.find(x => x.id === id); if(!t) return;
+  const a = b.dataset.a;
+  if(a === "edit") return oeffneTeil(t);
+  if(nichtJetzt()) return;
+  if(a === "minus") return mengeAendern(t, -1);
+  if(a === "plus") return mengeAendern(t, +1);
+  if(a === "nach") return oeffneTeil({liste: "fehlt", nr: t.nr, name: t.name, ort: t.ort, menge: 1}, "Nachbestellen");
+  if(a === "da") return eingetroffen(t);
+});
+
+// Mehrere Klicks in kurzer Folge werden zu einer Änderung zusammengefasst
+function mengeAendern(t, d){
+  const o = offen.get(t.id) || {delta: 0, timer: null};
+  if(t.menge + o.delta + d < 0) return toast(t.liste === "bestand" ? "Davon ist nichts mehr da." : "Die Stückzahl ist schon 0.");
+  o.delta += d; clearTimeout(o.timer);
+  o.timer = setTimeout(() => mengeSenden(t.id), 700);
+  offen.set(t.id, o); render();
+}
+async function mengeSenden(id){
+  const o = offen.get(id); if(!o) return;
+  offen.delete(id);
+  if(!o.delta){ render(); return; }
+  const r = await aendern("wl_menge", {teilId: id, delta: o.delta});
+  if(r.ok){
+    const t = lager.teile.find(x => x.id === id);
+    if(t && t.liste === "bestand" && t.menge === 0 && o.delta < 0)
+      toast(`„${t.name}“ ist aufgebraucht.`, 9000, {text: "Nachbestellen", run: () => oeffneTeil({liste: "fehlt", nr: t.nr, name: t.name, ort: t.ort, menge: 1}, "Nachbestellen")});
+  } else render();
+}
+async function offenSenden(){ await Promise.all([...offen.keys()].map(id => { clearTimeout(offen.get(id).timer); return mengeSenden(id); })); }
+addEventListener("beforeunload", () => { if(offen.size) offenSenden(); });
+
+async function eingetroffen(t){
+  const ziel = lager.teile.find(x => x.liste === "bestand" && nrKey(x.nr) === nrKey(t.nr) && (x.ort || "").toLowerCase() === (t.ort || "").toLowerCase());
+  await aendern("wl_umbuchen", {teilId: t.id}, () => {
+    state.tab === "fehlt" && toast(ziel ? `${t.menge} Stück zu „${t.name}“ im Bestand dazugezählt.` : `„${t.name}“ ist jetzt im Fahrzeugbestand.`, 6000,
+      {text: "Zum Bestand", run: () => { state.tab = "bestand"; persist(); render(); }});
+  });
+}
+
+$("#tabBestand").onclick = () => { state.tab = "bestand"; persist(); render(); };
+$("#tabFehlt").onclick = () => { state.tab = "fehlt"; persist(); render(); };
+$("#such").addEventListener("input", render);
+$("#ortFilter").addEventListener("change", render);
+$("#sortSel").addEventListener("change", e => { state.sort = e.target.value; persist(); render(); });
+$("#syncBtn").onclick = async () => { await offenSenden(); await laden(true); if(!lager.offline) toast("Abgeglichen."); };
+addEventListener("keydown", e => {
+  if(document.querySelector("dialog[open]")) return;
+  if((e.ctrlKey && e.key.toLowerCase() === "f") || (e.key === "/" && e.target === document.body)){ e.preventDefault(); $("#such").focus(); $("#such").select(); }
+  if(e.ctrlKey && e.key.toLowerCase() === "n"){ e.preventDefault(); $("#neuBtn").click(); }
+});
+
+/* ---------- Teil bearbeiten ---------- */
+let teil = null; // {id?, v?, liste, nr, name, ort, menge}
+let nameVonHand = false;
+function teilListe(l){ teil.liste = l; $("#tlBestand").setAttribute("aria-selected", l === "bestand"); $("#tlFehlt").setAttribute("aria-selected", l === "fehlt"); $("#teilOk").textContent = "Speichern"; pruefeTreffer(); }
+$("#tlBestand").onclick = () => teilListe("bestand");
+$("#tlFehlt").onclick = () => teilListe("fehlt");
+const teilErr = m => { $("#teilErr").textContent = m || ""; $("#teilErr").hidden = !m; };
+function oeffneTeil(t, titel){
+  if(locked()) return checkAccess();
+  teil = t ? {...t} : {liste: state.tab, nr: "", name: "", ort: $("#ortFilter").value || "", menge: 1};
+  $("#teilTitle").textContent = titel || (teil.id ? "Teil bearbeiten" : "Neues Teil");
+  $("#fNr").value = teil.nr || ""; $("#fName").value = teil.name || ""; $("#fOrt").value = teil.ort || ""; $("#fMenge").value = teil.menge != null ? teil.menge : 1;
+  $("#teilDel").hidden = !teil.id; $("#teilNachbestellen").hidden = !(teil.id && teil.liste === "bestand");
+  $("#ocrBox").hidden = true; $("#nameHint").hidden = true; teilErr("");
+  nameVonHand = !!teil.name;
+  $("#nameListe").innerHTML = [...new Set([...lager.katalog.values(), ...lager.teile.map(x => x.name)])].slice(0, 400).map(n => `<option value="${esc(n)}">`).join("");
+  teilListe(teil.liste || "bestand");
+  const ro = !kannAendern();
+  for(const id of ["#teilOk", "#teilDel", "#teilNachbestellen"]) $(id).disabled = ro;
+  if(!$("#teilDlg").open) $("#teilDlg").showModal();
+  setTimeout(() => (teil.nr ? (teil.name ? $("#fMenge") : $("#fName")) : $("#fNr")).focus(), 30);
+  if(ro) teilErr(lager.offline ? "Offline – Änderungen sind erst wieder mit Verbindung möglich." : "");
+}
+function nrUebernehmen(){
+  const n = teileNr($("#fNr").value);
+  if(n !== $("#fNr").value) $("#fNr").value = n;
+  const name = nameZu(n);
+  if(name && (!nameVonHand || !$("#fName").value.trim())){ $("#fName").value = name; nameVonHand = false; $("#nameHint").textContent = "✓ Bezeichnung aus dem Katalog übernommen."; $("#nameHint").hidden = false; }
+  pruefeTreffer();
+}
+// Schon vorhanden? Dann lieber den vorhandenen Eintrag öffnen als doppelt anlegen.
+function pruefeTreffer(){
+  const box = $("#trefferBox"); box.hidden = true;
+  if(!teil) return;
+  const n = nrKey($("#fNr").value); if(!n) return;
+  const gleiche = lager.teile.filter(t => nrKey(t.nr) === n && t.id !== teil.id);
+  if(!gleiche.length) return;
+  const hier = gleiche.filter(t => t.liste === teil.liste), dort = gleiche.filter(t => t.liste !== teil.liste);
+  const g = hier[0] || dort[0];
+  const wo = t => `${menge(t)} Stück${t.ort ? " in „" + t.ort + "“" : ""}`;
+  $("#trefferText").textContent = hier.length
+    ? `Schon ${teil.liste === "bestand" ? "im Wagen" : "auf der Fehlliste"}: ${hier.map(wo).join(", ")}.`
+    : `Steht ${g.liste === "bestand" ? "im Fahrzeugbestand" : "auf der Fehlliste"} (${wo(g)}).`;
+  $("#trefferBtn").onclick = () => oeffneTeil(g);
+  box.hidden = false;
+}
+$("#fNr").addEventListener("blur", nrUebernehmen);
+$("#fNr").addEventListener("input", () => { const v = $("#fNr").value; if(nrGueltig(v)) nrUebernehmen(); else { $("#trefferBox").hidden = true; } });
+$("#fNr").addEventListener("keydown", e => { if(e.key === "Enter"){ e.preventDefault(); nrUebernehmen(); $("#fName").value ? $("#fOrt").focus() : $("#fName").focus(); } });
+$("#fName").addEventListener("input", () => { nameVonHand = true; $("#nameHint").hidden = true; });
+const mengeWert = () => Math.max(0, Math.min(999999, parseInt($("#fMenge").value, 10) || 0));
+$("#fMinus").onclick = () => { $("#fMenge").value = Math.max(0, mengeWert() - 1); };
+$("#fPlus").onclick = () => { $("#fMenge").value = Math.min(999999, mengeWert() + 1); };
+$("#fTdoc").onclick = () => {
+  const n = teileNr($("#fNr").value);
+  if(!nrGueltig(n)) return teilErr("Für T-Doc bitte eine vollständige Toyota- (12345-ABCDE-12) oder BT-Nummer eintragen.");
+  fetch("/api/open?ziel=teil&nr=" + encodeURIComponent(n), {method: "POST"});
+  toast("T-Doc öffnet sich im Browser. Die Bezeichnung dort kopieren und hier einfügen.", 6000);
+};
+const teilZu = () => { $("#teilDlg").close(); teil = null; };
+$("#teilClose").onclick = teilZu; $("#teilAbbr").onclick = teilZu;
+$("#teilForm").addEventListener("submit", async e => {
+  e.preventDefault();
+  if(nichtJetzt()) return;
+  nrUebernehmen();
+  const x = {...teil, nr: teileNr($("#fNr").value), name: $("#fName").value.trim(), ort: $("#fOrt").value.trim(), menge: mengeWert()};
+  if(x.nr.replace(/[\s-]/g, "").length < 3) return teilErr("Bitte eine Teilenummer eintragen.");
+  if(!x.name) return teilErr("Bitte eine Bezeichnung eintragen.");
+  $("#teilOk").disabled = true; teilErr("");
+  const r = await server("wl_speichern", {teil: {id: x.id || "", v: x.v || 0, liste: x.liste, nr: x.nr, name: x.name, ort: x.ort, menge: x.menge}});
+  $("#teilOk").disabled = false;
+  if(!r.ok){
+    teilErr(r.error || "Speichern fehlgeschlagen.");
+    if(r.vorhanden){ uebernehmen(await server("wl_liste", {stand: ""})); render(); pruefeTreffer(); }
+    if(r.konflikt) laden(true);
+    return;
+  }
+  uebernehmen(r);
+  if(x.liste !== state.tab){ state.tab = x.liste; persist(); }
+  render(); teilZu();
+  toast(x.id ? "Gespeichert." : `„${x.name}“ ${x.liste === "bestand" ? "ist im Bestand" : "steht auf der Fehlliste"}.`);
+});
+$("#teilDel").onclick = async () => {
+  if(!teil || !teil.id || nichtJetzt()) return;
+  const t = {...teil};
+  if(!await frage("Teil löschen", `„${t.name}“ (${t.nr}) wirklich löschen?`, "Löschen")) return;
+  const r = await aendern("wl_loeschen", {teilId: t.id, v: t.v});
+  if(r.ok){
+    teilZu();
+    toast("Gelöscht.", 8000, {text: "Rückgängig", run: () => aendern("wl_speichern", {teil: {liste: t.liste, nr: t.nr, name: t.name, ort: t.ort, menge: t.menge}}, () => toast("Wiederhergestellt."))});
+  }
+};
+$("#teilNachbestellen").onclick = () => { if(teil) oeffneTeil({liste: "fehlt", nr: teil.nr, name: teil.name, ort: teil.ort, menge: 1}, "Nachbestellen"); };
+// Kleine Rückfrage im Stil des Programms (kein Browser-Dialog)
+function frage(titel, text, ja){
+  return new Promise(res => {
+    const dl = document.createElement("dialog");
+    dl.innerHTML = '<form method="dialog" class="dlg"><div class="dlg-head"><strong></strong></div><div class="dlg-body"><p style="margin:0"></p></div><div class="dlg-foot"><span></span><div class="row"><button class="ghost" value="nein">Abbrechen</button><button class="primary" value="ja"></button></div></div></form>';
+    dl.querySelector("strong").textContent = titel; dl.querySelector("p").textContent = text; dl.querySelector(".primary").textContent = ja;
+    dl.addEventListener("close", () => { res(dl.returnValue === "ja"); dl.remove(); });
+    document.body.appendChild(dl); dl.showModal(); dl.querySelector(".primary").focus();
+  });
+}
+
+/* ---------- Teilenummer vom Foto ---------- */
+async function fotoVerkleinern(file, max = 2200){
+  const url = URL.createObjectURL(file);
+  try{
+    const img = await new Promise((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => no(new Error("Das Bild konnte nicht geöffnet werden.")); i.src = url; });
+    const f = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
+    const c = document.createElement("canvas"); c.width = Math.round(img.naturalWidth * f); c.height = Math.round(img.naturalHeight * f);
+    c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+    return c.toDataURL("image/jpeg", .9).split(",")[1];
+  } finally { URL.revokeObjectURL(url); }
+}
+async function fotoLesen(file){
+  if(!file) return;
+  if(!$("#teilDlg").open) oeffneTeil(null);
+  $("#ocrBox").hidden = false; $("#cands").innerHTML = ""; $("#ocrInfo").textContent = "Teilenummer wird gelesen …"; teilErr("");
+  try{
+    const bild = await fotoVerkleinern(file);
+    const r = await (await fetch("/api/ocr", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({bild})})).json();
+    if(!r.ok) throw new Error(r.error || "Texterkennung fehlgeschlagen.");
+    const k = kandidaten(r.text);
+    if(!k.gut.length && !k.rest.length){ $("#ocrInfo").textContent = "Keine Teilenummer erkannt. Bitte näher und schärfer fotografieren oder die Nummer eintippen."; return; }
+    $("#ocrInfo").textContent = k.gut.length === 1 ? "Erkannt – bitte kurz prüfen:" : "Bitte die richtige Nummer antippen:";
+    $("#cands").innerHTML = [...k.gut.map(n => `<button type="button" class="gut">${esc(n)}</button>`), ...k.rest.map(n => `<button type="button">${esc(n)}</button>`)].join("");
+    if(k.gut.length === 1){ $("#fNr").value = k.gut[0]; nrUebernehmen(); }
+  }catch(e){ $("#ocrInfo").textContent = e.message; }
+}
+$("#cands").addEventListener("click", e => { const b = e.target.closest("button"); if(!b) return; $("#fNr").value = b.textContent; nrUebernehmen(); ($("#fName").value ? $("#fMenge") : $("#fName")).focus(); });
+$("#fotoIn").addEventListener("change", e => { const f = e.target.files[0]; e.target.value = ""; if(locked()) return checkAccess(); fotoLesen(f); });
+$("#fFoto").addEventListener("change", e => { const f = e.target.files[0]; e.target.value = ""; fotoLesen(f); });
+$("#neuBtn").onclick = () => oeffneTeil(null);
+
+/* ---------- T-Doc (Lesezeichen „T-Doc → Excel“ der Service-Mappe) und Excel-Import ---------- */
+let importDaten = null; // {quelle: "tdoc"|"excel", blaetter: [{art, titel, zeilen:[{nr,name,ort,menge}]}]}
+$("#lesezeichenBtn").onclick = () => { fetch("/api/open?ziel=lesezeichen", {method: "POST"}); toast("Die Einrichtungsseite öffnet sich im Browser – dort den roten Knopf in die Lesezeichenleiste ziehen.", 9000); };
+$("#tdocBtn").onclick = async () => {
+  if(locked()) return checkAccess();
+  let t = "";
+  try{ t = await navigator.clipboard.readText(); }catch(e){ return toast("Die Zwischenablage konnte nicht gelesen werden. Bitte das Einfügen erlauben."); }
+  t = String(t).replace(/\r/g, "");
+  if(t.indexOf("TDOC-ERSATZTEILE") !== 0) return toast("In der Zwischenablage sind keine T-Doc-Ersatzteile. In T-Doc die Teile anklicken und das Lesezeichen „T-Doc → Excel“ drücken.", 8000);
+  const zeilen = [];
+  for(const z of t.split("\n").slice(1)){
+    const [mg, nr, nm, bm] = z.split("\t"); if(!nr || !nr.trim()) continue;
+    const m = parseInt(String(mg || "1").replace(",", "."), 10);
+    zeilen.push({nr: teileNr(nr), name: (nm || bm || "").trim(), ort: "", menge: Number.isFinite(m) && m > 0 ? m : 1});
+  }
+  if(!zeilen.length) return toast("Keine Teile in der T-Doc-Sammlung.");
+  importOeffnen({quelle: "tdoc", blaetter: [{art: "fehlt", titel: "T-Doc", zeilen}]});
+};
+$("#importIn").addEventListener("change", async e => {
+  const f = e.target.files[0]; e.target.value = ""; if(!f) return;
+  if(locked()) return checkAccess();
+  try{
+    const r = await (await fetch("/api/excel/import", {method: "POST", body: f})).json();
+    if(!r.ok) return toast(r.error || "Die Excel-Datei konnte nicht gelesen werden.", 8000);
+    importOeffnen({quelle: "excel", name: f.name, blaetter: r.blaetter});
+  }catch(err){ toast("Die Excel-Datei konnte nicht gelesen werden."); }
+});
+const importErr = m => { $("#importErr").textContent = m || ""; $("#importErr").hidden = !m; };
+function importZeilen(){
+  const ziel = $("#importZiel").value, ort = $("#importOrt").value.trim();
+  return importDaten.blaetter.flatMap(b => b.zeilen.map(z => ({liste: ziel === "datei" ? b.art : ziel, nr: z.nr, name: z.name || nameZu(z.nr), ort: ort || z.ort || "", menge: z.menge})));
+}
+function importRender(){
+  const z = importZeilen();
+  const lbl = {bestand: "Bestand", fehlt: "Fehlt"};
+  $("#importRows").innerHTML = z.slice(0, 300).map(x => `<tr><td>${lbl[x.liste]}</td><td class="nr">${esc(x.nr)}</td><td>${esc(x.name) || '<span class="hint">– ohne Bezeichnung –</span>'}</td><td>${esc(x.ort)}</td><td>${zahl(x.menge)}</td></tr>`).join("")
+    + (z.length > 300 ? `<tr><td colspan="5" class="hint">… und ${z.length - 300} weitere</td></tr>` : "");
+  $("#importOk").textContent = `${z.length} ${z.length === 1 ? "Teil" : "Teile"} übernehmen`;
+}
+let importFertig = null;
+function importOeffnen(d, fertig){
+  importDaten = d; importFertig = fertig || null; importErr("");
+  const anz = d.blaetter.reduce((s, b) => s + b.zeilen.length, 0);
+  $("#importTitle").textContent = {tdoc: "Teile aus T-Doc übernehmen", liste: "Aus der Ersatzteilliste übernehmen"}[d.quelle] || "Excel importieren";
+  $("#importInfo").textContent = d.quelle === "excel"
+    ? `${d.name}: ${d.blaetter.map(b => `${b.titel} (${b.zeilen.length})`).join(", ")}.`
+    : `${anz} ${anz === 1 ? "Teil" : "Teile"} aus ${d.quelle === "tdoc" ? "der T-Doc-Sammlung" : "der Ersatzteilliste"}.`;
+  const sel = $("#importZiel");
+  sel.querySelector('[value="datei"]').hidden = d.quelle !== "excel";
+  sel.value = d.quelle === "excel" ? "datei" : (state.tab === "bestand" ? "bestand" : "fehlt");
+  $("#importOrt").value = "";
+  $("#importModus").value = d.quelle === "excel" ? "ersetzen" : "dazu";
+  importRender();
+  $("#importOk").disabled = !kannAendern();
+  if(lager.offline) importErr("Offline – übernehmen geht erst wieder mit Verbindung.");
+  $("#importDlg").showModal();
+}
+$("#importZiel").addEventListener("change", importRender);
+$("#importOrt").addEventListener("input", importRender);
+const importZu = () => { $("#importDlg").close(); importDaten = null; };
+$("#importClose").onclick = importZu; $("#importAbbr").onclick = importZu;
+$("#importForm").addEventListener("submit", async e => {
+  e.preventDefault();
+  if(!importDaten || nichtJetzt()) return;
+  const teile = importZeilen(), quelle = importDaten.quelle;
+  $("#importOk").disabled = true; importErr("");
+  const r = await server("wl_import", {teile, modus: $("#importModus").value});
+  $("#importOk").disabled = false;
+  if(!r.ok) return importErr(r.error || "Übernehmen fehlgeschlagen.");
+  uebernehmen(r);
+  const ziel = [...new Set(teile.map(t => t.liste))];
+  if(ziel.length === 1 && ziel[0] !== state.tab){ state.tab = ziel[0]; persist(); }
+  render(); importZu();
+  if(quelle === "tdoc") try{ await navigator.clipboard.writeText("TDOC-EINGEFUEGT"); }catch(e){}
+  if(importFertig){ importFertig(); importFertig = null; }
+  toast(`Übernommen: ${r.neu || 0} neu, ${r.geaendert || 0} geändert.`, 6000);
+});
+
+/* ---------- Ersatzteilliste aus der Service-Mappe (Reparaturauftrag) ---------- */
+let etDaten = null, etKatalog = null, etListe = 0;
+const etMengen = {};
+async function etLaden(){
+  if(etDaten) return etDaten;
+  etDaten = await (await fetch("/ersatzteilliste.json")).json();
+  etKatalog = new Map();
+  for(const l of etDaten.listen) for(const g of l.gruppen) for(const a of g.artikel) if(a.nr && !etKatalog.has(nrKey(a.nr))) etKatalog.set(nrKey(a.nr), a.name);
+  return etDaten;
+}
+etLaden().catch(() => {});
+const etZahl = v => { const n = parseFloat(String(v || "").replace(",", ".")); return Number.isFinite(n) && n > 0 ? n : 0; };
+function etZeigen(){
+  const tabs = $("#etTabs"); tabs.innerHTML = "";
+  etDaten.listen.forEach((l, i) => { const b = document.createElement("button"); b.type = "button"; b.textContent = l.name; b.setAttribute("aria-pressed", i === etListe); b.onclick = () => { etListe = i; etZeigen(); }; tabs.appendChild(b); });
+  const q = $("#etSuche").value.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  // Mit Suchbegriff wird in allen Listen gesucht
+  const listen = q.length ? etDaten.listen : [etDaten.listen[etListe]];
+  let html = "";
+  const schon = new Set(); // bei der Suche über alle Listen jeden Artikel nur einmal zeigen
+  for(const l of listen) for(const g of l.gruppen){
+    const z = g.artikel.filter(a => (!q.length || q.every(x => (a.name + " " + (a.nr || "") + " " + (a.info || "")).toLowerCase().includes(x))) && !(q.length && a.nr && schon.has(a.nr)));
+    z.forEach(a => a.nr && schon.add(a.nr));
+    if(!z.length) continue;
+    html += `<tr class="gr"><td colspan="3">${esc(q.length ? l.name + " · " + g.name : g.name)}</td></tr>`;
+    for(const a of z){
+      const k = a.nr || a.name, m = etMengen[k] || "";
+      const da = lager.teile.filter(t => t.liste === "bestand" && a.nr && nrKey(t.nr) === nrKey(a.nr)).reduce((s, t) => s + menge(t), 0);
+      html += `<tr data-k="${esc(k)}" class="${m ? "an" : ""}"><td class="nr" style="font:13px var(--f-mono);white-space:nowrap">${esc(a.nr || "–")}</td><td>${esc(a.name)}${a.info ? `<span class="hint"> – ${esc(a.info)}</span>` : ""}${da ? ` <span class="chip ok">${zahl(da)} im Wagen</span>` : ""}</td><td style="width:1%"><input inputmode="decimal" value="${esc(m)}" aria-label="Menge" placeholder="0"${a.nr ? "" : " disabled title=\"ohne Artikelnummer\""}></td></tr>`;
+    }
+  }
+  $("#etListe").innerHTML = html || '<tr><td class="hint" style="padding:14px">Kein Artikel gefunden.</td></tr>';
+  etSumme();
+}
+function etAuswahl(){
+  const alle = new Map();
+  for(const l of etDaten.listen) for(const g of l.gruppen) for(const a of g.artikel) if(a.nr && !alle.has(a.nr)) alle.set(a.nr, a);
+  return Object.entries(etMengen).map(([k, m]) => ({a: alle.get(k), m: etZahl(m)})).filter(x => x.a && x.m);
+}
+function etSumme(){
+  const n = etAuswahl().length;
+  $("#etSumme").textContent = n ? `${n} ${n === 1 ? "Artikel" : "Artikel"} ausgewählt` : "Nichts ausgewählt";
+  $("#etOk").disabled = !n;
+}
+$("#etListe").addEventListener("input", e => {
+  const tr = e.target.closest("tr[data-k]"); if(!tr) return;
+  const v = e.target.value.trim(); if(v) etMengen[tr.dataset.k] = v; else delete etMengen[tr.dataset.k];
+  tr.classList.toggle("an", !!etZahl(v)); etSumme();
+});
+$("#etListe").addEventListener("keydown", e => {
+  if(e.key !== "Enter" || e.target.tagName !== "INPUT") return;
+  e.preventDefault(); const ins = [...$("#etListe").querySelectorAll("input:not([disabled])")]; const i = ins.indexOf(e.target); if(ins[i + 1]) ins[i + 1].focus();
+});
+$("#etSuche").addEventListener("input", etZeigen);
+$("#etBtn").onclick = async () => {
+  if(locked()) return checkAccess();
+  try{ await etLaden(); }catch(e){ return toast("Die Ersatzteilliste konnte nicht geladen werden."); }
+  $("#etSuche").value = ""; etZeigen(); $("#etDlg").showModal(); setTimeout(() => $("#etSuche").focus(), 30);
+};
+$("#etZu").onclick = () => $("#etDlg").close();
+$("#etLeeren").onclick = () => { for(const k of Object.keys(etMengen)) delete etMengen[k]; etZeigen(); };
+$("#etForm").addEventListener("submit", e => {
+  e.preventDefault();
+  const zeilen = etAuswahl().map(({a, m}) => ({nr: teileNr(a.nr), name: a.name, ort: "", menge: Math.max(1, Math.round(m))}));
+  if(!zeilen.length) return;
+  $("#etDlg").close();
+  importOeffnen({quelle: "liste", blaetter: [{art: state.tab, titel: "Ersatzteilliste", zeilen}]}, () => { for(const k of Object.keys(etMengen)) delete etMengen[k]; });
+});
+
+/* ---------- Excel-Export ---------- */
+async function saveBlob(blob, name){
+  const types = [{description: "Excel-Arbeitsmappe", accept: {"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [".xlsx"]}}];
+  if(window.showSaveFilePicker){
+    let fh;
+    try{ fh = await showSaveFilePicker({suggestedName: name, types}); }
+    catch(e){ if(e.name === "AbortError") return false; fh = null; }
+    if(fh){ const w = await fh.createWritable(); await w.write(blob); await w.close(); return fh.name; }
+  }
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 30000);
+  return name;
+}
+$("#exportBtn").onclick = async () => {
+  if(!lager.geladen) return toast("Der Bestand ist noch nicht geladen.");
+  const sort = (a, b) => a.name.localeCompare(b.name, "de") || a.nr.localeCompare(b.nr);
+  const blatt = (art, titel) => ({titel, art, zeilen: lager.teile.filter(t => t.liste === art).sort(sort).map(t => ({nr: t.nr, name: t.name, ort: t.ort || "", menge: menge(t)}))});
+  try{
+    const f = lager.fahrzeug || {};
+    const info = [["Kennzeichen", f.kennzeichen || ""], ["Fahrer", f.fahrer || ""], ["Stand", new Date().toLocaleString("de-DE", {dateStyle: "medium", timeStyle: "short"})]];
+    const r = await fetch("/api/excel/export", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({info, blaetter: [blatt("bestand", "Bestand"), blatt("fehlt", "Fehlende Ersatzteile")]})});
+    if(!r.ok) throw new Error((await r.text()).trim() || "Die Excel-Datei konnte nicht erstellt werden.");
+    const saved = await saveBlob(await r.blob(), `Kundendienstfahrzeug-${(f.kennzeichen || "").replace(/[^A-Z0-9ÄÖÜ]+/gi, "") ? (f.kennzeichen.replace(/[^A-Z0-9ÄÖÜ]+/gi, "-") + "-") : ""}${new Date().toISOString().slice(0, 10)}.xlsx`);
+    if(saved) toast(`Gespeichert: ${saved}`);
+  }catch(e){ toast(e.message || "Export fehlgeschlagen.", 7000); }
+};
+
+/* ---------- Handy ---------- */
+function qrZeichnen(){
+  const u = window.HANDY_URL; if(!u) return;
+  $("#handyUrl").textContent = u.replace(/^https:\/\//, "");
+  try{
+    const m = qrMatrix(u), n = m.length, rand = 2, c = $("#qrCanvas");
+    c.width = c.height = n + rand * 2;
+    const g = c.getContext("2d"); g.fillStyle = "#fff"; g.fillRect(0, 0, c.width, c.height); g.fillStyle = "#000";
+    for(let y = 0; y < n; y++) for(let x = 0; x < n; x++) if(m[y][x]) g.fillRect(x + rand, y + rand, 1, 1);
+  }catch(e){ $("#qrCanvas").hidden = true; }
+}
+$("#handyCopy").onclick = async () => { try{ await navigator.clipboard.writeText(window.HANDY_URL); toast("Link kopiert – z. B. per Teams oder E-Mail ans Handy schicken."); }catch(e){ toast("Kopieren ging nicht."); } };
+function handyFold(zu){ state.handyZu = zu; $("#handyPanel").classList.toggle("closed", zu); $("#handyFold").setAttribute("aria-expanded", !zu); }
+$("#handyFold").onclick = () => { handyFold(!state.handyZu); persist(); };
+$("#handyFold").addEventListener("keydown", e => { if(e.key === "Enter" || e.key === " "){ e.preventDefault(); $("#handyFold").click(); } });
+
+$("#helpBtn").onclick = () => $("#helpDlg").showModal();
+
+/* ---------- Updates ---------- */
+// Admins bekommen auf Wunsch Testversionen, bevor sie für alle freigegeben werden.
+const ADMINS = ["b.stockey@hotmail.de"];
+const isAdmin = () => !!(state.user && state.user.verified && ADMINS.includes(state.user.email)
+  && state.user.name.trim().toLowerCase() === "benjamin stockey");
+const kanal = () => (isAdmin() && state.testChannel !== false) ? "?kanal=test" : "";
+async function checkUpdates(manual){
+  try{
+    const r = await (await fetch("/api/update/check" + kanal())).json();
+    if(r.ok && r.available){
+      const t = /-test/.test(r.latest);
+      $("#bannerTitle").textContent = t ? `Testversion ${r.latest} zum Ausprobieren` : `Neue Version ${r.latest} ist da`;
+      $("#bannerNotes").textContent = r.notes || "";
+      $("#banner").hidden = false;
+    } else if(manual){
+      toast(r.ok ? `Du hast die neueste Version (${r.current}).` : "Keine Verbindung zum Update-Server. Bitte Internet prüfen.");
+    }
+  }catch(e){ if(manual) toast("Keine Verbindung zum Update-Server."); }
+}
+$("#checkBtn").onclick = () => checkUpdates(true);
+$("#updateBtn").onclick = async () => {
+  await offenSenden();
+  const b = $("#updateBtn"); b.disabled = true; b.textContent = "Wird heruntergeladen …";
+  try{
+    const r = await (await fetch("/api/update/apply" + kanal(), {method: "POST"})).json();
+    if(!r.ok){ toast(r.error || "Update fehlgeschlagen.", 7000); b.disabled = false; b.textContent = "Jetzt aktualisieren"; return; }
+    b.textContent = "Wird neu gestartet …";
+    const t0 = Date.now();
+    const poll = async () => {
+      try{
+        const i = await (await fetch("/api/info", {cache: "no-store"})).json();
+        if(i.version === r.version){ location.reload(); return; }
+      }catch(e){}
+      if(Date.now() - t0 > 30000){ b.textContent = "Bitte Programm neu öffnen"; return; }
+      setTimeout(poll, 500);
+    };
+    setTimeout(poll, 800);
+  }catch(e){ toast("Update fehlgeschlagen."); b.disabled = false; b.textContent = "Jetzt aktualisieren"; }
+};
+
+/* ---------- Anmeldung, Freischaltung ---------- */
+// Wie bei der Service-Mappe: einmalig Name + Arbeits-E-Mail, Freischaltcode per E-Mail.
+const MAIL_DOMAIN = "schlueter-gabelstapler.de";
+let reportOn = false;
+async function call(event, extra = {}){
+  try{
+    return await (await fetch("/api/report", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({event, ...extra})})).json();
+  }catch(e){ return {ok: false, offline: true, error: "Keine Verbindung zum Programm."}; }
+}
+function mailFromName(n){
+  const w = n.trim().toLowerCase()
+    .replace(/ä/g, "ae").replace(/ö/g, "oe").replace(/ü/g, "ue").replace(/ß/g, "ss")
+    .normalize("NFD").replace(/[̀-ͯ]/g, "")
+    .split(/\s+/).map(x => x.replace(/[^a-z0-9-]/g, "")).filter(Boolean);
+  if(w.length < 2) return w.join("");
+  return w[0][0] + "." + w.slice(1).join("-");
+}
+// Ohne Anmeldeserver (Entwicklerversion) gibt es auch keinen Bestand – dann gilt man als angemeldet.
+const locked = () => reportOn && (!state.user || !state.user.verified || state.blocked);
+["regDlg", "codeDlg", "blockDlg"].forEach(id => $("#" + id).addEventListener("cancel", e => { if(locked()) e.preventDefault(); }));
+let mailEdited = false;
+$("#regName").addEventListener("input", () => { if(!mailEdited) $("#regMail").value = mailFromName($("#regName").value); });
+// Eine vollständige Adresse (mit @) ist nur für Admins erlaubt – sonst wird die Firmen-Domain angehängt.
+const ADMIN_MAILS = ["b.stockey@hotmail.de"];
+$("#regMail").addEventListener("input", () => {
+  mailEdited = true;
+  const v = $("#regMail").value.trim().toLowerCase();
+  if(v.endsWith("@" + MAIL_DOMAIN)) $("#regMail").value = v.slice(0, -(MAIL_DOMAIN.length + 1));
+  $("#regDomain").hidden = $("#regMail").value.includes("@");
+});
+const regErr = m => { $("#regErr").textContent = m; $("#regErr").hidden = !m; };
+const codeErr = m => { $("#codeErr").textContent = m; $("#codeErr").hidden = !m; };
+function angemeldetWechsel(){ lager.teile = []; lager.stand = ""; lager.geladen = false; lager.fahrzeug = null; fzGefragt = false; render(); laden(true); }
+$("#regForm").addEventListener("submit", async e => {
+  e.preventDefault();
+  const name = $("#regName").value.trim().replace(/\s+/g, " ");
+  const local = $("#regMail").value.trim().toLowerCase();
+  if(name.split(" ").length < 2) return regErr("Bitte Vor- und Nachnamen eintragen.");
+  let email;
+  if(local.includes("@")){
+    if(!ADMIN_MAILS.includes(local)) return regErr("Bitte nur den Teil vor dem @ eintragen – es gilt immer die Arbeits-E-Mail @" + MAIL_DOMAIN + ".");
+    email = local;
+  } else {
+    if(!/^[a-z0-9]+([.-][a-z0-9]+)*\.[a-z0-9]+([.-][a-z0-9]+)*$/.test(local)) return regErr("Die E-Mail hat die Form v.nachname@" + MAIL_DOMAIN + ".");
+    email = `${local}@${MAIL_DOMAIN}`;
+  }
+  // Jede Person behält ihre eigene ID – auch wenn sich mehrere Personen an einem Rechner abwechseln.
+  const people = state.people = state.people || {};
+  const prev = state.user;
+  if(prev && prev.email) people[prev.email] = {id: prev.id, name: prev.name};
+  const known = people[email];
+  const id = (prev && prev.email === email && prev.id) || (known && known.id) || (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(36).slice(2));
+  const same = prev && prev.verified && prev.email === email;
+  if(!prev || prev.email !== email) state.blocked = false;
+  state.user = {id, name, email, verified: same || !reportOn};
+  state.lastStart = new Date().toISOString().slice(0, 10);
+  await persistNow(); renderUser();
+  if(!reportOn || same){ $("#regDlg").close(); if(same) call("update"); angemeldetWechsel(); return; }
+  $("#regOk").disabled = true; regErr("");
+  // Schon einmal an diesem Rechner freigeschaltet? Dann ohne neuen Code zurückwechseln.
+  const r = await call(known ? "update" : "register");
+  $("#regOk").disabled = false;
+  if(r.ok && r.verified){
+    state.user.verified = true; state.blocked = !!r.blocked; await persistNow(); renderUser();
+    $("#regDlg").close(); if(state.blocked) $("#blockDlg").showModal(); else { toast(`Angemeldet als ${name}.`); angemeldetWechsel(); } return;
+  }
+  if(!r.ok) return regErr(r.error || "Anmeldung fehlgeschlagen.");
+  $("#regDlg").close(); openCode(false);
+});
+function openRegistration(){
+  regErr("");
+  $("#regName").value = state.user ? state.user.name : "";
+  $("#regMail").value = state.user ? (state.user.email.endsWith("@" + MAIL_DOMAIN) ? state.user.email.split("@")[0] : state.user.email) : "";
+  $("#regDomain").hidden = $("#regMail").value.includes("@");
+  mailEdited = !!state.user;
+  if(!$("#regDlg").open) $("#regDlg").showModal();
+}
+async function openCode(send){
+  codeErr(""); $("#codeInput").value = "";
+  $("#codeInfo").textContent = `Wir haben einen 6-stelligen Code an ${state.user.email} geschickt. Er ist 30 Minuten gültig. Schau auch im Spam-Ordner nach.`;
+  if(!$("#codeDlg").open) $("#codeDlg").showModal();
+  if(send){
+    const r = await call("resend");
+    if(!r.ok) codeErr(r.error || "Der Code konnte nicht gesendet werden.");
+  }
+}
+$("#codeBack").onclick = () => { $("#codeDlg").close(); openRegistration(); };
+$("#codeResend").onclick = async () => {
+  $("#codeResend").disabled = true; codeErr("");
+  const r = await call("resend");
+  $("#codeResend").disabled = false;
+  codeErr(r.ok ? "" : (r.error || "Der Code konnte nicht gesendet werden."));
+  if(r.ok) toast("Neuer Code ist unterwegs.");
+};
+$("#codeForm").addEventListener("submit", async e => {
+  e.preventDefault();
+  const code = $("#codeInput").value.replace(/\D/g, "");
+  if(code.length !== 6) return codeErr("Der Code hat 6 Ziffern.");
+  $("#codeOk").disabled = true;
+  const r = await call("verify", {code});
+  $("#codeOk").disabled = false;
+  if(!r.ok || !r.verified) return codeErr(r.error || "Der Code stimmt nicht.");
+  state.user.verified = true; state.blocked = !!r.blocked;
+  await persistNow(); renderUser();
+  $("#codeDlg").close();
+  if(state.blocked) $("#blockDlg").showModal(); else { toast("Freigeschaltet – dein Kundendienstfahrzeug ist bereit."); angemeldetWechsel(); }
+});
+$("#blockRetry").onclick = async () => {
+  const r = await call("check");
+  if(r.ok && !r.blocked){ state.blocked = false; persist(); $("#blockDlg").close(); toast("Zugang ist wieder freigegeben."); laden(true); }
+  else toast(r.ok ? "Der Zugang ist weiterhin gesperrt." : (r.error || "Keine Verbindung."));
+};
+function renderAdmin(){
+  $("#adminPanel").hidden = !isAdmin();
+  $("#testChannel").checked = state.testChannel !== false;
+  const v = $("#verText").dataset.v;
+  if(v) $("#verText").innerHTML = `Version ${esc(v)}` + (/-test/.test(v) ? ' <span class="chip warn">Testversion</span>' : "");
+}
+$("#openSheet").onclick = () => fetch("/api/open?ziel=tabelle", {method: "POST"}).catch(() => {});
+$("#testChannel").onchange = e => { state.testChannel = e.target.checked; persist(); $("#banner").hidden = true; checkUpdates(true); };
+function renderUser(){
+  renderAdmin();
+  const el = $("#userLine");
+  if(!state.user){ el.hidden = true; return; }
+  el.hidden = false;
+  el.innerHTML = `Angemeldet als ${esc(state.user.name)} (${esc(state.user.email)}) · <button class="link" id="userChange">ändern</button> · <button class="link" id="userLogout">abmelden</button>`;
+  $("#userChange").onclick = openRegistration;
+  $("#userLogout").onclick = () => $("#logoutDlg").showModal();
+}
+$("#logoutDlg").addEventListener("close", async () => {
+  if($("#logoutDlg").returnValue !== "ok") return;
+  await offenSenden();
+  if(state.user && state.user.email) (state.people = state.people || {})[state.user.email] = {id: state.user.id, name: state.user.name};
+  state.user = null; state.blocked = false; state.lastStart = null;
+  lager.teile = []; lager.geladen = false; lager.stand = ""; lager.fahrzeug = null; fzGefragt = false;
+  await persistNow(); renderUser(); render();
+  toast("Abgemeldet.");
+  if(reportOn) openRegistration();
+});
+// Sperre wird bei jedem Start und danach alle 10 Minuten geprüft. Ohne Internet gilt der letzte bekannte Stand.
+let accessTimer = null;
+async function checkAccess(){
+  if(!reportOn) return;
+  if(!state.user) return openRegistration();
+  if(!state.user.verified) return openCode(true);
+  if(state.blocked) $("#blockDlg").showModal();
+  await refreshBlock("start");
+  if(!accessTimer) accessTimer = setInterval(() => refreshBlock("check"), 10 * 60 * 1000);
+}
+async function refreshBlock(event){
+  if(!state.user || !state.user.verified) return;
+  const r = await call(event);
+  if(!r.ok) return;
+  const was = !!state.blocked; state.blocked = !!r.blocked;
+  if(was !== state.blocked) persist();
+  if(state.blocked && !$("#blockDlg").open) $("#blockDlg").showModal();
+  if(!state.blocked && $("#blockDlg").open){ $("#blockDlg").close(); toast("Zugang ist wieder freigegeben."); }
+}
+
+/* ---------- Start ---------- */
+(async () => {
+  try{
+    const s = await (await fetch("/api/settings", {cache: "no-store"})).json();
+    for(const k of ["user", "blocked", "testChannel", "people", "lastStart", "tab", "sort", "handyZu"]) if(s[k] !== undefined && s[k] !== null) state[k] = s[k];
+  }catch(e){}
+  handyFold(!!state.handyZu);
+  renderUser(); render();
+  try{
+    const i = await (await fetch("/api/info", {cache: "no-store"})).json();
+    $("#verText").dataset.v = i.version;
+    window.HANDY_URL = i.handy; qrZeichnen();
+    reportOn = !!i.report; renderAdmin(); render();
+    checkAccess();
+    laden(false);
+    if(i.updates){ $("#checkBtn").hidden = false; checkUpdates(false); }
+  }catch(e){}
+})();
+})();
+</script>
+</body>
+</html>

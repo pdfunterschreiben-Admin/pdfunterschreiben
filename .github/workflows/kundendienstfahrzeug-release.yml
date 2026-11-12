@@ -1,0 +1,119 @@
+# Kundendienstfahrzeug – gleiche zwei Kanäle wie PDF Unterschreiben, aber eigene Release-Namen:
+#  - kundendienstfahrzeug/TESTVERSION höher als kundendienstfahrzeug/VERSION → Testversion (z. B. 1.0.0-test.7) ins Vorab-Release
+#    „kundendienstfahrzeug-adminkanal“. Die bekommen nur Admins, die im Programm „Testversionen“ eingeschaltet haben.
+#  - kundendienstfahrzeug/VERSION neu                         → fertige Version für alle: Release „kundendienstfahrzeug-vX.Y.Z“ und
+#    „kundendienstfahrzeug-stabil“ (dort fragt das Programm nach Updates).
+# Kein Release wird als „latest“ markiert – das bleibt PDF Unterschreiben vorbehalten.
+name: Release Kundendienstfahrzeug
+
+on:
+  push:
+    branches: [main]
+    paths: ["kundendienstfahrzeug/**", ".github/workflows/kundendienstfahrzeug-release.yml", "web/ersatzteilliste.json"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-kundendienstfahrzeug
+  cancel-in-progress: false
+
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: kundendienstfahrzeug
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Kanal bestimmen
+        id: ver
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          STABLE="$(tr -d '[:space:]' < VERSION)"
+          TEST="$(tr -d '[:space:]' < TESTVERSION 2>/dev/null || true)"
+          higher() { [ "$1" != "$2" ] && [ "$(printf '%s\n%s\n' "$1" "$2" | sort -V | tail -n1)" = "$1" ]; }
+          if [ "$STABLE" != "0.0.0" ] && ! gh release view "kundendienstfahrzeug-v$STABLE" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Fertige Version $STABLE wird veröffentlicht."
+            echo "kind=stable" >> "$GITHUB_OUTPUT"
+            echo "VERSION=$STABLE" >> "$GITHUB_ENV"
+            echo "TAG=kundendienstfahrzeug-stabil" >> "$GITHUB_ENV"
+          elif [ -n "$TEST" ] && higher "$TEST" "$STABLE"; then
+            V="$TEST-test.${GITHUB_RUN_NUMBER}"
+            echo "Testversion $V wird veröffentlicht."
+            echo "kind=test" >> "$GITHUB_OUTPUT"
+            echo "VERSION=$V" >> "$GITHUB_ENV"
+            echo "TAG=kundendienstfahrzeug-adminkanal" >> "$GITHUB_ENV"
+          else
+            echo "Nichts zu tun."
+            echo "kind=none" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-go@v5
+        if: steps.ver.outputs.kind != 'none'
+        with:
+          go-version: "1.24"
+          cache: false
+
+
+      - name: Ersatzteilliste der Service-Mappe übernehmen (immer der aktuelle Stand)
+        if: steps.ver.outputs.kind != 'none'
+        run: cp ../web/ersatzteilliste.json web/ersatzteilliste.json
+
+      - name: Programmsymbol in die exe einbauen
+        if: steps.ver.outputs.kind != 'none'
+        run: go run github.com/tc-hib/go-winres@v0.3.3 simply --icon assets/logo_256.png --arch amd64 --product-name "Kundendienstfahrzeug" --file-description "Kundendienstfahrzeug – Ersatzteile im Fahrzeug"
+
+      - name: Bauen
+        if: steps.ver.outputs.kind != 'none'
+        env:
+          REPORT_URL: ${{ secrets.REPORT_URL }}
+          REPORT_KEY: ${{ secrets.REPORT_KEY }}
+        run: |
+          RU="$(printf '%s' "$REPORT_URL" | tr -d '[:space:]')"
+          RK="$(printf '%s' "$REPORT_KEY" | tr -d '[:space:]')"
+          echo "Anmeldeserver gesetzt: $([ -n "$RU" ] && echo ja || echo nein), Schlüssel-Länge: ${#RK}"
+          GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -trimpath \
+            -ldflags "-s -w -H=windowsgui -X main.Version=$VERSION -X main.RepoOwner=${{ github.repository_owner }} -X main.RepoName=${{ github.event.repository.name }} -X 'main.ReportURL=$RU' -X 'main.ReportKey=$RK'" \
+            -o Kundendienstfahrzeug-Setup.exe .
+
+      - name: version.json schreiben
+        if: steps.ver.outputs.kind != 'none'
+        run: |
+          # Kollegen sehen nur „Neue Version … ist da“ – der Änderungstext steht nur in Admin-Testversionen
+          if [ "${{ steps.ver.outputs.kind }}" = "test" ]; then NOTES="$(git log -1 --format=%s "$GITHUB_SHA")"; else NOTES=""; fi
+          SHA="$(sha256sum Kundendienstfahrzeug-Setup.exe | cut -d' ' -f1)"
+          URL="https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/Kundendienstfahrzeug-Setup.exe"
+          jq -n --arg v "$VERSION" --arg n "$NOTES" --arg u "$URL" --arg s "$SHA" \
+            '{version:$v, notes:$n, url:$u, sha256:$s}' > version.json
+          cat version.json
+
+      - name: Fertige Version veröffentlichen
+        if: steps.ver.outputs.kind == 'stable'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Archiv dieser Version
+          gh release create "kundendienstfahrzeug-v$VERSION" Kundendienstfahrzeug-Setup.exe --target "$GITHUB_SHA" --latest=false \
+            -R "$GITHUB_REPOSITORY" --title "Kundendienstfahrzeug $VERSION" --notes "$(git log -1 --format=%s "$GITHUB_SHA")"
+          # Fester Name, unter dem das Programm nach Updates sucht
+          gh release delete kundendienstfahrzeug-stabil -R "$GITHUB_REPOSITORY" --yes --cleanup-tag 2>/dev/null || true
+          git push origin ":refs/tags/kundendienstfahrzeug-stabil" 2>/dev/null || true
+          gh release create kundendienstfahrzeug-stabil Kundendienstfahrzeug-Setup.exe version.json --target "$GITHUB_SHA" --latest=false \
+            -R "$GITHUB_REPOSITORY" --title "Kundendienstfahrzeug (aktuelle Version $VERSION)" \
+            --notes "Zum Installieren Kundendienstfahrzeug-Setup.exe herunterladen und doppelklicken."
+
+      - name: Testversion veröffentlichen
+        if: steps.ver.outputs.kind == 'test'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete kundendienstfahrzeug-adminkanal -R "$GITHUB_REPOSITORY" --yes --cleanup-tag 2>/dev/null || true
+          git push origin ":refs/tags/kundendienstfahrzeug-adminkanal" 2>/dev/null || true
+          gh release create kundendienstfahrzeug-adminkanal Kundendienstfahrzeug-Setup.exe version.json --target "$GITHUB_SHA" \
+            --prerelease --latest=false -R "$GITHUB_REPOSITORY" \
+            --title "Kundendienstfahrzeug – Testversion $VERSION (nur Admin)" --notes "$(git log -1 --format=%s "$GITHUB_SHA")"

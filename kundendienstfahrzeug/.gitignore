@@ -1,0 +1,6 @@
+web/lib/pdfium.js
+web/lib/pdfium.wasm
+web/lib/PDFIUM-LICENSE.txt
+*.exe
+version.json
+rsrc_windows_*.syso

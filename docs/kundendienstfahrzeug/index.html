@@ -1,0 +1,387 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#1d3fb8">
+<title>Kundendienstfahrzeug</title>
+<link rel="icon" href="icon.png">
+<link rel="apple-touch-icon" href="icon.png">
+<style>
+:root{
+  --paper:#f3f5f9; --sheet:#ffffff; --ink:#18233a; --muted:#5b6880; --line:#d8deea;
+  --pen:#1d3fb8; --pen-soft:#e5ebfb; --ok:#13703a; --ok-soft:#e3f4ea; --warn:#9a4a07; --warn-soft:#fbefdf; --bad:#b42318; --bad-soft:#fdecea;
+  --f-body:"Segoe UI",system-ui,-apple-system,Roboto,sans-serif; --f-mono:ui-monospace,"Cascadia Mono",Consolas,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){:root{
+  --paper:#0f131b; --sheet:#171d29; --ink:#e5e9f2; --muted:#98a3b8; --line:#2a3345;
+  --pen:#86a6ff; --pen-soft:#1c2a4d; --ok:#5ad38c; --ok-soft:#14301f; --warn:#f0b35a; --warn-soft:#352610; --bad:#ff8a7a; --bad-soft:#3a1714; color-scheme:dark}}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0}
+body{background:var(--paper);color:var(--ink);font:16px/1.45 var(--f-body);padding:0 0 calc(90px + env(safe-area-inset-bottom))}
+header{position:sticky;top:0;z-index:5;background:var(--paper);padding:14px 16px 10px;display:flex;flex-direction:column;gap:10px;border-bottom:1px solid var(--line)}
+.kopf{display:flex;align-items:center;justify-content:space-between;gap:10px}
+h1{font:700 22px/1.1 var(--f-body);margin:0}
+.chip{display:inline-flex;align-items:center;font-size:12.5px;padding:2px 9px;border-radius:99px;white-space:nowrap}
+.chip.ok{background:var(--ok-soft);color:var(--ok)} .chip.warn{background:var(--warn-soft);color:var(--warn)} .chip.info{background:var(--pen-soft);color:var(--pen)}
+.tabs{display:flex;border:1px solid var(--line);border-radius:10px;padding:3px;gap:3px;background:var(--sheet)}
+.tabs button{flex:1;border:0;background:transparent;color:var(--ink);font:500 15px var(--f-body);padding:9px 6px;border-radius:8px}
+.tabs button[aria-selected="true"]{background:var(--pen-soft);color:var(--pen);font-weight:600}
+input,select{font:16px var(--f-body);padding:10px 12px;border:1px solid var(--line);border-radius:9px;background:var(--sheet);color:var(--ink);width:100%}
+input.mono{font-family:var(--f-mono)}
+button{font:500 15px var(--f-body);border-radius:9px;border:1px solid var(--line);background:var(--sheet);color:var(--ink);padding:10px 14px}
+button.primary{background:var(--pen);border-color:var(--pen);color:#fff;font-weight:600}
+button.ghost{background:transparent;border-color:transparent;color:var(--muted)}
+button:disabled{opacity:.45}
+main{padding:12px 16px;display:flex;flex-direction:column;gap:10px}
+.karte{background:var(--sheet);border:1px solid var(--line);border-radius:12px;padding:12px 12px 12px 14px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 10px;align-items:center}
+.karte .name{font-weight:600;overflow-wrap:anywhere}
+.karte .nr{font:13.5px var(--f-mono);color:var(--muted)}
+.karte .ort{font-size:13px;color:var(--muted)}
+.karte .rechts{grid-row:1/4;grid-column:2;display:flex;flex-direction:column;gap:6px;align-items:flex-end}
+.stepper{display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.stepper button{border:0;border-radius:0;padding:9px 14px;font-size:19px;line-height:1;background:transparent}
+.stepper output{min-width:42px;text-align:center;font:600 17px var(--f-mono)}
+.stepper.leer output{color:var(--bad)} .stepper.wartet output{color:var(--pen)}
+.klein{font-size:13px;padding:6px 10px}
+.leer-box{text-align:center;color:var(--muted);padding:40px 16px}
+.leer-box b{display:block;color:var(--ink);font-size:17px;margin-bottom:4px}
+.fab{position:fixed;right:16px;bottom:calc(18px + env(safe-area-inset-bottom));z-index:6;border-radius:99px;padding:14px 22px;font-size:17px;box-shadow:0 8px 24px rgba(20,40,120,.35)}
+.blatt{position:fixed;inset:0;z-index:20;background:rgba(10,15,30,.55);display:flex;align-items:flex-end}
+.blatt>form{background:var(--sheet);width:100%;max-height:92vh;overflow:auto;border-radius:16px 16px 0 0;padding:16px 16px calc(16px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:12px}
+.blatt h2{margin:0;font:600 19px var(--f-body)}
+label{display:flex;flex-direction:column;gap:5px;font-size:13.5px;font-weight:500}
+.zeile{display:flex;gap:8px;align-items:center}
+.mengen{display:flex;gap:6px}
+.mengen input{text-align:center;font:600 18px var(--f-mono)}
+.mengen button{width:54px;font-size:20px;padding:8px 0}
+.hint{font-size:13px;color:var(--muted);margin:0}
+.err{font-size:14px;color:var(--bad);margin:0}
+.treffer{background:var(--pen-soft);border-radius:9px;padding:9px 12px;font-size:14px}
+.anmelden{max-width:440px;margin:30px auto;padding:0 16px;display:flex;flex-direction:column;gap:14px}
+.anmelden .k{background:var(--sheet);border:1px solid var(--line);border-radius:14px;padding:20px;display:flex;flex-direction:column;gap:12px}
+.mail{display:flex}
+.mail input{border-radius:9px 0 0 9px;min-width:0}
+.mail span{border:1px solid var(--line);border-left:0;border-radius:0 9px 9px 0;padding:10px;background:var(--paper);font-size:14px;color:var(--muted);white-space:nowrap}
+.fz{display:flex;align-items:center;gap:10px;padding:0;border:0;background:none;text-align:left;min-width:0}
+.fahrer{font-size:13px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.schild{display:inline-flex;align-items:stretch;border:2px solid #111;border-radius:6px;background:#fff;color:#111;overflow:hidden;font:700 19px/1 "DIN 1451 Mittelschrift","Bahnschrift","Arial Narrow",var(--f-body);letter-spacing:.04em;flex:none}
+.schild .eu{background:#003399;color:#fc0;font:700 11px/1 var(--f-body);display:flex;align-items:flex-end;padding:0 4px 3px}
+.schild span:last-child{padding:5px 9px 4px;white-space:nowrap}
+#toast{position:fixed;left:16px;right:16px;bottom:calc(84px + env(safe-area-inset-bottom));z-index:30;background:var(--ink);color:var(--paper);padding:11px 14px;border-radius:10px;font-size:15px;display:flex;gap:10px;align-items:center;justify-content:space-between}
+#toast button{background:transparent;color:var(--paper);border-color:rgba(255,255,255,.4);padding:5px 10px;font-size:14px}
+</style>
+</head>
+<body>
+
+<div id="anmeldung" class="anmelden" hidden>
+  <div><h1>Kundendienstfahrzeug</h1><p class="hint">Dein Ersatzteil-Bestand im Fahrzeug – derselbe wie im Programm auf dem Laptop.</p></div>
+  <form class="k" id="regForm" autocomplete="off">
+    <strong>Einmalige Anmeldung</strong>
+    <label>Vor- und Nachname<input id="regName" autocomplete="name" placeholder="Max Mustermann" required></label>
+    <label>Arbeits-E-Mail<span class="mail"><input id="regMail" placeholder="m.mustermann" autocapitalize="off" required><span id="regDomain">@schlueter-gabelstapler.de</span></span></label>
+    <p class="err" id="regErr" hidden></p>
+    <button class="primary" id="regOk">Code anfordern</button>
+  </form>
+  <form class="k" id="codeForm" hidden>
+    <strong>Freischaltcode eingeben</strong>
+    <p class="hint" id="codeInfo"></p>
+    <input id="codeInput" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="123456" style="font:600 24px var(--f-mono);letter-spacing:.3em;text-align:center">
+    <p class="err" id="codeErr" hidden></p>
+    <button class="primary" id="codeOk">Freischalten</button>
+    <div class="zeile" style="justify-content:space-between"><button type="button" class="ghost" id="codeBack">E-Mail ändern</button><button type="button" class="ghost" id="codeResend">Code neu senden</button></div>
+  </form>
+</div>
+
+<div id="app" hidden>
+  <header>
+    <div class="kopf"><button type="button" class="fz" id="fzBtn"><span class="schild"><span class="eu">D</span><span id="fzKz">Kennzeichen?</span></span><span class="fahrer" id="fzFahrer"></span></button><span class="chip info" id="syncChip">Wird geladen …</span></div>
+    <div class="tabs"><button id="tabBestand" aria-selected="true">Im Wagen <span id="nBestand"></span></button><button id="tabFehlt" aria-selected="false">Fehlt <span id="nFehlt"></span></button></div>
+    <input type="search" id="such" placeholder="Suchen …" aria-label="Suchen">
+  </header>
+  <main id="liste"></main>
+  <p class="hint" style="text-align:center;padding:8px 16px" id="userLine"></p>
+  <button class="primary fab" id="neuBtn">＋ Teil</button>
+</div>
+
+<div class="blatt" id="teilBlatt" hidden>
+  <form id="teilForm" autocomplete="off">
+    <div class="zeile" style="justify-content:space-between"><h2 id="teilTitel">Neues Teil</h2><button type="button" class="ghost" id="teilZu">Schließen</button></div>
+    <div class="tabs"><button type="button" id="tlBestand">Im Wagen</button><button type="button" id="tlFehlt">Fehlt</button></div>
+    <label>Teilenummer<input id="fNr" class="mono" placeholder="67405-T1000-71 / BT7643266" autocapitalize="characters" required></label>
+    <div class="treffer" id="treffer" hidden></div>
+    <label>Bezeichnung<input id="fName" placeholder="z. B. Filter-Teilgruppe" required></label>
+    <label>Lagerort<input id="fOrt" placeholder="z. B. Fach A" list="orte"></label>
+    <datalist id="orte"></datalist>
+    <label>Stückzahl<span class="mengen"><button type="button" id="fMinus">−</button><input id="fMenge" type="number" inputmode="numeric" min="0" max="999999" value="1"><button type="button" id="fPlus">＋</button></span></label>
+    <p class="err" id="teilErr" hidden></p>
+    <button class="primary" id="teilOk">Speichern</button>
+    <div class="zeile" style="justify-content:space-between"><button type="button" class="ghost" id="teilDel" style="color:var(--bad)" hidden>Löschen</button><button type="button" class="ghost" id="teilNach" hidden>Nachbestellen</button></div>
+  </form>
+</div>
+
+<div class="blatt" id="fzBlatt" hidden>
+  <form id="fzForm" autocomplete="off">
+    <div class="zeile" style="justify-content:space-between"><h2>Dein Fahrzeug</h2><button type="button" class="ghost" id="fzZu">Später</button></div>
+    <label>Kennzeichen<input id="fzKzIn" class="mono" placeholder="z. B. OL-SG 123" maxlength="20" autocapitalize="characters" style="text-transform:uppercase;font-size:19px"></label>
+    <label>Fahrer (Vor- und Nachname)<input id="fzFahrerIn" placeholder="Max Mustermann" maxlength="100"></label>
+    <p class="err" id="fzErr" hidden></p>
+    <button class="primary" id="fzOk">Speichern</button>
+  </form>
+</div>
+
+<div id="toast" hidden><span id="toastText"></span><button type="button" id="toastBtn" hidden></button></div>
+
+<script>
+// Läuft ohne Google-Anmeldung direkt gegen den Server der Service-Mappe (Apps Script, doPost).
+// Angemeldet wird wie im Programm mit Name + Arbeits-E-Mail und einem Code per E-Mail.
+var SERVER = "https://script.google.com/macros/s/AKfycbwj7l1K2RcGtPUu4wdRFjI7NLayzAtqjx0_XorzQmMNEqh-JyuEaOrUlOEN1BT9HVSC/exec";
+var DOMAIN = "schlueter-gabelstapler.de", VERSION = "handy-1";
+function $(id){ return document.getElementById(id); }
+function esc(s){ return String(s == null ? "" : s).replace(/[&<>"']/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); }
+function speicher(k, v){ try{ if(v === undefined) return JSON.parse(localStorage.getItem("wl_" + k) || "null"); localStorage.setItem("wl_" + k, JSON.stringify(v)); }catch(e){ return null; } }
+
+var nutzer = speicher("nutzer"); // {id, name, email, verified}
+var lager = {fahrzeug: null, teile: speicher("teile") || [], katalog: {}, stand: "", kstand: "", geladen: false, offline: false};
+var tab = speicher("tab") || "bestand";
+var offen = {};
+
+function anfrage(daten){
+  daten.app = "wagenlager"; daten.quelle = "handy"; daten.version = VERSION;
+  if(nutzer){ daten.id = nutzer.id; daten.name = nutzer.name; daten.email = nutzer.email; }
+  return fetch(SERVER, {method: "POST", body: JSON.stringify(daten), credentials: "omit", headers: {"Content-Type": "text/plain;charset=utf-8"}})
+    .then(function(r){ if(!r.ok) throw new Error("Server antwortet nicht (" + r.status + ")"); return r.json(); })
+    .catch(function(e){ return {ok: false, offline: true, error: "Keine Verbindung zum Server."}; });
+}
+
+var toastT;
+function toast(t, ms, btn){
+  $("toastText").textContent = t; $("toast").hidden = false; var b = $("toastBtn"); b.hidden = !btn;
+  if(btn){ b.textContent = btn.text; b.onclick = function(){ $("toast").hidden = true; btn.run(); }; }
+  clearTimeout(toastT); toastT = setTimeout(function(){ $("toast").hidden = true; }, ms || (btn ? 8000 : 3500));
+}
+
+function teileNr(v){
+  var roh = String(v || "").trim().toUpperCase(), c = roh.replace(/[\s-]/g, ""), m;
+  if(/^BT\d{7}$/.test(c)) return c;
+  if(/^\d{7}$/.test(c)) return "BT" + c;
+  m = c.match(/^(\d{5})([A-Z0-9]{5})(\d{2})$/);
+  return m ? m[1] + "-" + m[2] + "-" + m[3] : roh;
+}
+function nrKey(n){ return teileNr(n).replace(/[\s-]/g, ""); }
+function menge(t){ return t.menge + (offen[t.id] ? offen[t.id].delta : 0); }
+
+/* ---------- Anmeldung ---------- */
+function mailVonName(n){
+  var w = n.trim().toLowerCase().replace(/ä/g, "ae").replace(/ö/g, "oe").replace(/ü/g, "ue").replace(/ß/g, "ss")
+    .normalize("NFD").replace(/[̀-ͯ]/g, "").split(/\s+/).map(function(x){ return x.replace(/[^a-z0-9-]/g, ""); }).filter(Boolean);
+  return w.length < 2 ? w.join("") : w[0][0] + "." + w.slice(1).join("-");
+}
+var mailHand = false;
+$("regName").oninput = function(){ if(!mailHand) $("regMail").value = mailVonName($("regName").value); };
+$("regMail").oninput = function(){ mailHand = true; var v = $("regMail").value.trim().toLowerCase(); if(v.slice(-DOMAIN.length - 1) === "@" + DOMAIN) $("regMail").value = v.slice(0, -DOMAIN.length - 1); $("regDomain").hidden = $("regMail").value.indexOf("@") >= 0; };
+function fehler(id, t){ $(id).textContent = t || ""; $(id).hidden = !t; }
+function zeigeAnmeldung(code){
+  $("app").hidden = true; $("anmeldung").hidden = false;
+  $("regForm").hidden = !!code; $("codeForm").hidden = !code;
+  if(code) $("codeInfo").textContent = "Wir haben einen 6-stelligen Code an " + nutzer.email + " geschickt (30 Minuten gültig). Schau auch im Spam-Ordner nach.";
+  else if(nutzer){ $("regName").value = nutzer.name; $("regMail").value = nutzer.email.split("@")[1] === DOMAIN ? nutzer.email.split("@")[0] : nutzer.email; mailHand = true; }
+}
+$("regForm").onsubmit = function(e){
+  e.preventDefault();
+  var name = $("regName").value.trim().replace(/\s+/g, " "), lokal = $("regMail").value.trim().toLowerCase(), mail;
+  if(name.split(" ").length < 2) return fehler("regErr", "Bitte Vor- und Nachnamen eintragen.");
+  if(lokal.indexOf("@") >= 0){ if(lokal !== "b.stockey@hotmail.de") return fehler("regErr", "Bitte nur den Teil vor dem @ eintragen."); mail = lokal; }
+  else if(!/^[a-z0-9]+([.-][a-z0-9]+)*\.[a-z0-9]+([.-][a-z0-9]+)*$/.test(lokal)) return fehler("regErr", "Die E-Mail hat die Form v.nachname@" + DOMAIN + ".");
+  else mail = lokal + "@" + DOMAIN;
+  var id = nutzer && nutzer.email === mail && nutzer.id ? nutzer.id : (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(36).slice(2));
+  nutzer = {id: id, name: name, email: mail, verified: false}; speicher("nutzer", nutzer);
+  $("regOk").disabled = true; fehler("regErr", "");
+  anfrage({event: "register"}).then(function(r){
+    $("regOk").disabled = false;
+    if(r.ok && r.verified){ nutzer.verified = true; speicher("nutzer", nutzer); return starten(); }
+    if(!r.ok) return fehler("regErr", r.error || "Anmeldung fehlgeschlagen.");
+    zeigeAnmeldung(true); $("codeInput").focus();
+  });
+};
+$("codeForm").onsubmit = function(e){
+  e.preventDefault();
+  var code = $("codeInput").value.replace(/\D/g, "");
+  if(code.length !== 6) return fehler("codeErr", "Der Code hat 6 Ziffern.");
+  $("codeOk").disabled = true;
+  anfrage({event: "verify", code: code}).then(function(r){
+    $("codeOk").disabled = false;
+    if(!r.ok || !r.verified) return fehler("codeErr", r.error || "Der Code stimmt nicht.");
+    if(r.blocked) return fehler("codeErr", "Dein Zugang wurde gesperrt. Bitte wende dich an den Administrator.");
+    nutzer.verified = true; speicher("nutzer", nutzer); starten();
+  });
+};
+$("codeBack").onclick = function(){ zeigeAnmeldung(false); };
+$("codeResend").onclick = function(){ anfrage({event: "resend"}).then(function(r){ fehler("codeErr", r.ok ? "" : r.error); if(r.ok) toast("Neuer Code ist unterwegs."); }); };
+
+/* ---------- Bestand ---------- */
+function uebernehmen(r){
+  if(!r || !r.ok) return false;
+  if(!r.unveraendert && r.teile){ lager.teile = r.teile; lager.stand = r.stand || ""; speicher("teile", r.teile); }
+  if(r.fahrzeug) lager.fahrzeug = r.fahrzeug;
+  if(r.katalog){ lager.katalog = {}; r.katalog.forEach(function(k){ lager.katalog[nrKey(k.nr)] = k.name; }); lager.kstand = r.kstand || ""; }
+  lager.geladen = true; lager.offline = false; lager.zeit = new Date();
+  return true;
+}
+function laden(){
+  if(!nutzer || !nutzer.verified || Object.keys(offen).length) return;
+  anfrage({event: "wl_liste", stand: lager.stand, kstand: lager.kstand}).then(function(r){
+    if(r.ok){ uebernehmen(r); fzNachfragen(); }
+    else if(/neu anmelden/i.test(r.error || "")){ nutzer.verified = false; speicher("nutzer", nutzer); return zeigeAnmeldung(false); }
+    else { lager.offline = true; }
+    zeichnen();
+  });
+}
+function aendern(daten, ok){
+  if(lager.offline){ toast("Ohne Verbindung kann nichts geändert werden."); return Promise.resolve({ok: false}); }
+  daten.stand = lager.stand; daten.kstand = lager.kstand;
+  return anfrage(daten).then(function(r){
+    if(!r.ok){ toast(r.error || "Speichern fehlgeschlagen.", 6000); if(r.konflikt){ lager.stand = ""; laden(); } return r; }
+    uebernehmen(r); zeichnen(); if(ok) ok(r); return r;
+  });
+}
+
+function zeichnen(){
+  var fz = lager.fahrzeug || {};
+  $("fzKz").textContent = fz.kennzeichen || "Kennzeichen?"; $("fzFahrer").textContent = fz.fahrer ? "Fahrer: " + fz.fahrer : "Fahrer eintragen";
+  var b = lager.teile.filter(function(t){ return t.liste === "bestand"; }), f = lager.teile.filter(function(t){ return t.liste === "fehlt"; });
+  $("nBestand").textContent = "(" + b.length + ")"; $("nFehlt").textContent = "(" + f.length + ")";
+  $("tabBestand").setAttribute("aria-selected", tab === "bestand"); $("tabFehlt").setAttribute("aria-selected", tab === "fehlt");
+  var c = $("syncChip");
+  if(lager.offline){ c.className = "chip warn"; c.textContent = "Offline"; }
+  else if(!lager.geladen){ c.className = "chip info"; c.textContent = "Wird geladen …"; }
+  else { c.className = "chip ok"; c.textContent = "Stand " + lager.zeit.toLocaleTimeString("de-DE", {hour: "2-digit", minute: "2-digit"}); }
+  var q = $("such").value.trim().toLowerCase(), qk = q.replace(/[\s-]/g, "");
+  var a = (tab === "bestand" ? b : f).filter(function(t){ return !q || (t.nr + " " + t.name + " " + t.ort).toLowerCase().indexOf(q) >= 0 || (qk && nrKey(t.nr).toLowerCase().indexOf(qk) >= 0); })
+    .sort(function(x, y){ return x.name.localeCompare(y.name, "de") || x.nr.localeCompare(y.nr); });
+  var orte = {}; lager.teile.forEach(function(t){ if(t.ort) orte[t.ort] = 1; });
+  $("orte").innerHTML = Object.keys(orte).sort().map(function(o){ return '<option value="' + esc(o) + '">'; }).join("");
+  if(!a.length){
+    $("liste").innerHTML = '<div class="leer-box"><b>' + (!lager.geladen ? "Wird geladen …" : q ? "Nichts gefunden" : tab === "bestand" ? "Noch keine Teile im Wagen" : "Es fehlt nichts") + '</b>' +
+      (lager.geladen && !q ? (tab === "bestand" ? "Mit „＋ Teil“ das erste Teil erfassen." : "Was nachbestellt werden muss, hier sammeln.") : "") + '</div>';
+    return;
+  }
+  $("liste").innerHTML = a.map(function(t){
+    var m = menge(t);
+    return '<div class="karte" data-id="' + esc(t.id) + '"><span class="name" data-a="edit">' + esc(t.name) + '</span><span class="nr" data-a="edit">' + esc(t.nr) + '</span><span class="ort">' + esc(t.ort || "") + '</span>' +
+      '<span class="rechts"><span class="stepper' + (m === 0 && t.liste === "bestand" ? " leer" : "") + (offen[t.id] ? " wartet" : "") + '"><button data-a="minus" aria-label="weniger">−</button><output>' + m + '</output><button data-a="plus" aria-label="mehr">＋</button></span>' +
+      (t.liste === "fehlt" ? '<button class="klein" data-a="da">✓ Eingetroffen</button>' : "") + '</span></div>';
+  }).join("");
+}
+$("liste").onclick = function(e){
+  var el = e.target.closest("[data-a]"); if(!el) return;
+  var k = el.closest(".karte"), t = lager.teile.filter(function(x){ return x.id === k.dataset.id; })[0]; if(!t) return;
+  var a = el.dataset.a;
+  if(a === "edit") return oeffnen(t);
+  if(lager.offline) return toast("Ohne Verbindung kann nichts geändert werden.");
+  if(a === "minus" || a === "plus"){
+    var d = a === "plus" ? 1 : -1, o = offen[t.id] || {delta: 0};
+    if(t.menge + o.delta + d < 0) return toast("Davon ist nichts mehr da.");
+    o.delta += d; clearTimeout(o.timer); o.timer = setTimeout(function(){ senden(t.id); }, 800); offen[t.id] = o; zeichnen();
+    if(navigator.vibrate) navigator.vibrate(12);
+  }
+  if(a === "da") aendern({event: "wl_umbuchen", teilId: t.id}, function(){ toast("„" + t.name + "“ ist jetzt im Wagen."); });
+};
+function senden(id){
+  var o = offen[id]; delete offen[id]; if(!o || !o.delta){ zeichnen(); return; }
+  aendern({event: "wl_menge", teilId: id, delta: o.delta}).then(function(r){
+    var t = lager.teile.filter(function(x){ return x.id === id; })[0];
+    if(r.ok && t && t.liste === "bestand" && t.menge === 0 && o.delta < 0)
+      toast("„" + t.name + "“ ist aufgebraucht.", 9000, {text: "Nachbestellen", run: function(){ oeffnen({liste: "fehlt", nr: t.nr, name: t.name, ort: t.ort, menge: 1}, "Nachbestellen"); }});
+    if(!r.ok) zeichnen();
+  });
+}
+$("tabBestand").onclick = function(){ tab = "bestand"; speicher("tab", tab); zeichnen(); };
+$("tabFehlt").onclick = function(){ tab = "fehlt"; speicher("tab", tab); zeichnen(); };
+$("such").oninput = zeichnen;
+
+/* ---------- Kennzeichen und Fahrer ---------- */
+var fzGefragt = false;
+function kzForm(v){ return String(v || "").toUpperCase().replace(/\s+/g, " ").replace(/\s*-\s*/g, "-").trim(); }
+function fzNachfragen(){ var f = lager.fahrzeug || {}; if(fzGefragt || (f.kennzeichen && f.fahrer)) return; fzGefragt = true; fzOeffnen(); }
+function fzOeffnen(){ var f = lager.fahrzeug || {}; $("fzKzIn").value = f.kennzeichen || ""; $("fzFahrerIn").value = f.fahrer || (nutzer ? nutzer.name : ""); fehler("fzErr", ""); $("fzBlatt").hidden = false; }
+$("fzBtn").onclick = fzOeffnen;
+$("fzZu").onclick = function(){ $("fzBlatt").hidden = true; };
+$("fzForm").onsubmit = function(e){
+  e.preventDefault();
+  var kz = kzForm($("fzKzIn").value), fahrer = $("fzFahrerIn").value.trim().replace(/\s+/g, " ");
+  if(kz.replace(/[\s-]/g, "").length < 3) return fehler("fzErr", "Bitte das Kennzeichen eintragen (z. B. OL-SG 123).");
+  if(fahrer.split(" ").length < 2) return fehler("fzErr", "Bitte Vor- und Nachnamen des Fahrers eintragen.");
+  aendern({event: "wl_fahrzeug", kennzeichen: kz, fahrer: fahrer}, function(){ $("fzBlatt").hidden = true; toast("Fahrzeug gespeichert."); });
+};
+
+/* ---------- Teil bearbeiten ---------- */
+var teil = null;
+function liste(l){ teil.liste = l; $("tlBestand").setAttribute("aria-selected", l === "bestand"); $("tlFehlt").setAttribute("aria-selected", l === "fehlt"); treffer(); }
+$("tlBestand").onclick = function(){ liste("bestand"); };
+$("tlFehlt").onclick = function(){ liste("fehlt"); };
+function oeffnen(t, titel){
+  teil = t ? JSON.parse(JSON.stringify(t)) : {liste: tab, nr: "", name: "", ort: "", menge: 1};
+  $("teilTitel").textContent = titel || (teil.id ? "Teil bearbeiten" : "Neues Teil");
+  $("fNr").value = teil.nr; $("fName").value = teil.name; $("fOrt").value = teil.ort || ""; $("fMenge").value = teil.menge;
+  $("teilDel").hidden = !teil.id; $("teilNach").hidden = !(teil.id && teil.liste === "bestand"); fehler("teilErr", "");
+  liste(teil.liste); $("teilBlatt").hidden = false;
+  if(!teil.nr) setTimeout(function(){ $("fNr").focus(); }, 50);
+}
+function treffer(){
+  var n = nrKey($("fNr").value), box = $("treffer"); box.hidden = true; if(!n || !teil) return;
+  var g = lager.teile.filter(function(t){ return nrKey(t.nr) === n && t.id !== teil.id; });
+  if(!g.length) return;
+  box.textContent = "Schon eingetragen: " + g.map(function(t){ return (t.liste === "bestand" ? "im Wagen " : "fehlt ") + menge(t) + " Stück" + (t.ort ? " (" + t.ort + ")" : ""); }).join(", ");
+  box.hidden = false;
+}
+$("fNr").onblur = function(){
+  var n = teileNr($("fNr").value); $("fNr").value = n;
+  var k = nrKey(n), eigen = lager.teile.filter(function(t){ return nrKey(t.nr) === k && t.name; })[0];
+  var name = (eigen && eigen.name) || lager.katalog[k];
+  if(name && !$("fName").value.trim()) $("fName").value = name;
+  treffer();
+};
+$("fNr").oninput = treffer;
+function mengeWert(){ return Math.max(0, Math.min(999999, parseInt($("fMenge").value, 10) || 0)); }
+$("fMinus").onclick = function(){ $("fMenge").value = Math.max(0, mengeWert() - 1); };
+$("fPlus").onclick = function(){ $("fMenge").value = mengeWert() + 1; };
+$("teilZu").onclick = function(){ $("teilBlatt").hidden = true; teil = null; };
+$("teilBlatt").onclick = function(e){ if(e.target === $("teilBlatt")) $("teilZu").click(); };
+$("teilForm").onsubmit = function(e){
+  e.preventDefault();
+  $("fNr").onblur();
+  var x = {id: teil.id || "", v: teil.v || 0, liste: teil.liste, nr: teileNr($("fNr").value), name: $("fName").value.trim(), ort: $("fOrt").value.trim(), menge: mengeWert()};
+  if(x.nr.length < 3) return fehler("teilErr", "Bitte eine Teilenummer eintragen.");
+  if(!x.name) return fehler("teilErr", "Bitte eine Bezeichnung eintragen.");
+  $("teilOk").disabled = true;
+  aendern({event: "wl_speichern", teil: x}).then(function(r){
+    $("teilOk").disabled = false;
+    if(!r.ok) return fehler("teilErr", r.error || "Speichern fehlgeschlagen.");
+    tab = x.liste; speicher("tab", tab); zeichnen(); $("teilZu").click(); toast("Gespeichert.");
+  });
+};
+$("teilDel").onclick = function(){
+  var t = teil; if(!t || !t.id || !confirm("„" + t.name + "“ löschen?")) return;
+  aendern({event: "wl_loeschen", teilId: t.id, v: t.v}, function(){ $("teilZu").click(); toast("Gelöscht."); });
+};
+$("teilNach").onclick = function(){ var t = teil; oeffnen({liste: "fehlt", nr: t.nr, name: t.name, ort: t.ort, menge: 1}, "Nachbestellen"); };
+$("neuBtn").onclick = function(){ oeffnen(null); };
+
+/* ---------- Start ---------- */
+var timer = null;
+function starten(){
+  $("anmeldung").hidden = true; $("app").hidden = false;
+  $("userLine").innerHTML = "Angemeldet als " + esc(nutzer.name) + " · <a href='#' id='abmelden'>abmelden</a>";
+  $("abmelden").onclick = function(e){ e.preventDefault(); if(!confirm("Abmelden?")) return; nutzer.verified = false; speicher("nutzer", nutzer); speicher("teile", []); lager.teile = []; lager.fahrzeug = null; fzGefragt = false; zeigeAnmeldung(false); };
+  zeichnen(); laden();
+  if(!timer) timer = setInterval(function(){ if(!document.hidden) laden(); }, 30000);
+}
+document.addEventListener("visibilitychange", function(){ if(!document.hidden && nutzer && nutzer.verified) laden(); });
+if(nutzer && nutzer.verified) starten(); else zeigeAnmeldung(false);
+</script>
+</body>
+</html>

@@ -2,7 +2,7 @@
 // Läuft als Apps Script in der Google-Tabelle „PDF Unterschreiben – Nutzer“ und ist als Web-App
 // veröffentlicht (Ausführen als: Ich, Zugriff: Jeder). In KEY steht derselbe Schlüssel wie im
 // GitHub-Secret REPORT_KEY – im Repository steht hier nur ein Platzhalter.
-// Beim Einspielen werden admin/Typenschild.js, admin/QrCode.js und admin/Vorlagen.js unten angehängt (jeweils ohne die letzte module.exports-Zeile).
+// Beim Einspielen werden admin/Typenschild.js, admin/QrCode.js, admin/Vorlagen.js und admin/Kundendienstfahrzeug.js unten angehängt (jeweils ohne die letzte module.exports-Zeile).
 const KEY = 'HIER_SCHLUESSEL_EINTRAGEN';
 const DOMAIN = 'schlueter-gabelstapler.de';
 const ADMIN_MAILS = ['b.stockey@hotmail.de', 'b.stockey@schlueter-gabelstapler.de']; // Admin darf sich mit dieser Adresse anmelden
@@ -81,6 +81,24 @@ function doPost(e) {
   if (d && d.key === KEY && d.event === 'ocr') {
     try { return out(ocrAnfrage(d)); } catch (x) { return out({ ok: false, error: 'Texterkennung: ' + x.message }); }
   }
+  // Kundendienstfahrzeug (früher Wagenlager): Bestand lesen/ändern – vom Windows-Programm und von der
+  // Handy-Seite (Kundendienstfahrzeug.js). Intern heißt die App weiter 'wagenlager'.
+  // Berechtigt ist nur eine freigeschaltete Rechner-ID der eigenen E-Mail; ein KEY ist dafür nicht nötig.
+  if (d && d.app === 'wagenlager' && /^wl_[a-z]+$/.test(String(d.event || ''))) {
+    const l = LockService.getScriptLock();
+    l.waitLock(25000);
+    try { return out(wagenlagerAnfrage(d)); }
+    catch (x) { return out({ ok: false, error: x.message }); }
+    finally { l.releaseLock(); }
+  }
+  // Anmeldung der Handy-Seite des Kundendienstfahrzeugs (öffentlich, darum ohne KEY – sonst gleicher Ablauf mit Freischaltcode)
+  if (d && d.app === 'wagenlager' && d.quelle === 'handy' && ['register', 'update', 'resend', 'verify', 'start', 'check'].indexOf(String(d.event || '')) >= 0) {
+    const l = LockService.getScriptLock();
+    l.waitLock(20000);
+    try { return out(handle(d)); }
+    catch (x) { return out({ ok: false, error: 'Serverfehler: ' + x.message }); }
+    finally { l.releaseLock(); }
+  }
   if (!d || d.key !== KEY) return out({ ok: false, error: 'Nicht berechtigt.' });
   const lock = LockService.getScriptLock();
   lock.waitLock(20000);
@@ -92,9 +110,11 @@ function doPost(e) {
 function handle(d) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   // „PDF zu PowerPoint“ meldet sich mit app: 'pptx' – eigene Nutzerliste, sonst gleicher Ablauf.
-  const pptx = d.app === 'pptx';
-  const APP_NAME = pptx ? 'PDF zu PowerPoint' : 'Service-Mappe';
-  const users = sheet(ss, pptx ? 'Nutzer PDF zu PowerPoint' : 'Nutzer', ['Name', 'E-Mail', 'Rechner-ID', 'Version', 'Erste Anmeldung', 'Zuletzt aktiv',
+  // Das Kundendienstfahrzeug meldet sich mit app: 'wagenlager' – eigene Nutzerliste, nur Anmeldung/Start/Prüfen.
+  const wl = d.app === 'wagenlager';
+  const pptx = d.app === 'pptx' || wl;
+  const APP_NAME = wl ? 'Kundendienstfahrzeug' : d.app === 'pptx' ? 'PDF zu PowerPoint' : 'Service-Mappe';
+  const users = sheet(ss, wl ? 'Nutzer Kundendienstfahrzeug' : d.app === 'pptx' ? 'Nutzer PDF zu PowerPoint' : 'Nutzer', ['Name', 'E-Mail', 'Rechner-ID', 'Version', 'Erste Anmeldung', 'Zuletzt aktiv',
     'Freigeschaltet', 'Gesperrt (ja)', 'Starts', 'Gespeichert', 'Gedruckt', 'Per E-Mail']);
   const log = sheet(ss, 'Protokoll', ['Zeit', 'Name', 'E-Mail', 'Ereignis', 'Version', 'Anzahl']);
 
@@ -114,7 +134,7 @@ function handle(d) {
   if (ev === 'adminblock') return adminBlock(users, id, mail, d.code, d.text);
   if (ev === 'adminuserdelete') return adminUserDelete(users, id, mail, d.code);
   if (ev === 'admindelete') return adminDelete(ss, users, id, mail, d.code, d.text);
-  if (ev !== 'check') log.appendRow([now, name, mail, ev, "'" + (pptx ? 'PPTX ' : '') + ver, n]);
+  if (ev !== 'check') log.appendRow([now, name, mail, ev, "'" + (wl ? (d.quelle === 'handy' ? 'KDF-Handy ' : 'KDF ') : pptx ? 'PPTX ' : '') + ver, n]);
   protokollKuerzen(log, now);
 
   let row = findRow(users, id);
