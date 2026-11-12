@@ -366,7 +366,7 @@ func (b *hgBrowser) suche(nr, url string) (hgErgebnis, bool) {
 	}
 	leser, _ := erweiterungFS.ReadFile("chrome/reader.js")
 	nrJSON, _ := json.Marshal(nr)
-	ausdruck := string(leser) + "\n;readToyotaPart(" + string(nrJSON) + ", 5000)"
+	ausdruck := string(leser) + "\n;readToyotaPart(" + string(nrJSON) + ", 10000)"
 	start := time.Now()
 	letzter := hgErgebnis{Error: "T-Doc hat keine Bezeichnung zu dieser Nummer gefunden."}
 	loginSeit := time.Time{}
