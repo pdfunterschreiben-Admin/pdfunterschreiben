@@ -46,6 +46,18 @@ var txt=KOPF+'\r\n'+zeilen.join('\r\n');
 var msg=(neu?neu+' Ersatzteil(e) hinzugefügt':'Diese Teile sind schon in der Sammlung')+' – zusammen '+zeilen.length+' in der Zwischenablage.\nWeitere Fenster/Baugruppen genauso sammeln, dann in Excel einmal auf „Ersatzteile einfügen“ klicken.';
 function alt(){var t=document.createElement('textarea');t.value=txt;document.body.appendChild(t);t.select();try{document.execCommand('copy');hinweis(msg,true);}catch(e){prompt('Bitte mit Strg+C kopieren:',txt);}document.body.removeChild(t);}
 if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(txt).then(function(){hinweis(msg,true);},alt);}else{alt();}}
-try{if(navigator.clipboard&&navigator.clipboard.readText){navigator.clipboard.readText().then(weiter,function(){weiter('');});return;}}catch(e){}
-weiter('');
+/* Ersatzteilsuche nach BT-Nummern: das Ergebnis ist erst eine Liste von Objekten – die Teileliste mit
+   der gesuchten Nummer erscheint, wenn man ein Objekt aufklappt. Das übernimmt das Lesezeichen. */
+function vorbereiten(fertig){
+var such='';try{such=String(new URL(location.href).searchParams.get('partNumber')||'');}catch(e){}
+such=such.replace(/[\s\-]/g,'').replace(/^BT/i,'').toUpperCase();
+function da(){return [].slice.call(document.querySelectorAll('td')).some(function(d){return d.children.length===0&&d.innerText.replace(/[\s\-]/g,'').replace(/^BT/i,'').toUpperCase()===such;});}
+if(document.querySelector('tr.selectedRow')||such.length<5||da())return fertig();
+var z=document.querySelector('tr.example-element-row');if(!z)return fertig();
+hinweis('Teileliste wird geöffnet …');z.click();var t0=Date.now();
+(function warte(){if(da()||Date.now()-t0>9000)return setTimeout(fertig,200);setTimeout(warte,300);})();}
+function los(){
+try{if(navigator.clipboard&&navigator.clipboard.readText){navigator.clipboard.readText().then(function(t){vorbereiten(function(){weiter(t);});},function(){vorbereiten(function(){weiter('');});});return;}}catch(e){}
+vorbereiten(function(){weiter('');});}
+los();
 })();
