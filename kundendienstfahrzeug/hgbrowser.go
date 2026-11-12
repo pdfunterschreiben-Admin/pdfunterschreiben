@@ -19,6 +19,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -426,9 +427,21 @@ type hgErgebnis struct {
 }
 
 // hgSuchen holt die Bezeichnung zu einer Nummer (url = T-Doc-Suche) – blockiert bis zu ~60 s.
+// hgNeueste: Nummer der neuesten Suche – ältere (z. B. halb getippte Nummern) brechen ab.
+var hgNeueste atomic.Int64
+
+var hgAktuell int64 // Suche, die gerade läuft (unter hgMu)
+
+var hgAbgebrochen = hgErgebnis{Error: "abgebrochen (neuere Suche)"}
+
 func hgSuchen(nr, url string) hgErgebnis {
+	meine := hgNeueste.Add(1)
 	hgMu.Lock()
 	defer hgMu.Unlock()
+	if hgNeueste.Load() != meine {
+		return hgAbgebrochen
+	}
+	hgAktuell = meine
 	if hgAnmeldungOffen() {
 		return hgErgebnis{Error: "Das Toyota-Anmeldefenster ist noch offen – dort anmelden und das Fenster schließen.", Anmelden: true}
 	}
@@ -539,6 +552,9 @@ func (b *hgBrowser) suche(nr, url string) (e hgErgebnis, ok bool) {
 		b.klickMarken()
 		b.marke("Ende: " + map[bool]string{true: "gefunden „" + e.Name + "“", false: "nichts – " + e.Error}[e.Name != ""])
 		t := b.ablaufText(nr)
+		if e.Error == hgAbgebrochen.Error {
+			return
+		}
 		hgAblaufMu.Lock()
 		hgAblauf = t
 		hgAblaufMu.Unlock()
@@ -564,7 +580,7 @@ func (b *hgBrowser) suche(nr, url string) (e hgErgebnis, ok bool) {
 	}
 	leser, _ := erweiterungFS.ReadFile("chrome/reader.js")
 	nrJSON, _ := json.Marshal(nr)
-	ausdruck := string(leser) + "\n;readToyotaPart(" + string(nrJSON) + ", 6000)"
+	ausdruck := string(leser) + "\n;readToyotaPart(" + string(nrJSON) + ", 3000)"
 	start := time.Now()
 	letzter := hgErgebnis{Error: "T-Doc hat keine Bezeichnung zu dieser Nummer gefunden."}
 	loginSeit := time.Time{}
@@ -573,6 +589,9 @@ func (b *hgBrowser) suche(nr, url string) (e hgErgebnis, ok bool) {
 	defer b.fremdeTabsSchliessen()
 	anmelden := hgErgebnis{Error: "Einmal bei Toyota anmelden – danach geht es im Hintergrund.", Anmelden: true}
 	for time.Since(start) < 40*time.Second && b.laeuft() {
+		if hgNeueste.Load() != hgAktuell {
+			return hgAbgebrochen, true
+		}
 		// Hat T-Doc auf den Wechsel nicht reagiert (nach 6 s noch keine neuen Zeilen), richtig laden.
 		// Sind neue Zeilen da, nicht abbrechen – BT-Listen brauchen zum Aufklappen länger.
 		var neu struct {

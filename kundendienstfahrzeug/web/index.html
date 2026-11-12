@@ -858,9 +858,17 @@ function pruefeTreffer(){
   $("#trefferBtn").onclick = () => oeffneTeil(g);
   box.hidden = false;
 }
-$("#fNr").addEventListener("blur", nrUebernehmen);
-$("#fNr").addEventListener("input", () => { const v = $("#fNr").value; if(nrGueltig(v)) nrUebernehmen(); else { $("#trefferBox").hidden = true; } });
-$("#fNr").addEventListener("keydown", e => { if(e.key === "Enter"){ e.preventDefault(); nrUebernehmen(); $("#fName").value ? $("#fOrt").focus() : $("#fName").focus(); } });
+$("#fNr").addEventListener("blur", () => { clearTimeout(nrTimer); nrUebernehmen(); });
+// Beim Tippen erst übernehmen, wenn kurz Ruhe ist – sonst würde schon „BT136“ gesucht, während noch „BT136140“ getippt wird
+let nrTimer = 0;
+$("#fNr").addEventListener("input", () => {
+  clearTimeout(nrTimer);
+  const v = $("#fNr").value;
+  if(!nrGueltig(v)){ $("#trefferBox").hidden = true; return; }
+  const toyota = /^\d{5}-[A-Z0-9]{5}-\d{2}$/.test(teileNr(v)); // vollständig, kann nicht länger werden
+  nrTimer = setTimeout(nrUebernehmen, toyota ? 0 : 1000);
+});
+$("#fNr").addEventListener("keydown", e => { if(e.key === "Enter"){ e.preventDefault(); clearTimeout(nrTimer); nrUebernehmen(); $("#fName").value ? $("#fOrt").focus() : $("#fName").focus(); } });
 $("#fName").addEventListener("input", () => { nameVonHand = true; $("#nameHint").hidden = true; });
 const mengeWert = () => Math.max(0, Math.min(999999, parseInt($("#fMenge").value, 10) || 0));
 $("#fMinus").onclick = () => { $("#fMenge").value = Math.max(0, mengeWert() - 1); };
