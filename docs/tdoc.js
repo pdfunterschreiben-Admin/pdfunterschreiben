@@ -18,13 +18,20 @@ var zeilen=[];
 if(!geleert&&ablage.indexOf(KOPF)===0){ablage.split('\n').slice(1).forEach(function(z){if(z.trim())zeilen.push(z);});}
 s.rows.forEach(function(r){if(zeilen.indexOf(r.z)<0)zeilen.push(r.z);});
 var rows=[].slice.call(document.querySelectorAll('tr.selectedRow'));
-/* Nichts markiert: das gesuchte Teil (partNumber in der Adresse, z. B. vom Kundendienstfahrzeug geöffnet) nehmen */
+/* Nichts markiert: das gesuchte Teil (partNumber in der Adresse, z. B. vom Kundendienstfahrzeug geöffnet) nehmen.
+   In der T-Doc-Ersatzteilsuche heißt die Nummernspalte „Nein“ (falsch übersetztes „No.“), die Bezeichnung „Ersatzteilname“. */
+var gesucht=[];
 if(!rows.length){var such='';try{such=String(new URL(location.href).searchParams.get('partNumber')||'');}catch(e){}
 var kurz=function(t){return String(t||'').replace(/[\s\-]/g,'').replace(/^BT/i,'').toUpperCase();};such=kurz(such);
-if(such.length>=5){[].slice.call(document.querySelectorAll('tr')).forEach(function(r){if(rows.length)return;var tab=r.closest('table');if(!tab)return;
-var h=[].slice.call(tab.querySelectorAll('th')).map(function(x){return x.innerText.trim().toLowerCase();}),ni=-1;
-for(var k=0;k<h.length;k++){if(h[k].indexOf('nummer')>=0){ni=k;break;}}
-var c=[].slice.call(r.querySelectorAll('td'));if(ni>=0&&c[ni]&&kurz(c[ni].innerText)===such)rows.push(r);});}}
+if(such.length>=5){[].slice.call(document.querySelectorAll('table')).forEach(function(tab){if(gesucht.length)return;
+var h=[].slice.call(tab.querySelectorAll('th')).map(function(x){return x.innerText.trim().toLowerCase();}),ni=-1,na=-1;
+for(var k=0;k<h.length;k++){if(ni<0&&/(nummer|^nein$|^no\.?$|part ?number)/.test(h[k]))ni=k;if(na<0&&/(ersatzteilname|bezeichnung|part ?name|^name$)/.test(h[k]))na=k;}
+if(ni<0||na<0)return;
+[].slice.call(tab.querySelectorAll('tr')).forEach(function(r){if(gesucht.length)return;var c=[].slice.call(r.querySelectorAll('td')).map(function(d){return d.innerText.replace(/\s+/g,' ').trim();});
+if(c[ni]&&kurz(c[ni])===such&&c[na])gesucht.push(['1',c[ni],c[na],''].join('\t'));});});}}
+var neuG=0;gesucht.forEach(function(z){if(zeilen.indexOf(z)<0){zeilen.push(z);neuG++;}});
+if(!rows.length&&gesucht.length){s.rows=zeilen.map(function(z){return{key:z,z:z};});speichere(s);var txtG=KOPF+'\r\n'+zeilen.join('\r\n');var msgG=(neuG?'„'+gesucht[0].split('\t')[2]+'“ übernommen':'Dieses Teil ist schon in der Sammlung')+' – zusammen '+zeilen.length+' in der Zwischenablage.';
+if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(txtG).then(function(){hinweis(msgG,true);},function(){var t=document.createElement('textarea');t.value=txtG;document.body.appendChild(t);t.select();try{document.execCommand('copy');hinweis(msgG,true);}catch(e){}document.body.removeChild(t);});}return;}
 if(!rows.length){hinweis(zeilen.length?('Keine Teile markiert. In der Sammlung: '+zeilen.length+' Teil(e).'):'Keine Ersatzteile markiert. Bitte zuerst die Teile in der Liste anklicken (rot).',zeilen.length>0);return;}
 var neu=0;
 rows.forEach(function(r){var tab=r.closest('table'),h=tab?[].slice.call(tab.querySelectorAll('th')).map(function(x){return x.innerText.trim().toLowerCase();}):[];
