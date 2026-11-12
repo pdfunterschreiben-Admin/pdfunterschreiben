@@ -891,7 +891,7 @@ async function tdocAbfrage(n){
     if(s.hinweis && !st.hinweisGezeigt){ st.hinweisGezeigt = true; st.eigen = false; hint(esc(s.hinweis) + " – T-Doc wird stattdessen im Browser geöffnet."); }
     if(s.fertig){
       tdocWarten = "";
-      if(s.name){ $("#fName").value = s.name; nameVonHand = false; hint("✓ Bezeichnung aus T-Doc übernommen."); setTimeout(() => window.focus(), 50); $("#fName").focus();
+      if(s.name){ $("#fName").value = s.name; nameVonHand = false; hint("✓ Bezeichnung aus T-Doc übernommen." + (s.info ? " (" + esc(s.info) + ")" : "")); setTimeout(() => window.focus(), 50); $("#fName").focus();
         if(!state.erwOk){ state.erwOk = true; persist(); } }
       else if(s.anmelden) hint(esc(s.error) + ' <button type="button" class="link" id="tdocAnmelden">Bei Toyota anmelden</button>');
       else hint(esc(s.error || "T-Doc hat keine Bezeichnung zu dieser Nummer gefunden.") + (st.eigen ? ' <button type="button" class="link" id="tdocBildBtn">Was zeigt T-Doc?</button>' : ""));

@@ -33,6 +33,7 @@ type tdocAuftrag struct {
 	version  string
 	anmelden bool
 	hinweis  string
+	info     string
 }
 
 var hgEinmal sync.Once
@@ -99,7 +100,7 @@ func (a *app) handleTdocStart(w http.ResponseWriter, r *http.Request) {
 			}
 			tdocMu.Lock()
 			if t := tdocAuftraege[tok]; t != nil && !t.fertig {
-				t.fertig, t.name, t.fehler, t.anmelden = true, e.Name, e.Error, e.Anmelden
+				t.fertig, t.name, t.fehler, t.anmelden, t.info = true, e.Name, e.Error, e.Anmelden, e.Info
 			}
 			tdocMu.Unlock()
 		}()
@@ -128,7 +129,7 @@ func (a *app) handleTdocStatus(w http.ResponseWriter, r *http.Request) {
 	if t == nil {
 		res = map[string]any{"ok": false, "error": "Unbekannte Abfrage."}
 	} else {
-		res = map[string]any{"ok": true, "fertig": t.fertig, "name": t.name, "error": t.fehler, "sekunden": int(time.Since(t.start).Seconds()), "erweiterung": erweiterungGesehen, "anmelden": t.anmelden, "hinweis": t.hinweis}
+		res = map[string]any{"ok": true, "fertig": t.fertig, "name": t.name, "error": t.fehler, "sekunden": int(time.Since(t.start).Seconds()), "erweiterung": erweiterungGesehen, "anmelden": t.anmelden, "hinweis": t.hinweis, "info": t.info}
 	}
 	tdocMu.Unlock()
 	writeJSON(w, res)

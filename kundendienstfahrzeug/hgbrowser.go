@@ -325,6 +325,8 @@ type hgErgebnis struct {
 	Error    string `json:"error"`
 	Anmelden bool   `json:"-"`
 	Defekt   bool   `json:"-"`
+	Klicks   int    `json:"klicks"`
+	Info     string `json:"-"`
 }
 
 // hgSuchen holt die Bezeichnung zu einer Nummer (url = T-Doc-Suche) – blockiert bis zu ~60 s.
@@ -439,7 +441,7 @@ func (b *hgBrowser) suche(nr, url string) (hgErgebnis, bool) {
 	ohneNeuladen := false
 	if b.aufTdoc {
 		u, _ := json.Marshal(url)
-		ohneNeuladen = b.rufen("Runtime.evaluate", map[string]any{"expression": "globalThis.__kdfAufgeklappt=null;history.pushState({},''," + string(u) + ");dispatchEvent(new PopStateEvent('popstate',{state:{}}));true", "returnByValue": true}, true, 5*time.Second, nil) == nil
+		ohneNeuladen = b.rufen("Runtime.evaluate", map[string]any{"expression": "globalThis.__kdfAufgeklappt=null;document.querySelectorAll('tr,[role=row]').forEach(e=>e.setAttribute('data-kdf-alt','1'));history.pushState({},''," + string(u) + ");dispatchEvent(new PopStateEvent('popstate',{state:{}}));true", "returnByValue": true}, true, 5*time.Second, nil) == nil
 	}
 	if !ohneNeuladen {
 		if err := b.rufen("Page.navigate", map[string]any{"url": url}, true, 30*time.Second, nil); err != nil {
@@ -453,12 +455,24 @@ func (b *hgBrowser) suche(nr, url string) (hgErgebnis, bool) {
 	start := time.Now()
 	letzter := hgErgebnis{Error: "T-Doc hat keine Bezeichnung zu dieser Nummer gefunden."}
 	loginSeit := time.Time{}
-	tabelleGesehen := false
+	tabelleGesehen, neuGeladen := false, false
+	beginn := time.Now()
 	defer b.fremdeTabsSchliessen()
 	anmelden := hgErgebnis{Error: "Einmal bei Toyota anmelden – danach geht es im Hintergrund.", Anmelden: true}
 	for time.Since(start) < 40*time.Second && b.laeuft() {
-		if ohneNeuladen && time.Since(start) > 6*time.Second { // Anwendung hat nicht reagiert: richtig laden
+		// Hat T-Doc auf den Wechsel nicht reagiert (nach 6 s noch keine neuen Zeilen), richtig laden.
+		// Sind neue Zeilen da, nicht abbrechen – BT-Listen brauchen zum Aufklappen länger.
+		var neu struct {
+			Result struct {
+				Value bool `json:"value"`
+			} `json:"result"`
+		}
+		if ohneNeuladen && time.Since(start) > 6*time.Second && b.rufen("Runtime.evaluate", map[string]any{"expression": "!!document.querySelector('tr:not([data-kdf-alt]),[role=row]:not([data-kdf-alt])')", "returnByValue": true}, true, 3*time.Second, &neu) == nil && neu.Result.Value {
+			ohneNeuladen = false // reagiert – weiter wie normal
+		}
+		if ohneNeuladen && time.Since(start) > 6*time.Second {
 			ohneNeuladen = false
+			neuGeladen = true
 			globalThisZuruecksetzen := "globalThis.__kdfAufgeklappt=null"
 			_ = b.rufen("Runtime.evaluate", map[string]any{"expression": globalThisZuruecksetzen}, true, 3*time.Second, nil)
 			if b.rufen("Page.navigate", map[string]any{"url": url}, true, 30*time.Second, nil) != nil {
@@ -508,6 +522,14 @@ func (b *hgBrowser) suche(nr, url string) (hgErgebnis, bool) {
 		_ = json.Unmarshal(r.Result.Value, &e)
 		if e.Name != "" {
 			b.aufTdoc = true
+			e.Info = fmt.Sprintf("%.0f s", time.Since(beginn).Seconds())
+			if e.Klicks > 0 {
+				e.Info += fmt.Sprintf(", %d Fahrzeugzeile(n) aufgeklappt", e.Klicks)
+			}
+			if neuGeladen {
+				e.Info += ", T-Doc neu geladen"
+			}
+			nativLog("T-Doc %s: %s (%s)", nr, e.Name, e.Info)
 			return e, true
 		}
 		if strings.Contains(strings.ToLower(e.Error), "anmelden") {
