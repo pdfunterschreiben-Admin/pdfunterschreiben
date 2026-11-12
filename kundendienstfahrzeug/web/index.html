@@ -353,7 +353,7 @@ dialog::backdrop{background:rgba(10,15,30,.55)}
         <li><b>＋ Neues Teil</b>: Teilenummer eintragen. Toyota-Nummern (12345-ABCDE-12) und BT-Nummern (BT1234567 oder nur die 7 Ziffern) werden automatisch richtig geschrieben.</li>
         <li>Ist die Nummer schon bekannt (bei dir oder bei Kollegen), wird die Bezeichnung automatisch eingetragen.</li>
         <li><b>📷 Vom Foto</b>: Foto vom Etikett wählen – die Teilenummer wird gelesen. Bitte die erkannte Nummer kurz prüfen.</li>
-        <li><b>T-Doc ↗</b> öffnet die Nummer in Toyota T-Doc (im Browser, in dem du bei Toyota angemeldet bist).</li>
+        <li><b>T-Doc ↗</b> öffnet die Nummer in Toyota T-Doc (im Browser, in dem du bei Toyota angemeldet bist). Dort auf das Lesezeichen „T-Doc → Excel“ klicken und zurück ins Programm – die Bezeichnung wird dann automatisch eingetragen.</li>
         <li><b>📋 Ersatzteilliste</b>: dieselbe Liste wie im Reparaturauftrag der Service-Mappe (Außendienst &amp; Werkstatt, Batteriedienst). Mengen eintragen und übernehmen – in den Bestand oder auf die Fehlliste.</li>
         <li><b>📋 Aus T-Doc</b>: In T-Doc die gewünschten Teile anklicken (rot markiert), das Lesezeichen „T-Doc → Excel“ drücken und dann hier auf „Aus T-Doc“. Das Lesezeichen ist dasselbe wie in der Service-Mappe.</li>
       </ul>
@@ -817,9 +817,29 @@ $("#fTdoc").onclick = () => {
   const n = teileNr($("#fNr").value);
   if(!nrGueltig(n)) return teilErr("Für T-Doc bitte eine vollständige Toyota- (12345-ABCDE-12) oder BT-Nummer eintragen.");
   fetch("/api/open?ziel=teil&nr=" + encodeURIComponent(n), {method: "POST"});
-  toast("T-Doc öffnet sich im Browser. Die Bezeichnung dort kopieren und hier einfügen.", 6000);
+  tdocWarten = nrKey(n);
+  $("#nameHint").textContent = "T-Doc ist im Browser geöffnet: dort auf das Lesezeichen „T-Doc → Excel“ klicken – die Bezeichnung kommt dann von selbst hierher.";
+  $("#nameHint").hidden = false;
 };
-const teilZu = () => { $("#teilDlg").close(); teil = null; };
+// Bezeichnung aus T-Doc: Das Lesezeichen „T-Doc → Excel“ legt die Teile in die Zwischenablage
+// (TDOC-ERSATZTEILE, je Zeile Menge, Nummer, Name, Bemerkung). Sobald dieses Fenster wieder vorne ist,
+// wird die Zeile mit der gesuchten Nummer übernommen.
+let tdocWarten = "";
+async function tdocAbholen(){
+  if(!tdocWarten || !$("#teilDlg").open || !document.hasFocus()) return;
+  let t = ""; try{ t = String(await navigator.clipboard.readText()).replace(/\r/g, ""); }catch(e){ return; }
+  if(t.indexOf("TDOC-ERSATZTEILE") !== 0) return;
+  const z = t.split("\n").slice(1).map(x => x.split("\t")).find(x => x[1] && nrKey(x[1]) === tdocWarten);
+  if(!z) return;
+  const name = (z[2] || z[3] || "").trim(); if(!name) return;
+  tdocWarten = "";
+  $("#fName").value = name; nameVonHand = false;
+  $("#nameHint").textContent = "✓ Bezeichnung aus T-Doc übernommen."; $("#nameHint").hidden = false;
+  $("#fName").focus();
+}
+addEventListener("focus", () => setTimeout(tdocAbholen, 150));
+setInterval(tdocAbholen, 1500);
+const teilZu = () => { $("#teilDlg").close(); teil = null; tdocWarten = ""; };
 $("#teilClose").onclick = teilZu; $("#teilAbbr").onclick = teilZu;
 $("#teilForm").addEventListener("submit", async e => {
   e.preventDefault();

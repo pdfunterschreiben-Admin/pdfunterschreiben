@@ -93,6 +93,16 @@ const [app, mock, out = '.'] = process.argv.slice(2);
   await page.click('#teilAbbr');
   ok('Teilenummer vom Foto erkannt (O→0 korrigiert), Bezeichnung ergänzt');
 
+  // T-Doc: Bezeichnung kommt über das Lesezeichen (Zwischenablage) automatisch
+  await page.click('#neuBtn'); await page.waitForTimeout(120);
+  await page.fill('#fNr', '67405T1001071'.slice(0, 12)); await page.press('#fNr', 'Tab');
+  await page.fill('#fNr', '11111ABCDE22'); await page.press('#fNr', 'Tab');
+  await page.click('#fTdoc');
+  await page.evaluate(() => navigator.clipboard.writeText('TDOC-ERSATZTEILE\r\n1\t11111-ABCDE-22\tLAGER, RADNABE\t'));
+  await page.waitForFunction(() => document.querySelector('#fName').value === 'LAGER, RADNABE', null, { timeout: 5000 });
+  await page.click('#teilAbbr');
+  ok('Bezeichnung aus T-Doc automatisch eingetragen');
+
   // Menge −/+ zusammengefasst
   const zeile = page.locator('tr', { hasText: 'Filter-Teilgruppe' });
   await zeile.locator('[data-a=minus]').click();
