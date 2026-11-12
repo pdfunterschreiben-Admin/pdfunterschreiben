@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"unsafe"
@@ -36,7 +37,51 @@ type startupInfo struct {
 
 var procCreateProcessW = syscall.NewLazyDLL("kernel32.dll").NewProc("CreateProcessW")
 
-func hgBrowserPfad() string { return findBrowser() }
+// hgBrowserPfade: erst Edge, dann Chrome (falls Edge auf dem Rechner gesperrt ist).
+func hgBrowserPfade() []string {
+	pf, pf86, lad := os.Getenv("ProgramFiles"), os.Getenv("ProgramFiles(x86)"), os.Getenv("LOCALAPPDATA")
+	var edge, chrome string
+	for _, p := range []string{
+		filepath.Join(pf86, `Microsoft\Edge\Application\msedge.exe`),
+		filepath.Join(pf, `Microsoft\Edge\Application\msedge.exe`),
+		filepath.Join(lad, `Microsoft\Edge\Application\msedge.exe`),
+	} {
+		if st, err := os.Stat(p); err == nil && !st.IsDir() && edge == "" {
+			edge = p
+		}
+	}
+	for _, p := range []string{
+		filepath.Join(pf, `Google\Chrome\Application\chrome.exe`),
+		filepath.Join(pf86, `Google\Chrome\Application\chrome.exe`),
+		filepath.Join(lad, `Google\Chrome\Application\chrome.exe`),
+	} {
+		if st, err := os.Stat(p); err == nil && !st.IsDir() && chrome == "" {
+			chrome = p
+		}
+	}
+	var l []string
+	for _, p := range []string{edge, chrome} {
+		if p != "" {
+			l = append(l, p)
+		}
+	}
+	return l
+}
+
+// hgRichtlinie: Sperrt eine Firmenrichtlinie die Entwicklerwerkzeuge (dann geht auch die Steuerung nicht)?
+func hgRichtlinie(exe string) string {
+	schluessel := `SOFTWARE\Policies\Microsoft\Edge`
+	if strings.Contains(strings.ToLower(filepath.Base(exe)), "chrome") {
+		schluessel = `SOFTWARE\Policies\Google\Chrome`
+	}
+	for _, wurzel := range []string{`HKLM\`, `HKCU\`} {
+		out, err := hidden("reg.exe", "query", wurzel+schluessel, "/v", "DeveloperToolsAvailability").Output()
+		if err == nil && strings.Contains(string(out), "0x2") {
+			return "Firmenrichtlinie sperrt die Entwicklerwerkzeuge (DeveloperToolsAvailability = 2)"
+		}
+	}
+	return ""
+}
 func hgURL(u string) string { return u }
 
 type procWarten struct{ p *os.Process }

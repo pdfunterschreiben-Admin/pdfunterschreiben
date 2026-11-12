@@ -33,6 +33,8 @@ type hgBrowser struct {
 	warten  map[int]chan cdpAntwort
 	sitzung string
 	tot     chan struct{}
+	exe     string
+	ende    string
 }
 
 type cdpAntwort struct {
@@ -50,12 +52,27 @@ var (
 	hgAnmeldMu  sync.Mutex
 )
 
-func hgProfil() string {
+// hgProfil: eigenes Profil je Browser (Edge- und Chrome-Profile vertragen sich nicht).
+func hgProfil(exe string) string {
 	base := os.Getenv("LOCALAPPDATA")
 	if base == "" {
 		base = dataDir()
 	}
-	return filepath.Join(base, AppName, "T-Doc")
+	name := "T-Doc"
+	if strings.Contains(strings.ToLower(filepath.Base(exe)), "chrome") {
+		name = "T-Doc-Chrome"
+	}
+	return filepath.Join(base, AppName, name)
+}
+
+// hgGewaehlt: der Browser, mit dem es zuletzt geklappt hat.
+var hgGewaehlt string
+
+func hgKandidaten() []string {
+	if hgGewaehlt != "" {
+		return []string{hgGewaehlt}
+	}
+	return hgBrowserPfade()
 }
 
 // hgVerfuegbar: Gibt es einen Browser für die Hintergrundabfrage?
@@ -63,12 +80,36 @@ func hgVerfuegbar() bool {
 	hgAnmeldMu.Lock()
 	defekt := hgDefekt
 	hgAnmeldMu.Unlock()
-	return defekt == "" && hgBrowserPfad() != ""
+	return defekt == "" && len(hgBrowserPfade()) > 0
 }
 
 // hgDefekt: Grund, falls das unsichtbare Edge auf diesem Rechner nicht startet – dann läuft es für den
 // Rest der Sitzung wieder über den sichtbaren Browser (Erweiterung/Lesezeichen).
 var hgDefekt string
+
+// hgBrowserLog: letzte Fehlerzeilen aus chrome_debug.log des Profils (zur Fehlersuche).
+func hgBrowserLog(exe string) string {
+	b, err := os.ReadFile(filepath.Join(hgProfil(exe), "chrome_debug.log"))
+	if err != nil {
+		return ""
+	}
+	var z []string
+	for _, l := range strings.Split(string(b), "\n") {
+		if strings.Contains(l, ":ERROR:") || strings.Contains(l, ":FATAL:") || strings.Contains(strings.ToLower(l), "polic") || strings.Contains(l, "pipe") {
+			if i := strings.Index(l, "] "); i > 0 {
+				l = l[i+2:]
+			}
+			z = append(z, strings.TrimSpace(l))
+		}
+	}
+	if len(z) > 3 {
+		z = z[len(z)-3:]
+	}
+	if len(z) == 0 {
+		return ""
+	}
+	return " [" + strings.Join(z, " / ") + "]"
+}
 
 func hgAusfall(err error) hgErgebnis {
 	nativLog("Unsichtbares Edge startet nicht: %v", err)
@@ -78,15 +119,14 @@ func hgAusfall(err error) hgErgebnis {
 	return hgErgebnis{Error: "T-Doc im Hintergrund ging nicht: " + err.Error(), Defekt: true}
 }
 
-func hgStarten() (*hgBrowser, error) {
-	exe := hgBrowserPfad()
-	if exe == "" {
-		return nil, errors.New("Kein Edge gefunden.")
+func hgStarten(exe string) (*hgBrowser, error) {
+	if grund := hgRichtlinie(exe); grund != "" {
+		return nil, errors.New(grund)
 	}
-	_ = os.MkdirAll(hgProfil(), 0o755)
+	_ = os.MkdirAll(hgProfil(exe), 0o755)
 	r, w, p, err := hgProzessStarten(exe, []string{
-		"--headless=new", "--remote-debugging-pipe",
-		"--user-data-dir=" + hgProfil(),
+		"--headless=new", "--remote-debugging-pipe", "--enable-logging", "--log-level=1",
+		"--user-data-dir=" + hgProfil(exe),
 		"--no-first-run", "--no-default-browser-check", "--disable-extensions",
 		"--disable-popup-blocking", "--disable-features=Translate",
 		"--window-size=1280,900", "about:blank",
@@ -94,9 +134,17 @@ func hgStarten() (*hgBrowser, error) {
 	if err != nil {
 		return nil, err
 	}
-	b := &hgBrowser{w: w, proc: p, warten: map[int]chan cdpAntwort{}, tot: make(chan struct{})}
+	b := &hgBrowser{w: w, proc: p, warten: map[int]chan cdpAntwort{}, tot: make(chan struct{}), exe: exe}
 	go b.lesen(r)
-	go func() { _, _ = p.Wait(); b.beenden() }()
+	go func() {
+		st, _ := p.Wait()
+		if st != nil {
+			b.mu.Lock()
+			b.ende = fmt.Sprintf("Browser hat sich beendet (Code %d)", st.ExitCode())
+			b.mu.Unlock()
+		}
+		b.beenden()
+	}()
 	return b, nil
 }
 
@@ -172,7 +220,14 @@ func (b *hgBrowser) rufen(methode string, params any, mitSitzung bool, dauer tim
 		}
 		return nil
 	case <-b.tot:
-		return errors.New("Hintergrund-Browser wurde beendet.")
+		time.Sleep(200 * time.Millisecond) // Beendigungscode abwarten
+		b.mu.Lock()
+		e := b.ende
+		b.mu.Unlock()
+		if e == "" {
+			e = "Verbindung zum Browser abgebrochen"
+		}
+		return errors.New(e)
 	case <-time.After(dauer):
 		b.mu.Lock()
 		delete(b.warten, id)
@@ -246,21 +301,31 @@ func hgSuchen(nr, url string) hgErgebnis {
 	}
 	for versuch := 0; versuch < 2; versuch++ {
 		if hg == nil || !hg.laeuft() {
-			b, err := hgStarten()
-			if err != nil {
-				return hgAusfall(err)
-			}
-			if err := b.vorbereiten(); err != nil {
-				if os.Getenv("KDF_BROWSER_LOG") != "" {
-					fmt.Fprintln(os.Stderr, "vorbereiten:", err)
+			var gruende []string
+			for _, exe := range hgKandidaten() {
+				b, err := hgStarten(exe)
+				if err == nil {
+					if err = b.vorbereiten(); err != nil {
+						_ = b.proc.Kill()
+					}
 				}
-				_ = b.proc.Kill()
+				if err != nil {
+					gruende = append(gruende, filepath.Base(exe)+": "+err.Error()+hgBrowserLog(exe))
+					continue
+				}
+				hg, hgGewaehlt = b, exe
+				nativLog("Unsichtbarer Browser läuft: %s", exe)
+				break
+			}
+			if hg == nil || !hg.laeuft() {
 				if versuch == 0 {
 					continue
 				}
-				return hgAusfall(err)
+				if len(gruende) == 0 {
+					gruende = []string{"Kein Edge/Chrome gefunden"}
+				}
+				return hgAusfall(errors.New(strings.Join(gruende, " | ")))
 			}
-			hg = b
 		}
 		e, ok := hg.suche(nr, hgURL(url))
 		hgLetzte = time.Now()
@@ -355,12 +420,13 @@ func hgAnmelden() error {
 		hg = nil
 	}
 	hgMu.Unlock()
-	exe := hgBrowserPfad()
-	if exe == "" {
+	k := hgKandidaten()
+	if len(k) == 0 {
 		return errors.New("Kein Edge gefunden.")
 	}
+	exe := k[0]
 	p, err := hgSichtbarStarten(exe, []string{
-		"--user-data-dir=" + hgProfil(), "--no-first-run", "--no-default-browser-check",
+		"--user-data-dir=" + hgProfil(exe), "--no-first-run", "--no-default-browser-check",
 		"--disable-extensions", "--window-size=1100,850", hgURL("https://tdoc.toyota-forklifts.eu/"),
 	})
 	if err != nil {

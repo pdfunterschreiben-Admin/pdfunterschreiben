@@ -879,6 +879,7 @@ async function tdocAbfrage(n){
     await new Promise(r => setTimeout(r, 700));
     let s; try{ s = await (await fetch("/api/tdoc/status?token=" + st.token)).json(); }catch(e){ continue; }
     if(!s.ok) break;
+    if(s.hinweis && !st.hinweisGezeigt){ st.hinweisGezeigt = true; st.eigen = false; hint(esc(s.hinweis) + " – T-Doc wird stattdessen im Browser geöffnet."); }
     if(s.fertig){
       tdocWarten = "";
       if(s.name){ $("#fName").value = s.name; nameVonHand = false; hint("✓ Bezeichnung aus T-Doc übernommen."); setTimeout(() => window.focus(), 50); $("#fName").focus();

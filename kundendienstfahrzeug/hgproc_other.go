@@ -10,7 +10,17 @@ import (
 )
 
 // Zum Testen auf Linux: KDF_BROWSER = Pfad zu Chromium, KDF_TDOC_BASIS ersetzt die T-Doc-Adresse.
-func hgBrowserPfad() string { return os.Getenv("KDF_BROWSER") }
+func hgBrowserPfade() []string {
+	var l []string
+	for _, p := range strings.Split(os.Getenv("KDF_BROWSER"), ";") {
+		if p != "" {
+			l = append(l, p)
+		}
+	}
+	return l
+}
+
+func hgRichtlinie(exe string) string { return "" }
 
 func hgURL(u string) string {
 	if b := os.Getenv("KDF_TDOC_BASIS"); b != "" {

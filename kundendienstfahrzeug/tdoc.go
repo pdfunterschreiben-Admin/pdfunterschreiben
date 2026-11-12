@@ -32,6 +32,7 @@ type tdocAuftrag struct {
 	fehler   string
 	version  string
 	anmelden bool
+	hinweis  string
 }
 
 var hgEinmal sync.Once
@@ -80,6 +81,11 @@ func (a *app) handleTdocStart(w http.ResponseWriter, r *http.Request) {
 		go func() {
 			e := hgSuchen(nr, u)
 			if e.Defekt { // wie früher: sichtbarer Browser mit Erweiterung bzw. Lesezeichen
+				tdocMu.Lock()
+				if t := tdocAuftraege[tok]; t != nil {
+					t.hinweis = e.Error
+				}
+				tdocMu.Unlock()
 				ziel := u + "&kdf=" + fmt.Sprintf("%d_%s", Port, tok)
 				if nativVerbunden() {
 					select {
@@ -122,7 +128,7 @@ func (a *app) handleTdocStatus(w http.ResponseWriter, r *http.Request) {
 	if t == nil {
 		res = map[string]any{"ok": false, "error": "Unbekannte Abfrage."}
 	} else {
-		res = map[string]any{"ok": true, "fertig": t.fertig, "name": t.name, "error": t.fehler, "sekunden": int(time.Since(t.start).Seconds()), "erweiterung": erweiterungGesehen, "anmelden": t.anmelden}
+		res = map[string]any{"ok": true, "fertig": t.fertig, "name": t.name, "error": t.fehler, "sekunden": int(time.Since(t.start).Seconds()), "erweiterung": erweiterungGesehen, "anmelden": t.anmelden, "hinweis": t.hinweis}
 	}
 	tdocMu.Unlock()
 	writeJSON(w, res)
