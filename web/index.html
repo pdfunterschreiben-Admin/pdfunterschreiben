@@ -278,6 +278,8 @@ dialog::backdrop{background:rgba(10,15,30,.55)}
 .form-tab td{padding:2px 4px}.form-tab input{width:100%;box-sizing:border-box}
 .form-tab td:first-child{width:70px}.form-tab td:nth-child(2){width:170px}
 .form-tools{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.form-fotos{display:flex;gap:8px;flex-wrap:wrap}.form-fotos .ff{position:relative}.form-fotos img{width:88px;height:88px;object-fit:cover;border-radius:8px;border:1px solid var(--line,#ddd);display:block}
+.form-fotos .ff button{position:absolute;top:3px;right:3px;padding:0 7px;min-height:0;line-height:20px;font-size:15px;border-radius:6px;background:rgba(255,255,255,.92);color:#222;border:1px solid #bbb}
 .form-qr{display:flex;gap:12px;align-items:center}.form-qr img{width:150px;height:150px;image-rendering:pixelated}
 @media (max-width:720px){#formDlg .dlg-body{flex-direction:column}.form-liste{flex-direction:row;flex-wrap:wrap;position:static}}
 .form-status{flex:1;min-width:200px;font-size:13px;white-space:pre-line;color:var(--ink,#222);background:#fff6d6;border-radius:8px;padding:6px 10px}
@@ -604,6 +606,7 @@ body{padding-bottom:172px}
         <li><b>📱 Kunde unterschreibt</b> (Reparaturauftrag, Prüfprotokoll, Ersatzteilbestellung Kunde, Batterieprüfprotokoll) – per Handy; der Kunde sieht vorher das ausgefüllte Formular, die Unterschrift kommt mit ins Formular. Deine eigene Unterschrift wird automatisch eingesetzt.</li>
         <li><b>Speichern</b> als PDF und/oder Excel, <b>Drucken</b> oder <b>📧 An Dispo senden</b> (Excel-Datei an service@schlueter-gabelstapler.de, Outlook öffnet sich – nur noch „Senden“ klicken).</li>
         <li>Fehlt etwas Wichtiges, kommt ein Hinweis – ein zweiter Klick speichert trotzdem.</li>
+        <li><b>Fotos im Reparaturauftrag / Kostenvoranschlag:</b> unten im Formular Fotos auswählen oder mit dem Handy aufnehmen – sie hängen an „E-Mail an Kunde“, „An Dispo senden“ und „Unterschreiben / E-Mail“ mit dran.</li>
         <li><b>Neues Formular:</b> „Kundendaten behalten“ (weiterer Auftrag für denselben Kunden) oder „Alles leeren“.</li>
         <li>Alle Eingaben werden laufend gesichert – nach einem Absturz sind sie wieder da.</li>
       </ul>
@@ -1249,6 +1252,7 @@ async function addDoc(name, bytes, handle, excel, mail){
   doc.addDate = state.addDate;
   await autoPlace(doc);
   doc.checks = await findChecks(doc);
+  return doc;
 }
 const isPdf = f => f.type === "application/pdf" || /\.pdf$/i.test(f.name);
 const isExcel = f => /\.(xlsx|xlsm|xls|xlsb)$/i.test(f.name);
@@ -2007,6 +2011,9 @@ async function mailDocs(list){
     const files = [], t0 = performance.now();
     for(const d of list){ const b = await signed(d); if(b) files.push({name: outName(d), data: b64(b)}); }
     if(!files.length){ toast("Es gab nichts zu versenden."); return; }
+    // Fotos aus dem Formular (z. B. Reparaturauftrag) hängen mit an
+    let fotoNr = 0;
+    for(const d of list) if(d.fotos && d.fotos.length){ files.push(...formFotoDateien(d.fotos, fotoNr)); fotoNr += d.fotos.length; }
     // Empfänger: wenn alle Berichte zum selben Kunden gehören, dessen E-Mail schon eintragen
     const mails = [...new Set(list.map(d => d.mail).filter(Boolean))], to = mails.length === 1 ? mails[0] : "";
     const t1 = performance.now(); const subject = await mailSubject(list); const t2 = performance.now();
@@ -2787,9 +2794,9 @@ $("#docuDlg").addEventListener("close", () => {
 new MutationObserver(() => { if($("#docuDlg").open) refreshDocu(); }).observe($("#docs"), {childList: true});
 
 // Foto verkleinern (max. 2304 px wie bei einem Handy-Scan), richtig drehen und als JPG einbetten
-async function photoJpeg(file){
+async function photoJpeg(file, max){
   const bmp = await createImageBitmap(file, {imageOrientation: "from-image"});
-  const k = Math.min(1, 2304 / Math.max(bmp.width, bmp.height));
+  const k = Math.min(1, (max || 2304) / Math.max(bmp.width, bmp.height));
   const c = document.createElement("canvas");
   c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
   const g = c.getContext("2d"); g.fillStyle = "#fff"; g.fillRect(0, 0, c.width, c.height); g.drawImage(bmp, 0, 0, c.width, c.height); bmp.close();
@@ -2988,7 +2995,8 @@ const FORMULARE = [
     {titel: "Ersatzteile", werkzeug: "tdoc", felder: [
       {t: "text", z: "A48", l: "Arbeitsstunden (V8000)"},
       {t: "tabelle", l: "Teile", s: [["A", "Stück"], ["D", "Teile-Nr."], ["J", "Bezeichnung / Abmessungen"]],
-        r: [49, 50, 51, 52, 53, 54, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87]}]}]},
+        r: [49, 50, 51, 52, 53, 54, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87]}]},
+    {titel: "Fotos (werden an die E-Mail angehängt)", werkzeug: "fotos", felder: []}]},
   {id: "rueckgabe", titel: "Ersatzteil-Rückgabe-Schein", blatt: "Ersatzteil-Rückgabe-Schein", abschnitte: [
     {titel: "Angaben", felder: [{t: "text", z: "B3", l: "Servicetechniker", d: TECHNIKER}, {t: "datum", z: "B5", l: "Rückgabedatum"}, {t: "datum", z: "B7", l: "Servicedatum"}, {t: "text", z: "B9", l: "Fabrikat"}, {t: "text", z: "B11", l: "Type"}, {t: "text", z: "B13", l: "Fahrgestell-Nr."}, {t: "text", z: "B15", l: "Betr. Std."}]},
     {titel: "Kunde / Kommission", felder: [{t: "zeilen", l: "Je Zeile ein Eintrag", z: ["G5", "G7", "G9"]}]},
@@ -3212,6 +3220,7 @@ function formRender(){
     if(a.werkzeug === "tdoc") sek.appendChild(tdocWerkzeug(f, w));
     if(a.werkzeug === "auftrag") sek.appendChild(auftragWerkzeug(f, w));
     if(a.werkzeug === "zellen") sek.appendChild(zellenWerkzeug(f, w));
+    if(a.werkzeug === "fotos") sek.appendChild(fotoWerkzeug(f));
     let felder = null, kreuze = null;
     for(const x of a.felder){
       if(x.t === "text" || x.t === "datum" || x.t === "wahl"){
@@ -3340,6 +3349,84 @@ function tsWerkzeug(f, w){
   inp.onchange = async () => { const fs = [...inp.files]; inp.value = ""; if(fs.length) await tsLesen(f, w, await Promise.all(fs.map(async x => new Uint8Array(await x.arrayBuffer()))), st); };
   hb.onclick = () => tsHandy(f, w, st, qr, hb);
   return d;
+}
+// Fotos zum Formular (z. B. Reparaturauftrag / Kostenvoranschlag): werden beim E-Mail-Versand als JPG angehängt.
+// Nur im Arbeitsspeicher – nach „Neues Formular“ oder einem Neustart des Programms sind sie weg.
+const formFotos = {};
+const formFotoListe = id => formFotos[id] || (formFotos[id] = []);
+async function formFotoDazu(id, blobs){
+  const liste = formFotoListe(id); let fehl = 0;
+  for(const b of blobs){
+    try{ const j = await photoJpeg(b, 1600); liste.push({bytes: j.bytes, url: URL.createObjectURL(new Blob([j.bytes], {type: "image/jpeg"}))}); }
+    catch(e){ fehl++; }
+  }
+  if(fehl) formMeldung(fehl + (fehl === 1 ? " Foto konnte" : " Fotos konnten") + " nicht gelesen werden.", 6000);
+}
+function formFotoLeeren(id){ (formFotos[id] || []).forEach(p => URL.revokeObjectURL(p.url)); formFotos[id] = []; }
+// Anhänge für /api/mail: „Foto 1.jpg“, „Foto 2.jpg“ … (start = schon vergebene Nummern)
+function formFotoDateien(liste, start){ return (liste || []).map((p, i) => ({name: "Foto " + ((start || 0) + i + 1) + ".jpg", data: b64(p.bytes)})); }
+function fotoWerkzeug(f){
+  const d = document.createElement("div"); d.className = "col"; d.style.gap = "8px";
+  const r = document.createElement("div"); r.className = "form-tools";
+  const lab = document.createElement("label"); lab.className = "btn file-btn"; lab.textContent = "📷 Fotos hinzufügen …";
+  const inp = document.createElement("input"); inp.type = "file"; inp.accept = "image/*"; inp.multiple = true; lab.appendChild(inp);
+  const hb = document.createElement("button"); hb.type = "button"; hb.textContent = "📱 Fotos mit dem Handy";
+  const st = document.createElement("span"); st.className = "hint";
+  const qr = document.createElement("div"); qr.className = "form-qr"; qr.hidden = true;
+  const th = document.createElement("div"); th.className = "form-fotos";
+  const h = document.createElement("span"); h.className = "hint";
+  r.append(lab, hb, st); d.append(r, qr, th, h);
+  const zeigen = () => {
+    const liste = formFotoListe(f.id); th.innerHTML = "";
+    liste.forEach(p => {
+      const c = document.createElement("div"); c.className = "ff";
+      const im = document.createElement("img"); im.src = p.url; im.alt = "Foto";
+      const x = document.createElement("button"); x.type = "button"; x.className = "ghost"; x.textContent = "×"; x.title = "Foto entfernen"; x.setAttribute("aria-label", "Foto entfernen");
+      x.onclick = () => { URL.revokeObjectURL(p.url); liste.splice(liste.indexOf(p), 1); zeigen(); };
+      c.append(im, x); th.appendChild(c);
+    });
+    h.textContent = liste.length
+      ? liste.length + (liste.length === 1 ? " Foto wird" : " Fotos werden") + " an „📧 E-Mail an Kunde“, „📧 An Dispo senden“ und „Unterschreiben / E-Mail“ angehängt."
+      : "Optional: Fotos (z. B. vom Schaden) auswählen, hierher ziehen oder mit dem Handy aufnehmen – sie werden beim Versand per E-Mail mitgeschickt.";
+  };
+  d._fotoDazu = async blobs => { st.textContent = "Fotos werden verkleinert …"; await formFotoDazu(f.id, blobs); st.textContent = ""; zeigen(); };
+  inp.onchange = async () => { const fs = [...inp.files]; inp.value = ""; if(fs.length) await d._fotoDazu(fs); };
+  hb.onclick = () => fotoHandy(st, qr, hb, d._fotoDazu);
+  d.ondragover = e => { if([...e.dataTransfer.types].includes("Files")){ e.preventDefault(); e.stopPropagation(); } };
+  d.ondrop = async e => { const fs = [...e.dataTransfer.files].filter(x => x.type.startsWith("image/")); if(!fs.length) return; e.preventDefault(); e.stopPropagation(); await d._fotoDazu(fs); };
+  zeigen();
+  return d;
+}
+// Mehrere Fotos vom Handy holen, bis „Fertig“ geklickt oder das Formular geschlossen wird
+async function fotoHandy(st, qr, hb, dazu){
+  const api = async (event, extra = {}) => (await fetch("/api/fotos", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({event, ...extra})})).json();
+  hb.disabled = true; st.textContent = "QR-Code wird erstellt …";
+  let s;
+  try{ s = await api("fotostart"); if(!s.ok) throw new Error(s.error); }
+  catch(e){ hb.disabled = false; st.textContent = ""; formMeldung("Handy: " + (e.message || e), 6000); return; }
+  qr.hidden = false;
+  qr.innerHTML = '<img alt="QR-Code"><span class="hint">Mit dem Handy scannen und die Fotos aufnehmen oder auswählen.<br><button type="button">Fertig</button></span>';
+  qr.querySelector("img").src = "/api/fotos/qr?u=" + encodeURIComponent(s.url);
+  let aus = false; qr.querySelector("button").onclick = () => { aus = true; };
+  const got = new Set(); let n = 0;
+  st.textContent = "Warte auf Fotos vom Handy …";
+  const bis = Date.now() + 20 * 60000;
+  while(!aus && Date.now() < bis && $("#formDlg").open){
+    await new Promise(r => setTimeout(r, 2500));
+    let l; try{ l = await api("fotoliste", {token: s.token}); }catch(e){ continue; }
+    if(!l.ok){ if(l.abgelaufen) break; continue; }
+    const bilder = [];
+    for(const fi of (l.files || []).filter(x => !got.has(x.id))){
+      let g; try{ g = await api("fotoholen", {token: s.token, id: fi.id}); }catch(e){ continue; }
+      if(!g || !g.ok) continue;
+      got.add(fi.id);
+      const bin = atob(g.b64), b = new Uint8Array(bin.length); for(let i = 0; i < bin.length; i++) b[i] = bin.charCodeAt(i);
+      bilder.push(new Blob([b], {type: g.mime || "image/jpeg"}));
+    }
+    if(bilder.length){ n += bilder.length; await dazu(bilder); st.textContent = n + (n === 1 ? " Foto" : " Fotos") + " vom Handy empfangen – weitere aufnehmen oder „Fertig“ klicken."; }
+  }
+  qr.hidden = true; qr.innerHTML = ""; hb.disabled = false; api("fotoende", {token: s.token}).catch(() => {});
+  st.textContent = n ? n + (n === 1 ? " Foto" : " Fotos") + " vom Handy übernommen." : "";
 }
 // Messgerät-Display (z. B. Benning ST 725) aus dem erkannten Text lesen
 function messWerte(roh){
@@ -4777,17 +4864,18 @@ async function formSpeichern(drucken, dispo){
     try{ const n = await speichern(data, ext, typ, mime); if(n){ ev.target.textContent = "✓ " + n; ev.target.disabled = true; } }
     catch(x){ formMeldung("Speichern fehlgeschlagen: " + (x.message || x), 7000); }
   };
+  const fotos = (formFotos[f.id] || []).slice();   // Fotos zum Formular – gehen mit jeder E-Mail mit
   if(r.pdf){ const pb = bytes(r.pdf);
     // E-Mail des Kunden aus dem Feld „E-Mail“ im Formular – für den Versand und zum Mitnehmen beim Unterschreiben
     const kMail = String((FELD_MAP[f.id] && w[FELD_MAP[f.id].D9]) || "").trim();
     const istMail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(kMail);
     knopf("PDF speichern …", klick(pb, ".pdf", "PDF-Dokument", "application/pdf"));
-    knopf("Unterschreiben / E-Mail", async () => { await addDoc(basis + ".pdf", pb.slice(), null, null, istMail ? kMail : ""); renderAll(); $("#formDlg").close(); });
+    knopf("Unterschreiben / E-Mail", async () => { const doc = await addDoc(basis + ".pdf", pb.slice(), null, null, istMail ? kMail : ""); if(doc && fotos.length) doc.fotos = fotos.slice(); renderAll(); $("#formDlg").close(); });
     if(istMail){ outlookVor();
       const mb = knopf("📧 E-Mail an Kunde", async () => {
         mb.disabled = true; const alt = mb.textContent; mb.textContent = "Bitte warten …";
         try{
-          const m = await (await fetch("/api/mail", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({subject: [f.titel, nrV, kundeName].filter(Boolean).join(" – "), to: kMail, files: [{name: basis + ".pdf", data: r.pdf}]})})).json();
+          const m = await (await fetch("/api/mail", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({subject: [f.titel, nrV, kundeName].filter(Boolean).join(" – "), to: kMail, files: [{name: basis + ".pdf", data: r.pdf}, ...formFotoDateien(fotos)]})})).json();
           if(!m.ok) throw new Error(m.error || "Outlook konnte nicht geöffnet werden.");
           formMeldung("Outlook ist offen – E-Mail an " + kMail + " prüfen und auf „Senden“ klicken.", 8000);
         }catch(e){ formMeldung("E-Mail an Kunde: " + (e.message || e), 8000); }
@@ -4806,7 +4894,7 @@ async function formSpeichern(drucken, dispo){
       const nr = w.E4 || w.H5 || w.B10 || w.B9 || "";
       const kunde = feld(/^(Kundenname|Auftraggeber|Name)$/);
       const subject = [f.titel, nr, kunde].filter(Boolean).join(" – ");
-      const m = await (await fetch("/api/mail", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({subject, to: DISPO_MAIL, files: [{name: basis + ".xlsx", data: x}]})})).json();
+      const m = await (await fetch("/api/mail", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({subject, to: DISPO_MAIL, files: [{name: basis + ".xlsx", data: x}, ...formFotoDateien(fotos)]})})).json();
       if(!m.ok) throw new Error(m.error || "Outlook konnte nicht geöffnet werden.");
       formMeldung("Outlook ist offen – Mail an die Dispo prüfen und auf „Senden“ klicken.", 8000);
     }catch(e){ formMeldung("An Dispo senden: " + (e.message || e), 8000); }
@@ -4837,6 +4925,7 @@ function formNeu(behalten){
   }
   if(behalten){ const g = gemeinsam(); for(const k of ["D15", "D16", "D17", "D19", "D23", "E4"]) delete g.v[k]; g.stand = Date.now(); gemeinsamAus(f, neu); neu._gStand = g.stand; }
   else { formState.daten._gemeinsam = {stand: Date.now(), v: {}}; neu._gStand = Date.now(); }
+  formFotoLeeren(formState.akt);
   formState.daten[formState.akt] = neu; formMerken(); formRender();
   formMeldung(behalten ? "Neues Formular – die Kundendaten sind stehen geblieben." : "Neues Formular – alles geleert.", 5000);
 }
