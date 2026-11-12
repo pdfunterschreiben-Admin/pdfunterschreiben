@@ -49,7 +49,11 @@ main{padding:12px 16px;display:flex;flex-direction:column;gap:10px}
 .klein{font-size:13px;padding:6px 10px}
 .leer-box{text-align:center;color:var(--muted);padding:40px 16px}
 .leer-box b{display:block;color:var(--ink);font-size:17px;margin-bottom:4px}
-.fab{position:fixed;right:16px;bottom:calc(18px + env(safe-area-inset-bottom));z-index:6;border-radius:99px;padding:14px 22px;font-size:17px;box-shadow:0 8px 24px rgba(20,40,120,.35)}
+.fabs{position:fixed;right:16px;bottom:calc(18px + env(safe-area-inset-bottom));z-index:6;display:flex;gap:10px;align-items:center}
+.fab{border-radius:99px;padding:14px 22px;font:600 17px var(--f-body);box-shadow:0 8px 24px rgba(20,40,120,.35);background:var(--pen);color:#fff;display:inline-block}
+.fab2{border-radius:99px;width:52px;height:52px;padding:0;font-size:24px;box-shadow:0 6px 18px rgba(20,40,120,.2)}
+.app-hinweis{margin:0 16px;background:var(--pen-soft);border-radius:12px;padding:12px 14px;font-size:14px;display:flex;gap:10px;align-items:center;justify-content:space-between}
+.cands{display:flex;flex-wrap:wrap;gap:8px}.cands button{font:15px var(--f-mono)}.cands button.gut{border-color:var(--pen);color:var(--pen);background:var(--pen-soft)}
 .blatt{position:fixed;inset:0;z-index:20;background:rgba(10,15,30,.55);display:flex;align-items:flex-end}
 .blatt>form{background:var(--sheet);width:100%;max-height:92vh;overflow:auto;border-radius:16px 16px 0 0;padding:16px 16px calc(16px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:12px}
 .blatt h2{margin:0;font:600 19px var(--f-body)}
@@ -102,9 +106,10 @@ label{display:flex;flex-direction:column;gap:5px;font-size:13.5px;font-weight:50
     <div class="tabs"><button id="tabBestand" aria-selected="true">Im Wagen <span id="nBestand"></span></button><button id="tabFehlt" aria-selected="false">Fehlt <span id="nFehlt"></span></button></div>
     <input type="search" id="such" placeholder="Suchen …" aria-label="Suchen">
   </header>
+  <div class="app-hinweis" id="apkHinweis" hidden><span>Mit der Android-App holt die Kamera-Erkennung die Bezeichnung direkt aus T-Doc.</span><a class="primary" id="apkLink" href="https://github.com/pdfunterschreiben-Admin/pdfunterschreiben/releases/download/kundendienstfahrzeug-android/Kundendienstfahrzeug.apk" style="padding:8px 12px;border-radius:9px;background:var(--pen);color:#fff;text-decoration:none;white-space:nowrap">App laden</a></div>
   <main id="liste"></main>
   <p class="hint" style="text-align:center;padding:8px 16px" id="userLine"></p>
-  <button class="primary fab" id="neuBtn">＋ Teil</button>
+  <div class="fabs"><button class="fab2" id="neuBtn" aria-label="Teil von Hand eintragen">＋</button><label class="primary fab" id="scanBtn">📷 Scannen<input type="file" id="scanIn" accept="image/*" capture="environment" hidden></label></div>
 </div>
 
 <div class="blatt" id="teilBlatt" hidden>
@@ -113,7 +118,8 @@ label{display:flex;flex-direction:column;gap:5px;font-size:13.5px;font-weight:50
     <div class="tabs"><button type="button" id="tlBestand">Im Wagen</button><button type="button" id="tlFehlt">Fehlt</button></div>
     <label>Teilenummer<input id="fNr" class="mono" placeholder="67405-T1000-71 / BT7643266" autocapitalize="characters" required></label>
     <div class="treffer" id="treffer" hidden></div>
-    <label>Bezeichnung<input id="fName" placeholder="z. B. Filter-Teilgruppe" required></label>
+    <label>Bezeichnung<span class="zeile"><input id="fName" placeholder="z. B. Filter-Teilgruppe" required><button type="button" id="fTdoc" hidden>T-Doc</button></span></label>
+    <p class="hint" id="nameHint" hidden></p>
     <label>Lagerort<input id="fOrt" placeholder="z. B. Fach A" list="orte"></label>
     <datalist id="orte"></datalist>
     <label>Stückzahl<span class="mengen"><button type="button" id="fMinus">−</button><input id="fMenge" type="number" inputmode="numeric" min="0" max="999999" value="1"><button type="button" id="fPlus">＋</button></span></label>
@@ -130,6 +136,14 @@ label{display:flex;flex-direction:column;gap:5px;font-size:13.5px;font-weight:50
     <label>Fahrer (Vor- und Nachname)<input id="fzFahrerIn" placeholder="Max Mustermann" maxlength="100"></label>
     <p class="err" id="fzErr" hidden></p>
     <button class="primary" id="fzOk">Speichern</button>
+  </form>
+</div>
+
+<div class="blatt" id="scanBlatt" hidden>
+  <form onsubmit="return false">
+    <div class="zeile" style="justify-content:space-between"><h2>Teilenummer</h2><button type="button" class="ghost" id="scanZu">Schließen</button></div>
+    <p class="hint" id="scanInfo">Wird gelesen …</p>
+    <div class="cands" id="scanCands"></div>
   </form>
 </div>
 
@@ -328,6 +342,7 @@ function oeffnen(t, titel){
   $("teilTitel").textContent = titel || (teil.id ? "Teil bearbeiten" : "Neues Teil");
   $("fNr").value = teil.nr; $("fName").value = teil.name; $("fOrt").value = teil.ort || ""; $("fMenge").value = teil.menge;
   $("teilDel").hidden = !teil.id; $("teilNach").hidden = !(teil.id && teil.liste === "bestand"); fehler("teilErr", "");
+  $("fTdoc").hidden = false; $("fTdoc").disabled = false; hinweisName("");
   liste(teil.liste); $("teilBlatt").hidden = false;
   if(!teil.nr) setTimeout(function(){ $("fNr").focus(); }, 50);
 }
@@ -370,6 +385,102 @@ $("teilDel").onclick = function(){
 };
 $("teilNach").onclick = function(){ var t = teil; oeffnen({liste: "fehlt", nr: t.nr, name: t.name, ort: t.ort, menge: 1}, "Nachbestellen"); };
 $("neuBtn").onclick = function(){ oeffnen(null); };
+
+/* ---------- Scannen: Foto → Teilenummer → Bezeichnung (Katalog oder T-Doc) → speichern ---------- */
+var APP = null; try{ if(window.KDF) APP = JSON.parse(window.KDF.info()); }catch(e){}
+if(!APP && /Android/i.test(navigator.userAgent)) $("apkHinweis").hidden = false;
+function kandidaten(text){
+  var t = String(text || "").toUpperCase(), alt;
+  do{ alt = t; t = t.replace(/O(?=\d)|(\d)O/g, function(m, d){ return d ? d + "0" : "0"; }); }while(t !== alt);
+  var gut = [], rest = [];
+  (t.match(/\d{5}[\s-]*[A-Z0-9]{5}[\s-]*\d{2}/g) || []).concat(t.match(/BT[\s-]?\d{7}/g) || []).forEach(function(x){ x = teileNr(x); if(gut.indexOf(x) < 0) gut.push(x); });
+  if(!gut.length) (t.match(/\b\d{7}\b/g) || []).forEach(function(x){ x = "BT" + x; if(gut.indexOf(x) < 0) gut.push(x); });
+  (t.match(/[A-Z0-9][A-Z0-9.\/-]{3,}/g) || []).forEach(function(x){ if(/\d/.test(x)){ x = teileNr(x); if(gut.indexOf(x) < 0 && rest.indexOf(x) < 0) rest.push(x); } });
+  return {gut: gut, rest: rest.slice(0, 10)};
+}
+function gueltig(n){ return /^(BT\d{7}|\d{5}-[A-Z0-9]{5}-\d{2})$/.test(teileNr(n)); }
+function verkleinern(file){
+  return new Promise(function(ok, no){
+    var url = URL.createObjectURL(file), img = new Image();
+    img.onload = function(){ var f = Math.min(1, 1800 / Math.max(img.naturalWidth, img.naturalHeight)), c = document.createElement("canvas");
+      c.width = Math.round(img.naturalWidth * f); c.height = Math.round(img.naturalHeight * f); c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url); ok(c.toDataURL("image/jpeg", .88).split(",")[1]); };
+    img.onerror = function(){ URL.revokeObjectURL(url); no(new Error("Das Foto konnte nicht geöffnet werden.")); };
+    img.src = url;
+  });
+}
+$("scanIn").onchange = function(e){
+  var f = e.target.files[0]; e.target.value = ""; if(!f) return;
+  if(lager.offline) return toast("Ohne Verbindung geht das Scannen nicht.");
+  $("scanBlatt").hidden = false; $("scanInfo").textContent = "Teilenummer wird gelesen …"; $("scanCands").innerHTML = "";
+  verkleinern(f).then(function(b64){ return anfrage({event: "wl_ocr", b64: b64, mime: "image/jpeg"}); }).then(function(r){
+    if(!r.ok) throw new Error(r.error || "Texterkennung fehlgeschlagen.");
+    var k = kandidaten(r.text);
+    if(k.gut.length === 1){ $("scanBlatt").hidden = true; return nummerGefunden(k.gut[0]); }
+    if(!k.gut.length && !k.rest.length){ $("scanInfo").textContent = "Keine Teilenummer erkannt. Bitte näher und schärfer fotografieren – oder mit ＋ von Hand eintragen."; return; }
+    $("scanInfo").textContent = "Bitte die richtige Nummer antippen:";
+    $("scanCands").innerHTML = k.gut.map(function(n){ return '<button type="button" class="gut">' + esc(n) + '</button>'; }).join("") + k.rest.map(function(n){ return '<button type="button">' + esc(n) + '</button>'; }).join("");
+  }).catch(function(err){ $("scanInfo").textContent = err.message; });
+};
+$("scanCands").onclick = function(e){ var b = e.target.closest("button"); if(!b) return; $("scanBlatt").hidden = true; nummerGefunden(b.textContent); };
+$("scanZu").onclick = function(){ $("scanBlatt").hidden = true; };
+function nameZu(nr){
+  var k = nrKey(nr), eigen = lager.teile.filter(function(t){ return nrKey(t.nr) === k && t.name; })[0];
+  return (eigen && eigen.name) || lager.katalog[k] || "";
+}
+var tdocAuto = null; // Nummer, für die nach dem T-Doc-Ergebnis automatisch gespeichert wird
+function nummerGefunden(nr){
+  nr = teileNr(nr);
+  var name = nameZu(nr);
+  if(name) return automatischSpeichern(nr, name);
+  if(APP && gueltig(nr)){
+    tdocAuto = nr; toast("T-Doc sucht die Bezeichnung für " + nr + " …", 70000);
+    window.KDF.tdoc(nr); return;
+  }
+  oeffnen({liste: tab, nr: nr, name: "", ort: "", menge: 1}, "Neues Teil");
+  if(gueltig(nr)) hinweisName('Bezeichnung bitte eintragen – <a href="' + tdocLink(nr) + '" target="_blank" rel="noopener">in T-Doc nachsehen</a>.');
+}
+function tdocLink(nr){
+  var n = teileNr(nr), bt = /^BT/.test(n);
+  return "https://tdoc.toyota-forklifts.eu/?partNumber=" + encodeURIComponent(bt ? n.slice(2) : n.replace(/-/g, "")) + "&truckType=" + (bt ? "warehouseTrucks&flag=Standard%2CSpecial" : "counterBalanceTrucks") + "&reset=false&source=partsSearch";
+}
+function hinweisName(html){ $("nameHint").innerHTML = html; $("nameHint").hidden = !html; }
+// Antwort der Android-App auf KDF.tdoc(nr)
+window.kdfTdoc = function(json){
+  var r = {}; try{ r = JSON.parse(json); }catch(e){}
+  var nr = teileNr(r.nr || "");
+  if(tdocAuto && nrKey(tdocAuto) === nrKey(nr)){
+    tdocAuto = null; $("toast").hidden = true;
+    if(r.name) return automatischSpeichern(nr, r.name);
+    oeffnen({liste: tab, nr: nr, name: "", ort: "", menge: 1}, "Neues Teil");
+    return hinweisName(esc(r.error || "T-Doc hat keine Bezeichnung geliefert."));
+  }
+  if(teil && !$("teilBlatt").hidden && nrKey($("fNr").value) === nrKey(nr)){
+    $("fTdoc").disabled = false;
+    if(r.name){ $("fName").value = r.name; hinweisName("✓ Bezeichnung aus T-Doc übernommen."); }
+    else hinweisName(esc(r.error || "T-Doc hat keine Bezeichnung geliefert."));
+  }
+};
+function automatischSpeichern(nr, name){
+  var gleiche = lager.teile.filter(function(t){ return t.liste === tab && nrKey(t.nr) === nrKey(nr); });
+  if(gleiche.length === 1){
+    var t = gleiche[0];
+    return aendern({event: "wl_menge", teilId: t.id, delta: 1}, function(){
+      toast("＋1: " + t.name + (t.ort ? " (" + t.ort + ")" : ""), 8000, {text: "Rückgängig", run: function(){ aendern({event: "wl_menge", teilId: t.id, delta: -1}); }});
+    });
+  }
+  if(gleiche.length > 1){ oeffnen({liste: tab, nr: nr, name: name, ort: "", menge: 1}, "Neues Teil"); return hinweisName("Dieses Teil gibt es an mehreren Lagerorten – bitte den Lagerort eintragen."); }
+  aendern({event: "wl_speichern", teil: {liste: tab, nr: nr, name: name, ort: "", menge: 1}}, function(r){
+    var neu = lager.teile.filter(function(t){ return t.liste === tab && nrKey(t.nr) === nrKey(nr); })[0];
+    toast("Gespeichert: " + name, 9000, neu ? {text: "Lagerort/Menge", run: function(){ oeffnen(neu); }} : null);
+  });
+}
+$("fTdoc").onclick = function(){
+  var nr = teileNr($("fNr").value);
+  if(!gueltig(nr)) return hinweisName("Für T-Doc bitte eine vollständige Toyota- oder BT-Nummer eintragen.");
+  if(APP){ $("fTdoc").disabled = true; hinweisName("T-Doc sucht …"); window.KDF.tdoc(nr); }
+  else window.open(tdocLink(nr), "_blank", "noopener");
+};
 
 /* ---------- Start ---------- */
 var timer = null;

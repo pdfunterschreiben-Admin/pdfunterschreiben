@@ -8,7 +8,7 @@ name: Release
 on:
   push:
     branches: [main]
-    paths-ignore: [".github/workflows/setup-name.yml", "android/**", ".github/workflows/android.yml", "vorlagen/**", "pptx/**", ".github/workflows/pptx-release.yml", "kundendienstfahrzeug/**", ".github/workflows/kundendienstfahrzeug-release.yml", "docs/kundendienstfahrzeug/**", "admin/Kundendienstfahrzeug.js"]
+    paths-ignore: [".github/workflows/setup-name.yml", "android/**", ".github/workflows/android.yml", "vorlagen/**", "pptx/**", ".github/workflows/pptx-release.yml", "kundendienstfahrzeug/**", ".github/workflows/kundendienstfahrzeug-release.yml", ".github/workflows/kundendienstfahrzeug-android.yml", "docs/kundendienstfahrzeug/**", "admin/Kundendienstfahrzeug.js"]
   workflow_dispatch:
 
 permissions:

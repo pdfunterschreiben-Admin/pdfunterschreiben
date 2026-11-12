@@ -256,4 +256,14 @@ function wagenlagerAnfrage(d) {
   return { ok: false, error: 'Unbekannte Anfrage.' };
 }
 
-if (typeof module !== 'undefined') module.exports = { wlNr, wagenlagerAnfrage };
+// Teilenummer vom Foto lesen (Handy-Seite und Android-App, ohne KEY – berechtigt wie oben über die Rechner-ID).
+// Läuft ohne Sperre, damit andere Anfragen nicht auf die Texterkennung warten.
+function wagenlagerOcr(d) {
+  wlNutzer(SpreadsheetApp.getActiveSpreadsheet(), d);
+  const b64 = String(d.b64 || '').replace(/\s/g, '');
+  if (b64.length < 100 || b64.length > 15000000) return { ok: false, error: 'Kein gültiges Foto.' };
+  const mime = /^image\/(jpeg|png|webp)$/.test(String(d.mime || '')) ? d.mime : 'image/jpeg';
+  return { ok: true, text: googleOcr(b64, mime) };
+}
+
+if (typeof module !== 'undefined') module.exports = { wlNr, wagenlagerAnfrage, wagenlagerOcr };

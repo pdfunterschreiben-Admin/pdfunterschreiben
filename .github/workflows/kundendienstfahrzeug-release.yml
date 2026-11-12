@@ -9,7 +9,7 @@ name: Release Kundendienstfahrzeug
 on:
   push:
     branches: [main]
-    paths: ["kundendienstfahrzeug/**", ".github/workflows/kundendienstfahrzeug-release.yml", "web/ersatzteilliste.json"]
+    paths: ["kundendienstfahrzeug/**", "!kundendienstfahrzeug/android/**", ".github/workflows/kundendienstfahrzeug-release.yml", "web/ersatzteilliste.json"]
   workflow_dispatch:
 
 permissions:

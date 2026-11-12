@@ -84,6 +84,9 @@ function doPost(e) {
   // Kundendienstfahrzeug (früher Wagenlager): Bestand lesen/ändern – vom Windows-Programm und von der
   // Handy-Seite (Kundendienstfahrzeug.js). Intern heißt die App weiter 'wagenlager'.
   // Berechtigt ist nur eine freigeschaltete Rechner-ID der eigenen E-Mail; ein KEY ist dafür nicht nötig.
+  if (d && d.app === 'wagenlager' && d.event === 'wl_ocr') {
+    try { return out(wagenlagerOcr(d)); } catch (x) { return out({ ok: false, error: 'Texterkennung: ' + x.message }); }
+  }
   if (d && d.app === 'wagenlager' && /^wl_[a-z]+$/.test(String(d.event || ''))) {
     const l = LockService.getScriptLock();
     l.waitLock(25000);

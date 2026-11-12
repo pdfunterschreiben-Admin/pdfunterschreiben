@@ -1,0 +1,65 @@
+# Kundendienstfahrzeug für Android: baut bei Änderungen unter kundendienstfahrzeug/android/ eine signierte
+# APK (gleicher Schlüssel wie die Admin-App) und legt sie ins Release „kundendienstfahrzeug-android“.
+# Dort sucht die App nach Updates (version.json mit Versionsnummer, Code und Prüfsumme).
+name: Kundendienstfahrzeug Android
+
+on:
+  push:
+    branches: [main]
+    paths: ["kundendienstfahrzeug/android/**", ".github/workflows/kundendienstfahrzeug-android.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: kundendienstfahrzeug-android
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+
+      - name: Signaturschlüssel
+        env:
+          KS: ${{ secrets.ANDROID_KEYSTORE }}
+        run: |
+          if [ -z "$KS" ]; then echo "::error::Secret ANDROID_KEYSTORE fehlt"; exit 1; fi
+          printf '%s' "$KS" | tr -d '[:space:]' | base64 -d > "$RUNNER_TEMP/admin.p12"
+          echo "ANDROID_KEYSTORE_FILE=$RUNNER_TEMP/admin.p12" >> "$GITHUB_ENV"
+
+      - name: Bauen
+        working-directory: kundendienstfahrzeug/android
+        env:
+          APP_REPO: ${{ github.repository }}
+          APP_VERSION_CODE: ${{ github.run_number }}
+        run: |
+          export APP_VERSION="$(tr -d '[:space:]' < VERSION)"
+          echo "APP_VERSION=$APP_VERSION" >> "$GITHUB_ENV"
+          echo "APP_VERSION_CODE=$APP_VERSION_CODE" >> "$GITHUB_ENV"
+          gradle --no-daemon assembleRelease
+          cp app/build/outputs/apk/release/app-release.apk "$GITHUB_WORKSPACE/Kundendienstfahrzeug.apk"
+
+      - name: Veröffentlichen
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          URL="https://github.com/$GITHUB_REPOSITORY/releases/download/kundendienstfahrzeug-android/Kundendienstfahrzeug.apk"
+          SHA="$(sha256sum Kundendienstfahrzeug.apk | cut -d' ' -f1)"
+          jq -n --arg v "$APP_VERSION" --argjson c "$APP_VERSION_CODE" --arg u "$URL" --arg s "$SHA" '{version:$v, code:$c, url:$u, sha256:$s}' > version.json
+          cat version.json
+          gh release delete kundendienstfahrzeug-android -R "$GITHUB_REPOSITORY" --yes --cleanup-tag 2>/dev/null || true
+          git push origin ":refs/tags/kundendienstfahrzeug-android" 2>/dev/null || true
+          gh release create kundendienstfahrzeug-android Kundendienstfahrzeug.apk version.json --target "$GITHUB_SHA" --latest=false \
+            --title "Kundendienstfahrzeug (Android) $APP_VERSION" --notes "Auf dem Handy öffnen und installieren. Kamera erkennt die Teilenummer, die Bezeichnung kommt aus T-Doc."

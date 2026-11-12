@@ -59,6 +59,8 @@ function machUmgebung() {
   let code = fs.readFileSync(path.join(admin, 'Code.gs'), 'utf8').replace("const KEY = 'HIER_SCHLUESSEL_EINTRAGEN';", "const KEY = 'testschluessel';");
   for (const f of ['Typenschild.js', 'QrCode.js', 'Vorlagen.js', 'Kundendienstfahrzeug.js']) code += '\n' + ohneExport(f);
   vm.runInContext(code + '\n;this.doPost = doPost;', ctx, { filename: 'Code.gs+Module' });
+  // Texterkennung nachbilden (Google gibt es hier nicht)
+  if (process.env.KDF_OCR_TEXT) vm.runInContext('googleOcr = function () { return ' + JSON.stringify(process.env.KDF_OCR_TEXT) + '; };', ctx);
   const post = d => JSON.parse(ctx.doPost({ postData: { contents: JSON.stringify(d) } }).text);
   return { post, sheets, props, mails, ctx };
 }
