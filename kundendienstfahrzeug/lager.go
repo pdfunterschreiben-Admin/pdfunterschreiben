@@ -127,7 +127,7 @@ func (a *app) handleLager(w http.ResponseWriter, r *http.Request) {
 /* ---------------- Teilenummern ---------------- */
 
 var (
-	reBT     = regexp.MustCompile(`^BT\d{5,8}$`)
+	reBT     = regexp.MustCompile(`^BT\d{3,12}$`)
 	reBTKurz = regexp.MustCompile(`^\d{7}$`)
 	reToyota = regexp.MustCompile(`^(\d{5})([A-Z0-9]{5})(\d{2})$`)
 	reLeer   = regexp.MustCompile(`[\s-]`)

@@ -522,19 +522,19 @@ function toast(msg, ms = 4500, btn){
 // Toyota: 12345-ABCDE-12 · BT: BT1234567 · alles andere bleibt, wie es ist (z. B. 4010-004)
 function teileNr(v){
   const roh = String(v || "").trim().toUpperCase(), c = roh.replace(/[\s-]/g, "");
-  if(/^BT\d{5,8}$/.test(c)) return c;
+  if(/^BT\d{3,12}$/.test(c)) return c;
   const m = c.match(/^(\d{5})([A-Z0-9]{5})(\d{2})$/);
   return m ? `${m[1]}-${m[2]}-${m[3]}` : roh;
 }
 const nrKey = n => teileNr(n).replace(/[\s-]/g, "");
 // Für T-Doc: Toyota-Nummer, BT-Nummer oder 7 Ziffern ohne Trennzeichen (wird als BT-Nummer gesucht)
-const nrGueltig = n => /^(BT\d{5,8}|\d{7}|\d{5}-[A-Z0-9]{5}-\d{2})$/.test(teileNr(n));
+const nrGueltig = n => /^(BT\d{3,12}|\d{7}|\d{5}-[A-Z0-9]{5}-\d{2})$/.test(teileNr(n));
 // Kandidaten aus erkanntem Text: zuerst vollständige Toyota-/BT-Nummern, dann sonstige Zeichenfolgen mit Ziffern
 function kandidaten(text){
   // O ↔ 0 verwechselt die Texterkennung oft – neben Ziffern ist es fast immer eine Null
   let t = String(text || "").toUpperCase(), vorher;
   do{ vorher = t; t = t.replace(/O(?=\d)|(?<=\d)O/g, "0"); }while(t !== vorher);
-  const gut = [...new Set([...(t.match(/\d{5}[\s-]*[A-Z0-9]{5}[\s-]*\d{2}/g) || []), ...(t.match(/BT[\s-]?\d{5,8}(?!\d)/g) || [])].map(teileNr))];
+  const gut = [...new Set([...(t.match(/\d{5}[\s-]*[A-Z0-9]{5}[\s-]*\d{2}/g) || []), ...(t.match(/BT[\s-]?\d{3,12}(?!\d)/g) || [])].map(teileNr))];
   const rest = [...new Set((t.match(/[A-Z0-9][A-Z0-9.\/-]{3,}/g) || []).filter(s => /\d/.test(s)).map(teileNr))].filter(s => !gut.includes(s));
   if(!gut.length) for(const s of (t.match(/\b\d{7}\b/g) || [])) if(!rest.includes(s)) rest.unshift(s);
   return {gut, rest: rest.slice(0, 12)};
