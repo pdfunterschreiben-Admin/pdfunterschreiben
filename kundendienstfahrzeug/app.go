@@ -107,7 +107,7 @@ func (a *app) routes() http.Handler {
 		w.Write([]byte(ownerToken()))
 	})
 	mux.HandleFunc("/api/info", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, map[string]any{"version": Version, "repo": repoSlug(), "updates": RepoOwner != "", "report": serverOK(), "handy": HandyURL})
+		writeJSON(w, map[string]any{"version": Version, "repo": repoSlug(), "updates": RepoOwner != "", "report": serverOK(), "handy": HandyURL, "tdocHintergrund": nativVerbunden()})
 	})
 	mux.HandleFunc("/api/alive", a.handleAlive)
 	mux.HandleFunc("/api/settings", a.handleSettings)
@@ -123,6 +123,7 @@ func (a *app) routes() http.Handler {
 	mux.HandleFunc("/api/tdoc/status", a.handleTdocStatus)
 	mux.HandleFunc("/api/tdoc/ergebnis", a.handleTdocErgebnis)
 	mux.HandleFunc("/api/tdoc/naechster", a.handleTdocNaechster)
+	mux.HandleFunc("/api/tdoc/log", a.handleTdocLog)
 	mux.HandleFunc("/api/tdoc/erweiterung", a.handleTdocErweiterung)
 	mux.HandleFunc("/api/open", func(w http.ResponseWriter, r *http.Request) {
 		// Nur feste Adressen im Standardbrowser öffnen (dort ist man bei Google angemeldet)

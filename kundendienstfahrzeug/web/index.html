@@ -194,7 +194,7 @@ dialog::backdrop{background:rgba(10,15,30,.55)}
           <button id="tdocBtn" style="justify-content:center" title="Teile, die in T-Doc mit dem Lesezeichen gesammelt wurden">📋 Aus T-Doc</button>
         </div>
         <button id="etBtn" class="wide" title="Dieselbe Ersatzteilliste wie im Reparaturauftrag der Service-Mappe">📋 Ersatzteilliste</button>
-        <p class="hint">T-Doc-Bezeichnungen automatisch: <button class="link" id="erwEinrichten">T-Doc-Verbindung einrichten</button> (einmalig). Mehrere Teile aus T-Doc: Teile anklicken, Lesezeichen „T-Doc → Excel“, dann „Aus T-Doc“. <button class="link" id="lesezeichenBtn">Lesezeichen einrichten</button></p>
+        <p class="hint">T-Doc-Bezeichnungen automatisch: <button class="link" id="erwEinrichten">T-Doc-Verbindung einrichten</button> (einmalig). <span class="chip info" id="tdocChip" hidden></span> Mehrere Teile aus T-Doc: Teile anklicken, Lesezeichen „T-Doc → Excel“, dann „Aus T-Doc“. <button class="link" id="lesezeichenBtn">Lesezeichen einrichten</button></p>
         <p class="hint" id="userLine" hidden></p>
       </section>
 
@@ -959,7 +959,7 @@ function frage(titel, text, ja){
   return new Promise(res => {
     const dl = document.createElement("dialog");
     dl.innerHTML = '<form method="dialog" class="dlg"><div class="dlg-head"><strong></strong></div><div class="dlg-body"><p style="margin:0"></p></div><div class="dlg-foot"><span></span><div class="row"><button class="ghost" value="nein">Abbrechen</button><button class="primary" value="ja"></button></div></div></form>';
-    dl.querySelector("strong").textContent = titel; dl.querySelector("p").textContent = text; dl.querySelector(".primary").textContent = ja;
+    dl.querySelector("strong").textContent = titel; dl.querySelector("p").textContent = text; dl.querySelector("p").style.whiteSpace = "pre-line"; dl.querySelector(".primary").textContent = ja;
     dl.addEventListener("close", () => { res(dl.returnValue === "ja"); dl.remove(); });
     document.body.appendChild(dl); dl.showModal(); dl.querySelector(".primary").focus();
   });
@@ -1143,6 +1143,23 @@ $("#etForm").addEventListener("submit", e => {
   if(!zeilen.length) return;
   $("#etDlg").close();
   importOeffnen({quelle: "liste", blaetter: [{art: state.tab, titel: "Ersatzteilliste", zeilen}]}, () => { for(const k of Object.keys(etMengen)) delete etMengen[k]; });
+});
+
+/* ---------- Status der T-Doc-Hintergrundverbindung ---------- */
+async function tdocStatus(){
+  try{
+    const i = await (await fetch("/api/info", {cache: "no-store"})).json();
+    const c = $("#tdocChip"); c.hidden = !state.erwOk && !i.tdocHintergrund;
+    c.className = "chip " + (i.tdocHintergrund ? "ok" : "warn");
+    c.innerHTML = i.tdocHintergrund ? "✓ T-Doc im Hintergrund verbunden" : 'T-Doc-Hintergrund nicht verbunden <button type="button" class="link" id="tdocHilfe">Was tun?</button>';
+  }catch(e){}
+}
+setInterval(tdocStatus, 10000); setTimeout(tdocStatus, 1500);
+document.addEventListener("click", async e => {
+  if(!e.target || e.target.id !== "tdocHilfe") return;
+  let l = {zeilen: []}; try{ l = await (await fetch("/api/tdoc/log")).json(); }catch(x){}
+  const z = (l.zeilen || []).filter(Boolean);
+  await frage("T-Doc im Hintergrund", "So wird die Verbindung hergestellt:\n1. In Chrome chrome://extensions öffnen und bei „Kundendienstfahrzeug – T-Doc“ auf ↻ (Aktualisieren) klicken. Steht dort die Version 1.2.0?\n2. Chrome ganz schließen (alle Fenster) und neu öffnen.\n3. Dieses Programm offen lassen – nach etwa 10 Sekunden steht hier „verbunden“.\n\nProtokoll:\n" + (z.length ? z.join("\n") : "– Chrome hat die Verbindung noch nie gestartet –"), "OK");
 });
 
 /* ---------- Bestellung ans Lager ---------- */

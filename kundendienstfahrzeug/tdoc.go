@@ -170,3 +170,13 @@ func (a *app) handleTdocErweiterung(w http.ResponseWriter, r *http.Request) {
 	ordnerZeigen(ziel)
 	writeJSON(w, map[string]any{"ok": true, "ordner": ziel})
 }
+
+// handleTdocLog zeigt die letzten Zeilen des Verbindungsprotokolls (Fehlersuche).
+func (a *app) handleTdocLog(w http.ResponseWriter, r *http.Request) {
+	b, _ := os.ReadFile(filepath.Join(dataDir(), "t-doc-verbindung.log"))
+	z := strings.Split(strings.TrimSpace(string(b)), "\n")
+	if len(z) > 15 {
+		z = z[len(z)-15:]
+	}
+	writeJSON(w, map[string]any{"verbunden": nativVerbunden(), "zeilen": z})
+}

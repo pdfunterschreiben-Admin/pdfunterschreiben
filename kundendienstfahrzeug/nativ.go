@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -82,8 +83,21 @@ func nativSchreiben(v any) error {
 	return err
 }
 
+func nativLog(f string, a ...any) {
+	p := filepath.Join(dataDir(), "t-doc-verbindung.log")
+	if st, err := os.Stat(p); err == nil && st.Size() > 200<<10 {
+		_ = os.Remove(p)
+	}
+	if fh, err := os.OpenFile(p, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644); err == nil {
+		fmt.Fprintf(fh, "%s  %s\n", time.Now().Format("2006-01-02 15:04:05"), fmt.Sprintf(f, a...))
+		fh.Close()
+	}
+}
+
 // nativHost läuft, solange der Browser die Verbindung offen hält.
 func nativHost() {
+	nativLog("Browser hat die Verbindung gestartet (%s)", strings.Join(os.Args[1:], " "))
+	defer nativLog("Verbindung beendet")
 	c := &http.Client{Timeout: 35 * time.Second}
 	ende := make(chan struct{})
 	ctx, abbrechen := context.WithCancel(context.Background())
@@ -106,6 +120,7 @@ func nativHost() {
 		}
 	}()
 	// Aufträge vom Programm → Erweiterung
+	gemeldet, verbunden := false, 0
 	for {
 		select {
 		case <-ende:
@@ -114,6 +129,10 @@ func nativHost() {
 		}
 		p := ownPort()
 		if p == 0 {
+			if !gemeldet {
+				nativLog("Programm läuft nicht – warte")
+				gemeldet = true
+			}
 			select {
 			case <-ende:
 				return
@@ -128,8 +147,13 @@ func nativHost() {
 			time.Sleep(2 * time.Second)
 			continue
 		}
+		if verbunden != p {
+			nativLog("mit dem Programm verbunden (Anschluss %d)", p)
+			verbunden, gemeldet = p, false
+		}
 		var j map[string]string
 		if resp.StatusCode == 200 && json.NewDecoder(io.LimitReader(resp.Body, 1<<16)).Decode(&j) == nil {
+			nativLog("Auftrag an die Erweiterung: %s", j["url"])
 			if nativSchreiben(j) != nil {
 				resp.Body.Close()
 				return

@@ -55,3 +55,16 @@ chrome.runtime.onMessage.addListener(function (m, sender) {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(erg)
   }).then(r => { if (r.ok && m.name) chrome.tabs.remove(sender.tab.id); }).catch(() => {});
 });
+
+// Notweg (keine Hintergrund-Verbindung): den vom Programm geöffneten T-Doc-Tab sofort in ein
+// minimiertes Fenster schieben, damit er möglichst nicht stört.
+chrome.tabs.onCreated.addListener(tab => verschieben(tab));
+chrome.tabs.onUpdated.addListener((id, info, tab) => { if (info.url) verschieben(tab); });
+const verschoben = new Set();
+function verschieben(tab) {
+  const u = String(tab.pendingUrl || tab.url || '');
+  if (!/^https:\/\/tdoc\.toyota-forklifts\.eu\/.*[?&]kdf=\d{4,5}_[0-9a-f]{32}/.test(u) || verschoben.has(tab.id)) return;
+  if (Object.values(fenster).includes(tab.windowId)) return; // schon unser Hintergrundfenster
+  verschoben.add(tab.id);
+  chrome.windows.create({ tabId: tab.id, state: 'minimized', focused: false }).catch(() => {});
+}
