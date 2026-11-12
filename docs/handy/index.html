@@ -53,8 +53,8 @@
 </div>
 
 <div id="ts" hidden>
-  <h2>Typenschild fotografieren</h2>
-  <p class="hint">Das Foto wird gelesen und die Werte erscheinen gleich in Excel.</p>
+  <h2 id="tsTitel">Typenschild fotografieren</h2>
+  <p class="hint" id="tsHint">Das Foto wird gelesen und die Werte erscheinen gleich in Excel.</p>
   <label class="btn">📷 Foto aufnehmen<input type="file" id="k" accept="image/*" capture="environment"></label>
   <label class="btn zwei">Aus der Galerie wählen<input type="file" id="g" accept="image/*"></label>
   <div id="st"></div>
@@ -65,7 +65,7 @@
 // So stört es nicht, wenn im Handy-Browser mehrere Google-Konten angemeldet sind.
 var SERVER = "https://script.google.com/macros/s/AKfycbwj7l1K2RcGtPUu4wdRFjI7NLayzAtqjx0_XorzQmMNEqh-JyuEaOrUlOEN1BT9HVSC/exec";
 var p = new URLSearchParams(location.search);
-var MODUS = p.get("ts") ? "ts" : "foto";
+var MODUS = p.get("ts") ? "ts" : p.get("vk") ? "vk" : "foto";   // vk = Visitenkarte (Kundendaten)
 var SIG = p.get("u") === "1";
 var T = String(p.get(MODUS) || "").replace(/[^a-f0-9]/g, "");
 function $(id) { return document.getElementById(id); }
@@ -86,6 +86,8 @@ function abgelaufen() {
   $("laden").hidden = true; $("fotos").hidden = true; $("ts").hidden = true; $("abgelaufen").hidden = false;
   $("abgText").textContent = MODUS === "ts"
     ? "Bitte in Excel erneut auf „Typenschild einlesen“ klicken und den neuen QR-Code scannen."
+    : MODUS === "vk"
+    ? "Bitte in der Service-Mappe bei „Kundendaten“ erneut auf „Visitenkarte scannen“ tippen und den neuen QR-Code scannen."
     : "Bitte im Programm „Service-Mappe“ bei der Dokumentation erneut auf „Fotos vom Handy“ tippen und den neuen QR-Code scannen.";
 }
 
@@ -94,9 +96,10 @@ function start(versuch) {
   anfrage({ event: "h_check", modus: MODUS }).then(function (r) {
     if (r !== "1") { abgelaufen(); return; }
     $("laden").hidden = true;
-    $(MODUS === "ts" ? "ts" : SIG ? "sig" : "fotos").hidden = false;
+    $(MODUS === "ts" || MODUS === "vk" ? "ts" : SIG ? "sig" : "fotos").hidden = false;
+    if (MODUS === "vk") { $("tsTitel").textContent = "Visitenkarte fotografieren"; $("tsHint").textContent = "Die Karte möglichst gerade und formatfüllend fotografieren. Die Daten erscheinen gleich in der Service-Mappe zur Prüfung."; }
     if (SIG) vorschauLaden();
-    document.title = MODUS === "ts" ? "Typenschild fotografieren" : SIG ? "Unterschrift – Service-Mappe" : "Fotos senden – Service-Mappe";
+    document.title = MODUS === "vk" ? "Visitenkarte fotografieren" : MODUS === "ts" ? "Typenschild fotografieren" : SIG ? "Unterschrift – Service-Mappe" : "Fotos senden – Service-Mappe";
   }).catch(function (e) {
     if (versuch < 3) { setTimeout(function () { start(versuch + 1); }, 1500 * versuch); return; }
     $("laden").className = "err"; $("laden").textContent = "Keine Verbindung zum Server: " + e.message + ". Bitte Seite neu laden.";
@@ -186,13 +189,16 @@ function tsSenden(f) {
     var versuch = 0;
     var senden = function () {
       versuch++;
-      anfrage({ event: "h_ts", b64: b64, mime: "image/jpeg" }).then(function (r) {
+      var vk = MODUS === "vk";
+      anfrage({ event: vk ? "h_vk" : "h_ts", b64: b64, mime: "image/jpeg" }).then(function (r) {
         st.className = r === "1" ? "ok" : "err";
-        st.textContent = r === "1" ? "✓ Fertig – die Werte stehen jetzt in Excel. Du kannst diese Seite schließen."
-                                   : "Das Foto konnte nicht gelesen werden. Bitte in Excel nochmal versuchen.";
+        st.textContent = r === "1" ? (vk ? "✓ Fertig – die Daten erscheinen jetzt in der Service-Mappe. Du kannst diese Seite schließen."
+                                         : "✓ Fertig – die Werte stehen jetzt in Excel. Du kannst diese Seite schließen.")
+                                   : (vk ? "Die Visitenkarte konnte nicht gelesen werden. Bitte in der Service-Mappe nochmal versuchen."
+                                         : "Das Foto konnte nicht gelesen werden. Bitte in Excel nochmal versuchen.");
       }).catch(function (e) {
         var t = String(e && e.message || e);
-        if (versuch < 3 && !/abgelaufen|schon ein Foto/.test(t)) { st.textContent = "neuer Versuch (" + (versuch + 1) + ") …"; setTimeout(senden, 2000 * versuch); return; }
+        if (versuch < 3 && !/abgelaufen|schon ein Foto|schon gelesen/.test(t)) { st.textContent = "neuer Versuch (" + (versuch + 1) + ") …"; setTimeout(senden, 2000 * versuch); return; }
         st.className = "err"; st.textContent = "Fehler: " + t;
       });
     };

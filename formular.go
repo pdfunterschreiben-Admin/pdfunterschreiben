@@ -406,10 +406,28 @@ func (a *app) handleFormularGeraete(w http.ResponseWriter, r *http.Request) {
 	}
 	t = strings.ReplaceAll(t, "\r", "")
 	if !strings.HasPrefix(t, "OK\n") {
-		writeJSON(w, map[string]any{"ok": false, "error": strings.TrimSpace(strings.TrimPrefix(t, "FEHLER\n"))})
+		writeJSON(w, map[string]any{"ok": false, "error": serverFehlerText(t, req.Event)})
 		return
 	}
 	writeJSON(w, map[string]any{"ok": true, "text": t[3:]})
+}
+
+// Fehlertext aus einer Server-Antwort. Kennt der Server eine Anfrage noch nicht (alter Stand des
+// Apps-Script-Projekts), antwortet er mit JSON {"ok":false,"error":"Nicht berechtigt."} statt „FEHLER\n…“.
+func serverFehlerText(t, event string) string {
+	t = strings.TrimSpace(t)
+	if strings.HasPrefix(t, "{") {
+		var j struct {
+			Error string `json:"error"`
+		}
+		if json.Unmarshal([]byte(t), &j) == nil && j.Error != "" {
+			if strings.HasPrefix(event, "kd_scan") && strings.Contains(j.Error, "berechtigt") {
+				return "Der Server kennt „Visitenkarte scannen“ noch nicht – das Server-Update muss noch eingespielt werden."
+			}
+			return j.Error
+		}
+	}
+	return strings.TrimSpace(strings.TrimPrefix(t, "FEHLER\n"))
 }
 
 // Neue Register aus dem Drive-Ordner (wie in den Allgemeinen Vorlagen): Liste und „In Excel öffnen“

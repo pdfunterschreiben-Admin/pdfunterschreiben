@@ -52,7 +52,7 @@ function doPost(e) {
     return ContentService.createTextOutput(t).setMimeType(ContentService.MimeType.TEXT);
   }
   // Handy-Seite (GitHub Pages, ohne Google-Anmeldung): nur mit gültigem QR-Code-Token
-  if (d && /^h_(check|foto|ts|vorschau|vorschaubild)$/.test(String(d.event || ''))) {
+  if (d && /^h_(check|foto|ts|vk|vorschau|vorschaubild)$/.test(String(d.event || ''))) {
     let t;
     try { t = 'OK\n' + handyAnfrage(d); } catch (x) { t = 'FEHLER\n' + x.message; }
     return ContentService.createTextOutput(t).setMimeType(ContentService.MimeType.TEXT);
