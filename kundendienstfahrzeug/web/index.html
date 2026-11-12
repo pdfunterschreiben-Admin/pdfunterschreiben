@@ -362,6 +362,13 @@ dialog::backdrop{background:rgba(10,15,30,.55)}
   </form>
 </dialog>
 
+<dialog id="tdocBildDlg">
+  <form method="dialog" class="dlg" style="max-width:min(1100px,95vw)">
+    <div class="dlg-head"><strong>So sieht T-Doc im Hintergrund gerade aus</strong><button class="ghost" value="x">Schließen</button></div>
+    <div class="dlg-body"><img id="tdocBild" alt="Bild der T-Doc-Seite" style="max-width:100%;border:1px solid var(--line,#ddd);border-radius:8px"></div>
+  </form>
+</dialog>
+
 <dialog id="erwDlg">
   <form method="dialog" class="dlg">
     <div class="dlg-head"><strong>T-Doc-Verbindung einrichten (einmalig)</strong><button class="ghost" value="x">Schließen</button></div>
@@ -887,7 +894,7 @@ async function tdocAbfrage(n){
       if(s.name){ $("#fName").value = s.name; nameVonHand = false; hint("✓ Bezeichnung aus T-Doc übernommen."); setTimeout(() => window.focus(), 50); $("#fName").focus();
         if(!state.erwOk){ state.erwOk = true; persist(); } }
       else if(s.anmelden) hint(esc(s.error) + ' <button type="button" class="link" id="tdocAnmelden">Bei Toyota anmelden</button>');
-      else hint(esc(s.error || "T-Doc hat keine Bezeichnung zu dieser Nummer gefunden."));
+      else hint(esc(s.error || "T-Doc hat keine Bezeichnung zu dieser Nummer gefunden.") + (st.eigen ? ' <button type="button" class="link" id="tdocBildBtn">Was zeigt T-Doc?</button>' : ""));
       return;
     }
     // Im Hintergrund nichts gekommen: einmal sichtbar versuchen (z. B. Toyota-Anmeldung nötig)
@@ -901,6 +908,7 @@ async function tdocAbfrage(n){
   }
 }
 document.addEventListener("click", e => { if(e.target && e.target.id === "erwBtn") erweiterungEinrichten(); });
+document.addEventListener("click", e => { if(e.target && e.target.id === "tdocBildBtn"){ $("#tdocBild").src = "/api/tdoc/bild?t=" + Date.now(); $("#tdocBildDlg").showModal(); } });
 // Einmalige Toyota-Anmeldung im eigenen Edge-Fenster; sobald es geschlossen ist, wird neu gesucht.
 document.addEventListener("click", async e => {
   if(!e.target || e.target.id !== "tdocAnmelden") return;

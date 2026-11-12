@@ -8,6 +8,7 @@ package main
 
 import (
 	"bufio"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -455,7 +456,7 @@ func (b *hgBrowser) suche(nr, url string) (hgErgebnis, bool) {
 	tabelleGesehen := false
 	defer b.fremdeTabsSchliessen()
 	anmelden := hgErgebnis{Error: "Einmal bei Toyota anmelden – danach geht es im Hintergrund.", Anmelden: true}
-	for time.Since(start) < 55*time.Second && b.laeuft() {
+	for time.Since(start) < 40*time.Second && b.laeuft() {
 		if ohneNeuladen && time.Since(start) > 6*time.Second { // Anwendung hat nicht reagiert: richtig laden
 			ohneNeuladen = false
 			globalThisZuruecksetzen := "globalThis.__kdfAufgeklappt=null"
@@ -479,11 +480,16 @@ func (b *hgBrowser) suche(nr, url string) (hgErgebnis, bool) {
 			Result struct {
 				Value struct {
 					Tabelle bool `json:"tabelle"`
+					Leer    bool `json:"leer"`
 				} `json:"value"`
 			} `json:"result"`
 		}
-		if b.rufen("Runtime.evaluate", map[string]any{"expression": "({tabelle: !!document.querySelector('table, mat-table, [role=table], tr.example-element-row')})", "returnByValue": true}, true, 5*time.Second, &seite) == nil && seite.Result.Value.Tabelle {
+		if b.rufen("Runtime.evaluate", map[string]any{"expression": "({tabelle: !!document.querySelector('table, mat-table, [role=table], tr.example-element-row'), leer: /(keine (ergebnisse|treffer|daten|einträge)|nichts gefunden|no (results|data|records|items)( found)?|0 (ergebnisse|results))/i.test(document.body ? document.body.innerText : '')})", "returnByValue": true}, true, 5*time.Second, &seite) == nil && seite.Result.Value.Tabelle {
 			tabelleGesehen = true
+		}
+		if seite.Result.Value.Leer && time.Since(start) > 3*time.Second {
+			b.bildMerken()
+			return hgErgebnis{Error: "T-Doc findet diese Nummer nicht."}, true
 		}
 		var r struct {
 			Result struct {
@@ -522,6 +528,7 @@ func (b *hgBrowser) suche(nr, url string) (hgErgebnis, bool) {
 			}
 		}
 	}
+	b.bildMerken()
 	if !tabelleGesehen { // T-Doc hat gar keine Ergebnisliste gezeigt – fast immer fehlt die Anmeldung
 		return hgErgebnis{Error: "T-Doc zeigt keine Ergebnisse – vermutlich fehlt die Toyota-Anmeldung.", Anmelden: true}, true
 	}
@@ -631,4 +638,37 @@ func (a *app) handleTdocAnmelden(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	writeJSON(w, map[string]any{"ok": true, "offen": hgAnmeldungOffen()})
+}
+
+// Bild der unsichtbaren Seite, wenn nichts gefunden wurde (zum Nachsehen: „Was zeigt T-Doc?“)
+var (
+	hgBildMu sync.Mutex
+	hgBild   []byte
+)
+
+func (b *hgBrowser) bildMerken() {
+	var r struct {
+		Data string `json:"data"`
+	}
+	if b.rufen("Page.captureScreenshot", map[string]any{"format": "jpeg", "quality": 70, "captureBeyondViewport": true}, true, 15*time.Second, &r) != nil {
+		return
+	}
+	if d, err := base64.StdEncoding.DecodeString(r.Data); err == nil {
+		hgBildMu.Lock()
+		hgBild = d
+		hgBildMu.Unlock()
+	}
+}
+
+func (a *app) handleTdocBild(w http.ResponseWriter, r *http.Request) {
+	hgBildMu.Lock()
+	d := hgBild
+	hgBildMu.Unlock()
+	if d == nil {
+		http.Error(w, "kein Bild", http.StatusNotFound)
+		return
+	}
+	w.Header().Set("Content-Type", "image/jpeg")
+	w.Header().Set("Cache-Control", "no-store")
+	_, _ = w.Write(d)
 }
