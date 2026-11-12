@@ -162,3 +162,6 @@ func openWindow(url string) {
 
 // openExternal öffnet eine feste Adresse im Standardbrowser.
 func openExternal(u string) { _ = hidden("rundll32.exe", "url.dll,FileProtocolHandler", u).Start() }
+
+// ordnerZeigen öffnet einen Ordner im Explorer.
+func ordnerZeigen(p string) { _ = exec.Command("explorer.exe", p).Start() }

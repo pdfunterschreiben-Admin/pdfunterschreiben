@@ -103,6 +103,27 @@ const [app, mock, out = '.'] = process.argv.slice(2);
   await page.click('#teilAbbr');
   ok('Bezeichnung aus T-Doc automatisch eingetragen');
 
+  // T-Doc automatisch über die Erweiterung (Ergebnis wird hier wie von der Erweiterung geschickt)
+  await page.click('#neuBtn'); await page.waitForTimeout(120);
+  await page.fill('#fNr', '7550609'); await page.press('#fNr', 'Tab');
+  const [st] = await Promise.all([page.waitForResponse(r => r.url().includes('/api/tdoc/start')), page.click('#fTdoc')]);
+  const tok = (await st.json()).token;
+  const fremd = await fetch(app + 'api/tdoc/ergebnis', { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: 'chrome-extension://abc' }, body: JSON.stringify({ token: 'falsch', nr: '7550609', name: 'X' }) });
+  assert.strictEqual(fremd.status, 403);
+  const erw = await fetch(app + 'api/tdoc/ergebnis', { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: 'chrome-extension://abc' }, body: JSON.stringify({ token: tok, nr: '7550609', name: 'Rad', version: '1.0.0' }) });
+  assert.strictEqual(erw.status, 204);
+  await page.waitForFunction(() => document.querySelector('#fName').value === 'Rad', null, { timeout: 5000 });
+  assert.strictEqual(await page.inputValue('#fNr'), '7550609');
+  await page.click('#teilAbbr');
+  ok('Bezeichnung automatisch über die T-Doc-Erweiterung');
+  // danach: Nummer eintippen reicht, die Abfrage startet von selbst
+  await page.click('#neuBtn'); await page.waitForTimeout(120);
+  const [st2] = await Promise.all([page.waitForResponse(r => r.url().includes('/api/tdoc/start')), (async () => { await page.fill('#fNr', '7517712'); await page.press('#fNr', 'Tab'); })()]);
+  await fetch(app + 'api/tdoc/ergebnis', { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: 'chrome-extension://abc' }, body: JSON.stringify({ token: (await st2.json()).token, nr: '7517712', name: 'Schraube' }) });
+  await page.waitForFunction(() => document.querySelector('#fName').value === 'Schraube', null, { timeout: 5000 });
+  await page.click('#teilAbbr');
+  ok('Bezeichnung kommt nach Eingabe der Nummer von selbst');
+
   // Menge −/+ zusammengefasst
   const zeile = page.locator('tr', { hasText: 'Filter-Teilgruppe' });
   await zeile.locator('[data-a=minus]').click();

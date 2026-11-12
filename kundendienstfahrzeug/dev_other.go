@@ -38,3 +38,5 @@ func windowsOCR(img []byte) (string, error) {
 	}
 	return "", fmt.Errorf("Texterkennung gibt es nur unter Windows.")
 }
+
+func ordnerZeigen(p string) { fmt.Println("ORDNER:", p) }

@@ -118,6 +118,10 @@ func (a *app) routes() http.Handler {
 	mux.HandleFunc("/api/excel/export", a.handleExcelExport)
 	mux.HandleFunc("/api/excel/import", a.handleExcelImport)
 	mux.HandleFunc("/api/ocr", a.handleOCR)
+	mux.HandleFunc("/api/tdoc/start", a.handleTdocStart)
+	mux.HandleFunc("/api/tdoc/status", a.handleTdocStatus)
+	mux.HandleFunc("/api/tdoc/ergebnis", a.handleTdocErgebnis)
+	mux.HandleFunc("/api/tdoc/erweiterung", a.handleTdocErweiterung)
 	mux.HandleFunc("/api/open", func(w http.ResponseWriter, r *http.Request) {
 		// Nur feste Adressen im Standardbrowser öffnen (dort ist man bei Google angemeldet)
 		links := map[string]string{
@@ -161,7 +165,9 @@ func guard(next http.Handler) http.Handler {
 			http.Error(w, "forbidden", http.StatusForbidden)
 			return
 		}
-		if o := r.Header.Get("Origin"); o != "" && o != strings.TrimSuffix(url(), "/") && o != fmt.Sprintf("http://localhost:%d", Port) {
+		// Die T-Doc-Erweiterung meldet sich mit eigener Herkunft – dort prüft der einmalige Schlüssel
+		erweiterung := r.URL.Path == "/api/tdoc/ergebnis" && (strings.HasPrefix(r.Header.Get("Origin"), "chrome-extension://") || strings.HasPrefix(r.Header.Get("Origin"), "extension://"))
+		if o := r.Header.Get("Origin"); o != "" && !erweiterung && o != strings.TrimSuffix(url(), "/") && o != fmt.Sprintf("http://localhost:%d", Port) {
 			http.Error(w, "forbidden", http.StatusForbidden)
 			return
 		}

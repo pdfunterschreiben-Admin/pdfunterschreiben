@@ -194,7 +194,7 @@ dialog::backdrop{background:rgba(10,15,30,.55)}
           <button id="tdocBtn" style="justify-content:center" title="Teile, die in T-Doc mit dem Lesezeichen gesammelt wurden">📋 Aus T-Doc</button>
         </div>
         <button id="etBtn" class="wide" title="Dieselbe Ersatzteilliste wie im Reparaturauftrag der Service-Mappe">📋 Ersatzteilliste</button>
-        <p class="hint">In T-Doc die Teile anklicken und das Lesezeichen „T-Doc → Excel“ drücken – dann hier „Aus T-Doc“. <button class="link" id="lesezeichenBtn">Lesezeichen einrichten</button></p>
+        <p class="hint">T-Doc-Bezeichnungen automatisch: <button class="link" id="erwEinrichten">T-Doc-Verbindung einrichten</button> (einmalig). Mehrere Teile aus T-Doc: Teile anklicken, Lesezeichen „T-Doc → Excel“, dann „Aus T-Doc“. <button class="link" id="lesezeichenBtn">Lesezeichen einrichten</button></p>
         <p class="hint" id="userLine" hidden></p>
       </section>
 
@@ -339,6 +339,22 @@ dialog::backdrop{background:rgba(10,15,30,.55)}
   </form>
 </dialog>
 
+<dialog id="erwDlg">
+  <form method="dialog" class="dlg">
+    <div class="dlg-head"><strong>T-Doc-Verbindung einrichten (einmalig)</strong><button class="ghost" value="x">Schließen</button></div>
+    <div class="dlg-body help">
+      <p>Damit die Bezeichnung ohne Klick aus T-Doc kommt, bekommt dein Browser (Chrome oder Edge) eine kleine Erweiterung. Sie liest nur die Teileliste, die das Programm öffnet, und schickt die Bezeichnung an das Programm auf diesem Rechner.</p>
+      <ol>
+        <li>Im Browser in die Adresszeile <b>chrome://extensions</b> eintippen (bei Edge: <b>edge://extensions</b>) und Enter drücken.</li>
+        <li>Rechts oben bzw. links unten den <b>Entwicklermodus</b> einschalten.</li>
+        <li><b>„Entpackte Erweiterung laden“</b> klicken und diesen Ordner wählen (er ist schon im Explorer geöffnet):<br><span class="val" id="erwOrdner" style="word-break:break-all"></span> <button type="button" class="link" id="erwKopieren">Pfad kopieren</button></li>
+        <li>Fertig. Ab jetzt reicht im Programm <b>T-Doc ↗</b> – die Bezeichnung wird eingetragen und der T-Doc-Tab schließt sich wieder.</li>
+      </ol>
+      <p class="hint">Falls „Entwicklermodus“ gesperrt ist (Firmenrichtlinie), geht es weiter wie bisher über das Lesezeichen „T-Doc → Excel“.</p>
+    </div>
+  </form>
+</dialog>
+
 <dialog id="helpDlg">
   <form method="dialog" class="dlg">
     <div class="dlg-head"><strong>Anleitung</strong><button class="ghost" value="x">Schließen</button></div>
@@ -460,12 +476,12 @@ const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({"&":"&amp
 /* Verbindung zum Programm halten: schließt man das Fenster, beendet sich das Programm. */
 try { new EventSource("/api/alive"); } catch(e) {}
 
-const state = {user: null, blocked: false, testChannel: true, people: {}, lastStart: null, tab: "bestand", sort: "name", handyZu: false};
+const state = {user: null, blocked: false, testChannel: true, people: {}, lastStart: null, tab: "bestand", sort: "name", handyZu: false, erwOk: false};
 let saveT;
 function persistNow(){
   clearTimeout(saveT);
-  const {user, blocked, testChannel, people, lastStart, tab, sort, handyZu} = state;
-  return fetch("/api/settings", {method: "PUT", headers: {"Content-Type": "application/json"}, body: JSON.stringify({user, blocked, testChannel, people, lastStart, tab, sort, handyZu})})
+  const {user, blocked, testChannel, people, lastStart, tab, sort, handyZu, erwOk} = state;
+  return fetch("/api/settings", {method: "PUT", headers: {"Content-Type": "application/json"}, body: JSON.stringify({user, blocked, testChannel, people, lastStart, tab, sort, handyZu, erwOk})})
     .catch(() => toast("Einstellungen konnten nicht gespeichert werden."));
 }
 function persist(){ clearTimeout(saveT); saveT = setTimeout(persistNow, 300); }
@@ -788,6 +804,8 @@ function nrUebernehmen(){
   if(n !== $("#fNr").value) $("#fNr").value = n;
   const name = nameZu(n);
   if(name && (!nameVonHand || !$("#fName").value.trim())){ $("#fName").value = name; nameVonHand = false; $("#nameHint").textContent = "✓ Bezeichnung aus dem Katalog übernommen."; $("#nameHint").hidden = false; }
+  // Unbekannte Nummer: mit eingerichteter T-Doc-Verbindung die Bezeichnung gleich selbst holen
+  else if(!name && !$("#fName").value.trim() && state.erwOk && nrGueltig(n) && tdocWarten !== nrKey(n) && !lager.teile.some(t => nrKey(t.nr) === nrKey(n))){ tdocWarten = nrKey(n); tdocAbfrage(n); }
   pruefeTreffer();
 }
 // Schon vorhanden? Dann lieber den vorhandenen Eintrag öffnen als doppelt anlegen.
@@ -816,11 +834,43 @@ $("#fPlus").onclick = () => { $("#fMenge").value = Math.min(999999, mengeWert() 
 $("#fTdoc").onclick = () => {
   const n = teileNr($("#fNr").value);
   if(!nrGueltig(n)) return teilErr("Für T-Doc bitte eine vollständige Toyota- (12345-ABCDE-12) oder BT-Nummer eintragen.");
-  fetch("/api/open?ziel=teil&nr=" + encodeURIComponent(n), {method: "POST"});
   tdocWarten = nrKey(n);
-  $("#nameHint").textContent = "T-Doc ist im Browser geöffnet: dort auf das Lesezeichen „T-Doc → Excel“ klicken – die Bezeichnung kommt dann von selbst hierher.";
-  $("#nameHint").hidden = false;
+  tdocAbfrage(n);
 };
+// Automatisch über die Erweiterung „Kundendienstfahrzeug – T-Doc“ im Browser: Programm öffnet die
+// Suche, die Erweiterung liest die Bezeichnung und schickt sie zurück. Ohne Erweiterung geht es
+// weiter über das Lesezeichen (Zwischenablage, siehe unten).
+let tdocLauf = 0;
+async function tdocAbfrage(n){
+  const lauf = ++tdocLauf;
+  const hint = t => { $("#nameHint").innerHTML = t; $("#nameHint").hidden = !t; };
+  hint("T-Doc sucht die Bezeichnung im Browser …");
+  let st;
+  try{ st = await (await fetch("/api/tdoc/start", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({nr: n})})).json(); }catch(e){ return hint("T-Doc konnte nicht geöffnet werden."); }
+  if(!st.ok) return hint(esc(st.error));
+  const t0 = Date.now();
+  while(lauf === tdocLauf && $("#teilDlg").open && Date.now() - t0 < 75000){
+    await new Promise(r => setTimeout(r, 700));
+    let s; try{ s = await (await fetch("/api/tdoc/status?token=" + st.token)).json(); }catch(e){ continue; }
+    if(!s.ok) break;
+    if(s.fertig){
+      tdocWarten = "";
+      if(s.name){ $("#fName").value = s.name; nameVonHand = false; hint("✓ Bezeichnung aus T-Doc übernommen."); setTimeout(() => window.focus(), 50); $("#fName").focus();
+        if(!state.erwOk){ state.erwOk = true; persist(); } }
+      else hint(esc(s.error || "T-Doc hat keine Bezeichnung zu dieser Nummer gefunden."));
+      return;
+    }
+    if(!s.erweiterung && s.sekunden >= 12 && s.sekunden < 14)
+      hint('Keine Antwort aus dem Browser. Ist die <b>T-Doc-Verbindung</b> eingerichtet? <button type="button" class="link" id="erwBtn">Jetzt einrichten</button> – oder in T-Doc das Lesezeichen „T-Doc → Excel“ klicken.');
+  }
+}
+document.addEventListener("click", e => { if(e.target && e.target.id === "erwBtn") erweiterungEinrichten(); });
+async function erweiterungEinrichten(){
+  let r; try{ r = await (await fetch("/api/tdoc/erweiterung", {method: "POST"})).json(); }catch(e){ return toast("Ging nicht."); }
+  if(!r.ok) return toast(r.error, 8000);
+  $("#erwOrdner").textContent = r.ordner;
+  $("#erwDlg").showModal();
+}
 // Bezeichnung aus T-Doc: Das Lesezeichen „T-Doc → Excel“ legt die Teile in die Zwischenablage
 // (TDOC-ERSATZTEILE, je Zeile Menge, Nummer, Name, Bemerkung). Sobald dieses Fenster wieder vorne ist,
 // wird die Zeile mit der gesuchten Nummer übernommen.
@@ -839,7 +889,7 @@ async function tdocAbholen(){
 }
 addEventListener("focus", () => setTimeout(tdocAbholen, 150));
 setInterval(tdocAbholen, 1500);
-const teilZu = () => { $("#teilDlg").close(); teil = null; tdocWarten = ""; };
+const teilZu = () => { $("#teilDlg").close(); teil = null; tdocWarten = ""; tdocLauf++; };
 $("#teilClose").onclick = teilZu; $("#teilAbbr").onclick = teilZu;
 $("#teilForm").addEventListener("submit", async e => {
   e.preventDefault();
@@ -917,6 +967,8 @@ $("#neuBtn").onclick = () => oeffneTeil(null);
 
 /* ---------- T-Doc (Lesezeichen „T-Doc → Excel“ der Service-Mappe) und Excel-Import ---------- */
 let importDaten = null; // {quelle: "tdoc"|"excel", blaetter: [{art, titel, zeilen:[{nr,name,ort,menge}]}]}
+$("#erwKopieren").onclick = async () => { try{ await navigator.clipboard.writeText($("#erwOrdner").textContent); toast("Pfad kopiert."); }catch(e){} };
+$("#erwEinrichten").onclick = erweiterungEinrichten;
 $("#lesezeichenBtn").onclick = () => { fetch("/api/open?ziel=lesezeichen", {method: "POST"}); toast("Die Einrichtungsseite öffnet sich im Browser – dort den roten Knopf in die Lesezeichenleiste ziehen.", 9000); };
 $("#tdocBtn").onclick = async () => {
   if(locked()) return checkAccess();
@@ -1312,7 +1364,7 @@ async function refreshBlock(event){
 (async () => {
   try{
     const s = await (await fetch("/api/settings", {cache: "no-store"})).json();
-    for(const k of ["user", "blocked", "testChannel", "people", "lastStart", "tab", "sort", "handyZu"]) if(s[k] !== undefined && s[k] !== null) state[k] = s[k];
+    for(const k of ["user", "blocked", "testChannel", "people", "lastStart", "tab", "sort", "handyZu", "erwOk"]) if(s[k] !== undefined && s[k] !== null) state[k] = s[k];
   }catch(e){}
   handyFold(!!state.handyZu);
   renderUser(); render();
