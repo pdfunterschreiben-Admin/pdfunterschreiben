@@ -57,7 +57,9 @@ var z=document.querySelector('tr.example-element-row');if(!z)return fertig();
 hinweis('Teileliste wird geöffnet …');z.click();var t0=Date.now();
 (function warte(){if(da()||Date.now()-t0>9000)return setTimeout(fertig,200);setTimeout(warte,300);})();}
 function los(){
-try{if(navigator.clipboard&&navigator.clipboard.readText){navigator.clipboard.readText().then(function(t){vorbereiten(function(){weiter(t);});},function(){vorbereiten(function(){weiter('');});});return;}}catch(e){}
+var einmal=false;function mit(t){if(einmal)return;einmal=true;vorbereiten(function(){weiter(t);});}
+/* Antwortet die Zwischenablage nicht (Fenster nicht im Vordergrund, Rückfrage offen), ohne sie weitermachen */
+try{if(navigator.clipboard&&navigator.clipboard.readText){setTimeout(function(){mit('');},2500);navigator.clipboard.readText().then(mit,function(){mit('');});return;}}catch(e){}
 vorbereiten(function(){weiter('');});}
 los();
 })();
