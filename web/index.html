@@ -4488,7 +4488,7 @@ function akteAnsicht(){
 }
 /* ---- Kundenliste: einmal eingelesene Kunden für alle Techniker (Server, Blatt „Kunden“) ---- */
 let kunden = null;   // [{name, strasse, ort, ansprech, tel, mail}]
-let meineKunden = null;   // persönliche Kundendaten – nur ich (Server, Blatt „Kundendaten“): [{id, firma, name, email}]
+let meineKunden = null;   // Kundendaten – gemeinsam für alle Techniker (Server, Blatt „Kundendaten“): [{id, firma, name, email, tel, strasse, ort}]
 const KUNDE_SPALTEN = [["name", "D5"], ["strasse", "D6"], ["ort", "D7"], ["ansprech", "D8"], ["tel", "Q9"], ["mail", "D9"]];
 async function kundenLaden(){
   try{
@@ -4521,7 +4521,7 @@ function kundeSpeichern(f, w){
     const neu = {}; for(const [n] of KUNDE_SPALTEN) neu[n] = k[n] || alt[n] || ""; if(i >= 0) kunden[i] = neu; else kunden.push(neu); }
   fetch("/api/formular/geraete", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({event: "k_speichern", kunde: k})}).catch(() => {});
 }
-// Beim Speichern eines Formulars automatisch in den persönlichen Kundendaten übernehmen/aktualisieren
+// Beim Speichern eines Formulars automatisch in die gemeinsamen Kundendaten übernehmen/aktualisieren
 // (Firma = Kundenname, Name = Ansprechpartner), wenn mehr als nur der Name bekannt ist.
 // Abgeglichen wird über Firma + Ansprechpartner zusammen, damit mehrere Ansprechpartner/E-Mails
 // derselben Firma als eigene Einträge nebeneinander stehen bleiben (statt sich gegenseitig zu überschreiben).
@@ -5297,7 +5297,7 @@ setTimeout(() => kalLaden(), 2500);
 setInterval(() => { if(!document.hidden){ kalZeigen(); kalLaden(true); } }, 10 * 60 * 1000);
 addEventListener("focus", () => kalLaden(true));
 
-/* ---------- Kundendaten (persönlich, nur ich) ---------- */
+/* ---------- Kundendaten (gemeinsam für alle Techniker) ---------- */
 // Legt die E-Mail-Adresse auf Wunsch auch als Kontakt in Outlook an (dann schlägt Outlook sie beim Tippen vor).
 function outlookKontakt(k){ if(k && (k.email || k.tel)) fetch("/api/kontakt", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({firma: k.firma || "", name: k.name || "", email: k.email || "", tel: k.tel || "", strasse: k.strasse || "", ort: k.ort || ""})}).catch(() => {}); }
 let kdBearbeitet = null;
@@ -5311,7 +5311,7 @@ function kdZeigen(){
     tb.appendChild(tr);
   }
   if(!l.length) tb.insertAdjacentHTML("beforeend", `<tr><td colspan="5" class="hint" style="padding:14px 6px">${meineKunden && meineKunden.length ? "Nichts gefunden." : "Noch keine Kundendaten. Mit „＋ Kunde hinzufügen“ anlegen" + ($("#kdScan").hidden ? "" : " oder eine Visitenkarte scannen") + "."}</td></tr>`);
-  $("#kdStand").textContent = (meineKunden || []).length + " Kunde(n) · nur für dich sichtbar";
+  $("#kdStand").textContent = (meineKunden || []).length + " Kunde(n) · gemeinsam für alle Kollegen";
 }
 function kdEditOeffnen(k){
   kdBearbeitet = k || {id: "", firma: "", name: "", email: "", tel: "", strasse: "", ort: ""};
@@ -5321,7 +5321,10 @@ function kdEditOeffnen(k){
   $("#kdEditDel").hidden = !(k && k.id); $("#kdEditFehler").hidden = true;
   $("#kdEditDlg").showModal(); setTimeout(() => $("#kdFirma").focus(), 50);
 }
-$("#kdOpen").onclick = async () => { kdScanVorladen(); if(!meineKunden) await meineKundenLaden(); kdZeigen(); $("#kdDlg").showModal(); };
+$("#kdOpen").onclick = async () => {
+  kdScanVorladen(); if(!meineKunden) await meineKundenLaden(); kdZeigen(); $("#kdDlg").showModal();
+  meineKundenLaden().then(() => { if($("#kdDlg").open) kdZeigen(); });   // Änderungen der Kollegen nachladen
+};
 $("#kdZu").onclick = () => $("#kdDlg").close();
 $("#kdSuche").oninput = () => kdZeigen();
 $("#kdNeu").onclick = () => kdEditOeffnen(null);
@@ -5428,18 +5431,18 @@ async function kontaktImportieren(){
   try{
     const r = await (await fetch("/api/kontakt/import", {method: "POST"})).json();
     if(!r.ok) throw new Error(r.error || "Import fehlgeschlagen.");
-    if(!meineKunden) await meineKundenLaden();
+    await meineKundenLaden();   // aktueller Stand inkl. Kollegen, damit nichts doppelt kommt
     const vorhandenMail = new Set((meineKunden || []).map(k => (k.email || "").toLowerCase()).filter(Boolean));
     const vorhandenTel = new Set((meineKunden || []).map(k => (k.tel || "").replace(/\s+/g, "")).filter(Boolean));
     const neu = (r.liste || []).filter(k => {
-      if(!(k.firma || k.name || k.email || k.tel)) return false;
+      if(!(k.firma || "").trim()) return false;   // gemeinsame Liste: keine privaten Kontakte ohne Firma
       const em = (k.email || "").toLowerCase(), tel = (k.tel || "").replace(/\s+/g, "");
       if(em && vorhandenMail.has(em)) return false;
       if(!em && tel && vorhandenTel.has(tel)) return false;
       return true;
     });
-    if(!neu.length){ toast("Keine neuen Kontakte gefunden – alle sind schon vorhanden."); return; }
-    if(!confirm(neu.length + " neue Kontakt(e) aus Outlook in deine Kundendaten übernehmen?")) return;
+    if(!neu.length){ toast("Keine neuen Kontakte mit Firmenname gefunden – alle sind schon vorhanden."); return; }
+    if(!confirm(neu.length + " neue Kontakt(e) aus Outlook in die Kundendaten übernehmen?\n\nDie Kundendaten sind für alle Kollegen sichtbar. Übernommen werden nur Kontakte mit Firmenname, private Kontakte ohne Firma bleiben draußen.")) return;
     let n = 0;
     for(const k of neu){
       btn.textContent = "Übernehme … (" + (n + 1) + "/" + neu.length + ")";
@@ -5471,7 +5474,7 @@ $("#kdEditSave").onclick = async () => {
 };
 $("#kdEditDel").onclick = async () => {
   if(!kdBearbeitet || !kdBearbeitet.id){ $("#kdEditDlg").close(); return; }
-  if(!confirm("Diesen Kunden aus deiner Liste löschen?")) return;
+  if(!confirm("Diesen Kunden löschen? Er verschwindet damit auch bei allen Kollegen.")) return;
   const r = await meineKundeLoeschen(kdBearbeitet.id);
   if(!r.ok){ $("#kdEditFehler").textContent = r.error || "Löschen fehlgeschlagen."; $("#kdEditFehler").hidden = false; return; }
   meineKunden = (meineKunden || []).filter(x => x.id !== kdBearbeitet.id);

@@ -430,8 +430,8 @@ function berechtigungenPruefen() {
 // ---------------- Persönliche Kundendaten (Visitenkarten) ----------------
 // Nur der angemeldete Nutzer sieht und ändert seine eigenen Einträge. Blatt „Kundendaten“, nach Besitzer gefiltert.
 function kundendatenSheet(ss) {
-  const s = sheet(ss || SpreadsheetApp.getActiveSpreadsheet(), 'Kundendaten', ['Besitzer', 'Firma', 'Name', 'E-Mail', 'Telefon', 'ID', 'Zuletzt', 'Straße', 'Ort']);
-  if (s.getLastColumn() < 9) s.getRange(1, 8, 1, 2).setValues([['Straße', 'Ort']]);
+  const s = sheet(ss || SpreadsheetApp.getActiveSpreadsheet(), 'Kundendaten', ['Angelegt von', 'Firma', 'Name', 'E-Mail', 'Telefon', 'ID', 'Zuletzt', 'Straße', 'Ort', 'Geändert von']);
+  if (s.getLastColumn() < 10) s.getRange(1, 8, 1, 3).setValues([['Straße', 'Ort', 'Geändert von']]);
   return s;
 }
 function kundendatenAnfrage(d) {
@@ -450,10 +450,24 @@ function kundendatenAnfrage(d) {
     return v === null ? 'FEHLER\nAbgelaufen.' : v;
   }
   const s = kundendatenSheet();
+  // Kundendaten sind gemeinsam für alle Techniker (seit 1.20.46); doppelte Einträge werden nur einmal geliefert
+  const norm = function (x) { return String(x == null ? '' : x).toLowerCase().replace(/\s+/g, ' ').trim(); };
+  const inhalt = function (r) { return [r[1], r[2], r[3], r[4], r[7], r[8]].map(norm).join('|'); };
+  // gleiche Einträge (z. B. von zwei Kollegen doppelt angelegt) werden nur einmal angezeigt – beim Ändern/Löschen mit entfernen
+  const doppelteWeg = function (v, row) {
+    const schl = inhalt(v[row - 1]);
+    for (let i = v.length - 1; i >= 1; i--) if (i + 1 !== row && inhalt(v[i]) === schl) { s.deleteRow(i + 1); if (i + 1 < row) row--; }
+    return row;
+  };
   if (ev === 'kd_holen') {
-    const v = s.getDataRange().getValues(), out = [];
-    for (let i = 1; i < v.length; i++) if (String(v[i][0]).toLowerCase() === mail)
-      out.push([v[i][5], v[i][1], v[i][2], v[i][3], v[i][4], v[i][7], v[i][8]].map(function (x) { return String(x == null ? '' : x).replace(/[\t\n]/g, ' '); }).join('\t'));
+    const v = s.getDataRange().getValues(), out = [], gesehen = {};
+    for (let i = 1; i < v.length; i++) {
+      const z = [v[i][5], v[i][1], v[i][2], v[i][3], v[i][4], v[i][7], v[i][8]];
+      if (!z[0] || !(z[1] || z[2] || z[3] || z[4])) continue;
+      const schl = inhalt(v[i]);
+      if (gesehen[schl]) continue; gesehen[schl] = 1;
+      out.push(z.map(function (x) { return String(x == null ? '' : x).replace(/[\t\n]/g, ' '); }).join('\t'));
+    }
     return out.join('\n');
   }
   const kd = d.kd || {};
@@ -462,16 +476,28 @@ function kundendatenAnfrage(d) {
     const firma = clean(kd.firma, 120), name = clean(kd.name, 120), em = clean(kd.email, 150), tel = clean(kd.tel, 60);
     const strasse = clean(kd.strasse, 150), ort = clean(kd.ort, 150);
     if (!firma && !name && !em && !tel) throw new Error('Leerer Eintrag.');
-    const v = s.getDataRange().getValues(); let row = 0;
-    for (let i = 1; i < v.length; i++) if (String(v[i][5]) === id && String(v[i][0]).toLowerCase() === mail) { row = i + 1; break; }
-    const zeile = [mail, firma, name, em, tel, id, new Date(), strasse, ort];
-    if (row) s.getRange(row, 1, 1, 9).setValues([zeile]); else s.appendRow(zeile);
+    const v = s.getDataRange().getValues(); let row = 0, ergaenzen = false;
+    for (let i = 1; i < v.length; i++) if (String(v[i][5]) === id) { row = i + 1; break; }
+    // ohne ID (neu): gleiche Firma + gleicher Ansprechpartner schon da (z. B. von einem Kollegen) -> diesen ergänzen
+    if (!row && !clean(kd.id, 40)) for (let i = 1; i < v.length; i++)
+      if (norm(v[i][1]) === norm(firma) && norm(v[i][2]) === norm(name)) { row = i + 1; ergaenzen = true; break; }
+    if (row) {
+      const a = v[row - 1];
+      row = doppelteWeg(v, row);
+      const w = function (neu, alt) { return ergaenzen ? (neu || alt) : neu; };
+      const zeile = [a[0] || mail, w(firma, a[1]), w(name, a[2]), w(em, a[3]), w(tel, a[4]), a[5] || id, new Date(), w(strasse, a[7]), w(ort, a[8]), mail];
+      s.getRange(row, 1, 1, 10).setValues([zeile]);
+      return String(a[5] || id);
+    }
+    s.appendRow([mail, firma, name, em, tel, id, new Date(), strasse, ort, mail]);
     return id;
   }
   if (ev === 'kd_loeschen') {
     const id = clean(kd.id, 40); if (!id) throw new Error('Keine ID.');
     const v = s.getDataRange().getValues();
-    for (let i = v.length - 1; i >= 1; i--) if (String(v[i][5]) === id && String(v[i][0]).toLowerCase() === mail) s.deleteRow(i + 1);
+    let row = 0;
+    for (let i = 1; i < v.length; i++) if (String(v[i][5]) === id) { row = i + 1; break; }
+    if (row) { row = doppelteWeg(v, row); s.deleteRow(row); }
     return 'ok';
   }
   throw new Error('Unbekannte Anfrage.');
