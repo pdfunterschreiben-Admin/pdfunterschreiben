@@ -713,6 +713,7 @@ body{padding-bottom:172px}
     <div class="dlg-body col" style="gap:12px;align-items:center;text-align:center;min-width:min(320px,82vw);padding:4px 16px 20px">
       <img id="kdScanQr" alt="QR-Code" style="width:220px;height:220px;background:#fff;border-radius:8px">
       <span class="hint" id="kdScanSt">QR-Code wird erstellt …</span>
+      <label class="btn file-btn ghost">🖼️ Oder Bild vom PC wählen …<input type="file" id="kdScanDatei" accept="image/*"></label>
     </div>
   </form>
 </dialog>
@@ -5324,37 +5325,77 @@ $("#kdOpen").onclick = async () => { if(!meineKunden) await meineKundenLaden(); 
 $("#kdZu").onclick = () => $("#kdDlg").close();
 $("#kdSuche").oninput = () => kdZeigen();
 $("#kdNeu").onclick = () => kdEditOeffnen(null);
-let kdScanAbbruch = false;
+let kdScanAbbruch = false, kdScanLauf = 0;
+// Visitenkarte lesen: Foto -> Texterkennung (/api/ocr, wie beim Typenschild) -> Felder raten.
+// Nutzt nur die Fotos-vom-Handy-Funktion des Servers, die schon läuft (kein Server-Update nötig).
+function vkAuswerten(text){
+  const zeilen = String(text || "").replace(/\r/g, "").split("\n").map(z => z.replace(/\s+/g, " ").trim()).filter(Boolean);
+  const EMAIL_RE = /[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}/;
+  const TEL_RE = /(?:\+|00)?\d[\d \/\-().]{5,}\d/;
+  const FIRMA_RE = /\b(GmbH|mbH|AG|KG|e\.?\s?K\.?|GbR|OHG|Inc\.?|Ltd\.?|& Co|UG)\b/i;
+  const TEL_LABEL = /^(tel|telefon|fon|mobil|handy|mob)\.?\s*[:.]?\s*/i;
+  const FAX_LABEL = /^fax[:.]?\s*/i;
+  const PLZ_ORT_RE = /^(D[- ])?\d{4,5}\s+\S+/;
+  const STRASSE_RE = /(straße|strasse|str\.|weg \d|allee|platz\b|gasse)/i;
+  const WEB_RE = /^(www\.|https?:)/i;
+  const NAME_RE = /^[A-ZÄÖÜ][a-zäöüß\-]+(\s+[A-ZÄÖÜ][a-zäöüß\-]+){1,2}$/;
+  let email = "", tel = "", strasse = "", ort = ""; const rest = [];
+  for(const z of zeilen){
+    const em = z.match(EMAIL_RE);
+    if(em && !email){ email = em[0]; continue; }
+    if(FAX_LABEL.test(z) || WEB_RE.test(z)) continue;
+    if(!tel){ const m = z.match(TEL_RE); if(m && (TEL_LABEL.test(z) || m[0].replace(/\D/g, "").length >= 7)){ tel = TEL_LABEL.test(z) ? z.replace(TEL_LABEL, "").trim() : m[0].trim(); continue; } }
+    if(!ort && PLZ_ORT_RE.test(z)){ ort = z; continue; }
+    if(!strasse && STRASSE_RE.test(z)){ strasse = z; continue; }
+    rest.push(z);
+  }
+  const firmaZeile = rest.find(z => FIRMA_RE.test(z));
+  const nameZeile = rest.find(z => z !== firmaZeile && NAME_RE.test(z));
+  const firma = firmaZeile || rest.find(z => z !== nameZeile) || "";
+  return {firma: firma.slice(0, 120), name: (nameZeile || "").slice(0, 120), email: email.slice(0, 150), tel: tel.slice(0, 60), strasse: strasse.slice(0, 150), ort: ort.slice(0, 150)};
+}
+async function vkLesen(bytes){
+  $("#kdScanSt").textContent = "Visitenkarte wird gelesen …";
+  let b64 = ""; for(let i = 0; i < bytes.length; i += 0x8000) b64 += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  let r; try{ r = await (await fetch("/api/ocr", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({images: [btoa(b64)]})})).json(); }
+  catch(e){ $("#kdScanSt").textContent = "Fehler: Keine Verbindung."; return; }
+  if(!r.ok){ $("#kdScanSt").textContent = "Fehler: " + (r.error || "Die Visitenkarte konnte nicht gelesen werden."); return; }
+  const daten = vkAuswerten((r.texts || [])[0]);
+  if(!$("#kdScanDlg").open) return;
+  $("#kdScanDlg").close();
+  if(daten.firma || daten.name || daten.email || daten.tel) kdEditOeffnen({id: "", ...daten});
+  else toast("Es konnten keine Daten aus der Visitenkarte erkannt werden.");
+}
 async function kdScanStarten(){
-  kdScanAbbruch = false;
+  kdScanAbbruch = false; const lauf = ++kdScanLauf;
+  const api = async (event, extra = {}) => (await fetch("/api/fotos", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({event, ...extra})})).json();
   $("#kdScanQr").removeAttribute("src"); $("#kdScanSt").textContent = "QR-Code wird erstellt …";
   $("#kdScanDlg").showModal();
-  let token, url;
-  try{
-    const r = await (await fetch("/api/formular/geraete", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({event: "kd_scanstart"})})).json();
-    if(!r.ok) throw new Error(r.error || "Konnte nicht gestartet werden.");
-    [token, url] = (r.text || "").split("\n");
-    if(!token || !url) throw new Error("Ungültige Antwort vom Server.");
-  }catch(e){ $("#kdScanSt").textContent = "Fehler: " + (e.message || e); return; }
-  $("#kdScanQr").src = "/api/fotos/qr?u=" + encodeURIComponent(url);
-  $("#kdScanSt").textContent = "Mit dem Handy scannen und eine Visitenkarte fotografieren – das Ergebnis erscheint hier automatisch.";
-  const bis = Date.now() + 10 * 60000;
-  while(Date.now() < bis && !kdScanAbbruch && $("#kdScanDlg").open){
-    await new Promise(r2 => setTimeout(r2, 2000));
-    if(kdScanAbbruch || !$("#kdScanDlg").open) return;
-    let g; try{ g = await (await fetch("/api/formular/geraete", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({event: "kd_scanergebnis", token})})).json(); }catch(e){ continue; }
-    if(!g.ok) continue;
-    const t = g.text || "";
-    if(t === "WARTEN" || t === "LIEST") continue;
-    if(t.indexOf("FEHLER") === 0){ $("#kdScanSt").textContent = t.slice(7) || "Die Visitenkarte konnte nicht gelesen werden."; return; }
-    let daten = null; try{ daten = JSON.parse(t); }catch(e){}
-    $("#kdScanDlg").close();
-    if(daten && (daten.firma || daten.name || daten.email || daten.tel)) kdEditOeffnen({id: "", firma: daten.firma || "", name: daten.name || "", email: daten.email || "", tel: daten.tel || "", strasse: daten.strasse || "", ort: daten.ort || ""});
-    else toast("Es konnten keine Daten aus der Visitenkarte erkannt werden.");
+  let s;
+  try{ s = await api("fotostart"); if(!s.ok) throw new Error(s.error || "Konnte nicht gestartet werden."); if(!s.token || !s.url) throw new Error("Ungültige Antwort vom Server."); }
+  catch(e){ $("#kdScanSt").textContent = "Fehler: " + (e.message || e) + " – du kannst stattdessen ein Bild der Visitenkarte wählen."; return; }
+  $("#kdScanQr").src = "/api/fotos/qr?u=" + encodeURIComponent(s.url);
+  $("#kdScanSt").textContent = "Mit dem Handy scannen und die Visitenkarte fotografieren (ein Foto, gerade und formatfüllend) – das Ergebnis erscheint hier automatisch.";
+  const ende = () => api("fotoende", {token: s.token}).catch(() => {});
+  const bis = Date.now() + 15 * 60000;
+  while(Date.now() < bis && !kdScanAbbruch && lauf === kdScanLauf && $("#kdScanDlg").open){
+    await new Promise(r2 => setTimeout(r2, 2500));
+    if(kdScanAbbruch || lauf !== kdScanLauf || !$("#kdScanDlg").open) break;
+    let l; try{ l = await api("fotoliste", {token: s.token}); }catch(e){ continue; }
+    if(!l.ok){ if(l.abgelaufen) break; continue; }
+    if(!(l.files && l.files.length)) continue;
+    $("#kdScanSt").textContent = "Foto empfangen …";
+    let g; try{ g = await api("fotoholen", {token: s.token, id: l.files[l.files.length - 1].id}); }catch(e){ continue; }
+    if(!g || !g.ok) continue;
+    ende();
+    const bin = atob(g.b64), b = new Uint8Array(bin.length); for(let i = 0; i < bin.length; i++) b[i] = bin.charCodeAt(i);
+    await vkLesen(b);
     return;
   }
-  if($("#kdScanDlg").open) $("#kdScanSt").textContent = "Zeit abgelaufen. Bitte nochmal versuchen.";
+  ende();
+  if($("#kdScanDlg").open && !kdScanAbbruch && lauf === kdScanLauf) $("#kdScanSt").textContent = "Zeit abgelaufen. Bitte nochmal versuchen.";
 }
+$("#kdScanDatei").onchange = async () => { const x = $("#kdScanDatei").files[0]; $("#kdScanDatei").value = ""; if(!x) return; kdScanAbbruch = true; await vkLesen(new Uint8Array(await x.arrayBuffer())); };
 $("#kdScan").onclick = kdScanStarten;
 $("#kdScanZu").onclick = () => { kdScanAbbruch = true; $("#kdScanDlg").close(); };
 async function kontaktImportieren(){
