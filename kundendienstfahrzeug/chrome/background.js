@@ -25,7 +25,18 @@ chrome.runtime.onStartup.addListener(verbinden);
 chrome.runtime.onInstalled.addListener(verbinden);
 verbinden();
 
+function neuer(a, b) { // ist Version a neuer als b?
+  const x = String(a).split('.').map(Number), y = String(b).split('.').map(Number);
+  for (let i = 0; i < Math.max(x.length, y.length); i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0); }
+  return false;
+}
+
 async function auftrag(m) {
+  if (m && m.typ === 'version') {
+    const jetzt = chrome.runtime.getManifest().version;
+    if (neuer(m.version, jetzt)) { log('neue Version im Ordner:', m.version, '– lade neu'); chrome.runtime.reload(); }
+    return;
+  }
   if (!m || m.typ !== 'tdoc' || !/^https:\/\/tdoc\.toyota-forklifts\.eu\//.test(String(m.url || '')) || !/^[0-9a-f]{32}$/.test(String(m.token || ''))) return;
   log('Auftrag vom Programm:', m.url);
   erwartet.add(m.token);

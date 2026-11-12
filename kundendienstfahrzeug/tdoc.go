@@ -130,7 +130,7 @@ func (a *app) handleTdocErgebnis(w http.ResponseWriter, r *http.Request) {
 func erweiterungOrdner() string { return filepath.Join(dataDir(), "T-Doc-Erweiterung") }
 
 // erweiterungAktualisieren schreibt die Dateien der Erweiterung neu, wenn der Ordner schon existiert
-// (nach einem Programm-Update genügt dann in Chrome „Aktualisieren“ bei der Erweiterung).
+// (die Erweiterung merkt das über die Verbindung und lädt sich selbst neu).
 func erweiterungAktualisieren() {
 	if _, err := os.Stat(erweiterungOrdner()); err == nil {
 		_ = erweiterungSchreiben()

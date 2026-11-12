@@ -121,11 +121,20 @@ func nativHost() {
 	}()
 	// Aufträge vom Programm → Erweiterung
 	gemeldet, verbunden := false, 0
+	gemeldeteVersion := ""
 	for {
 		select {
 		case <-ende:
 			return
 		default:
+		}
+		// Liegt im Ordner eine neuere Erweiterung (nach einem Programm-Update), lädt sie sich selbst neu.
+		if v := erweiterungVersionImOrdner(); v != "" && v != gemeldeteVersion {
+			if nativSchreiben(map[string]string{"typ": "version", "version": v}) != nil {
+				return
+			}
+			gemeldeteVersion = v
+			nativLog("Erweiterung im Ordner: Version %s", v)
 		}
 		p := ownPort()
 		if p == 0 {
@@ -161,6 +170,18 @@ func nativHost() {
 		}
 		resp.Body.Close()
 	}
+}
+
+func erweiterungVersionImOrdner() string {
+	b, err := os.ReadFile(filepath.Join(erweiterungOrdner(), "manifest.json"))
+	if err != nil {
+		return ""
+	}
+	var m struct {
+		Version string `json:"version"`
+	}
+	_ = json.Unmarshal(b, &m)
+	return m.Version
 }
 
 func istNativAufruf(args []string) bool {
