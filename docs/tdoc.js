@@ -51,7 +51,7 @@ if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.write
 function vorbereiten(fertig){
 var such='';try{such=String(new URL(location.href).searchParams.get('partNumber')||'');}catch(e){}
 such=such.replace(/[\s\-]/g,'').replace(/^BT/i,'').toUpperCase();
-function da(){return [].slice.call(document.querySelectorAll('td')).some(function(d){return d.children.length===0&&d.innerText.replace(/[\s\-]/g,'').replace(/^BT/i,'').toUpperCase()===such;});}
+function da(){return [].slice.call(document.querySelectorAll('td')).some(function(d){return d.innerText.length<40&&d.innerText.replace(/[\s\-]/g,'').replace(/^BT/i,'').toUpperCase()===such;});}
 if(document.querySelector('tr.selectedRow')||such.length<5||da())return fertig();
 var z=document.querySelector('tr.example-element-row');if(!z)return fertig();
 hinweis('Teileliste wird geöffnet …');z.click();var t0=Date.now();
