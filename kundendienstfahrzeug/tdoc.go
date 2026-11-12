@@ -25,13 +25,16 @@ import (
 var erweiterungFS embed.FS
 
 type tdocAuftrag struct {
-	nr      string
-	start   time.Time
-	fertig  bool
-	name    string
-	fehler  string
-	version string
+	nr       string
+	start    time.Time
+	fertig   bool
+	name     string
+	fehler   string
+	version  string
+	anmelden bool
 }
+
+var hgEinmal sync.Once
 
 var (
 	tdocMu             sync.Mutex
@@ -70,6 +73,33 @@ func (a *app) handleTdocStart(w http.ResponseWriter, r *http.Request) {
 	tdocAuftraege[tok] = &tdocAuftrag{nr: teileNr(req.Nr), start: time.Now()}
 	gesehen := erweiterungGesehen
 	tdocMu.Unlock()
+	// Eigenes unsichtbares Edge (kein Fenster, keine Erweiterung nötig)
+	if hgVerfuegbar() {
+		hgEinmal.Do(func() { go hgAufraeumen() })
+		nr := teileNr(req.Nr)
+		go func() {
+			e := hgSuchen(nr, u)
+			if e.Defekt { // wie früher: sichtbarer Browser mit Erweiterung bzw. Lesezeichen
+				ziel := u + "&kdf=" + fmt.Sprintf("%d_%s", Port, tok)
+				if nativVerbunden() {
+					select {
+					case nativAuftraege <- map[string]string{"typ": "tdoc", "token": tok, "url": ziel}:
+						return
+					default:
+					}
+				}
+				openExternal(ziel)
+				return
+			}
+			tdocMu.Lock()
+			if t := tdocAuftraege[tok]; t != nil && !t.fertig {
+				t.fertig, t.name, t.fehler, t.anmelden = true, e.Name, e.Error, e.Anmelden
+			}
+			tdocMu.Unlock()
+		}()
+		writeJSON(w, map[string]any{"ok": true, "token": tok, "hintergrund": true, "eigen": true})
+		return
+	}
 	ziel := u + "&kdf=" + fmt.Sprintf("%d_%s", Port, tok)
 	// Ist die Erweiterung im Hintergrund verbunden, öffnet sie T-Doc unsichtbar – sonst sichtbarer Tab
 	if nativVerbunden() && !req.Sichtbar {
@@ -92,7 +122,7 @@ func (a *app) handleTdocStatus(w http.ResponseWriter, r *http.Request) {
 	if t == nil {
 		res = map[string]any{"ok": false, "error": "Unbekannte Abfrage."}
 	} else {
-		res = map[string]any{"ok": true, "fertig": t.fertig, "name": t.name, "error": t.fehler, "sekunden": int(time.Since(t.start).Seconds()), "erweiterung": erweiterungGesehen}
+		res = map[string]any{"ok": true, "fertig": t.fertig, "name": t.name, "error": t.fehler, "sekunden": int(time.Since(t.start).Seconds()), "erweiterung": erweiterungGesehen, "anmelden": t.anmelden}
 	}
 	tdocMu.Unlock()
 	writeJSON(w, res)

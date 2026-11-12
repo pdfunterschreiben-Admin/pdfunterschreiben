@@ -194,7 +194,7 @@ dialog::backdrop{background:rgba(10,15,30,.55)}
           <button id="tdocBtn" style="justify-content:center" title="Teile, die in T-Doc mit dem Lesezeichen gesammelt wurden">📋 Aus T-Doc</button>
         </div>
         <button id="etBtn" class="wide" title="Dieselbe Ersatzteilliste wie im Reparaturauftrag der Service-Mappe">📋 Ersatzteilliste</button>
-        <p class="hint">T-Doc-Bezeichnungen automatisch: <button class="link" id="erwEinrichten">T-Doc-Verbindung einrichten</button> (einmalig). <span class="chip info" id="tdocChip" hidden></span> Mehrere Teile aus T-Doc: Teile anklicken, Lesezeichen „T-Doc → Excel“, dann „Aus T-Doc“. <button class="link" id="lesezeichenBtn">Lesezeichen einrichten</button></p>
+        <p class="hint"><span id="erwTeil">T-Doc-Bezeichnungen automatisch: <button class="link" id="erwEinrichten">T-Doc-Verbindung einrichten</button> (einmalig).</span> <span class="chip info" id="tdocChip" hidden></span> Mehrere Teile aus T-Doc: Teile anklicken, Lesezeichen „T-Doc → Excel“, dann „Aus T-Doc“. <button class="link" id="lesezeichenBtn">Lesezeichen einrichten</button></p>
         <p class="hint" id="userLine" hidden></p>
       </section>
 
@@ -830,7 +830,7 @@ function nrUebernehmen(){
   const name = nameZu(n);
   if(name && (!nameVonHand || !$("#fName").value.trim())){ $("#fName").value = name; nameVonHand = false; $("#nameHint").textContent = "✓ Bezeichnung aus dem Katalog übernommen."; $("#nameHint").hidden = false; }
   // Unbekannte Nummer: mit eingerichteter T-Doc-Verbindung die Bezeichnung gleich selbst holen
-  else if(!name && !$("#fName").value.trim() && state.erwOk && nrGueltig(n) && tdocWarten !== nrKey(n) && !lager.teile.some(t => nrKey(t.nr) === nrKey(n))){ tdocWarten = nrKey(n); tdocAbfrage(n); }
+  else if(!name && !$("#fName").value.trim() && (state.erwOk || tdocEigen) && nrGueltig(n) && tdocWarten !== nrKey(n) && !lager.teile.some(t => nrKey(t.nr) === nrKey(n))){ tdocWarten = nrKey(n); tdocAbfrage(n); }
   pruefeTreffer();
 }
 // Schon vorhanden? Dann lieber den vorhandenen Eintrag öffnen als doppelt anlegen.
@@ -865,7 +865,7 @@ $("#fTdoc").onclick = () => {
 // Automatisch über die Erweiterung „Kundendienstfahrzeug – T-Doc“ im Browser: Programm öffnet die
 // Suche, die Erweiterung liest die Bezeichnung und schickt sie zurück. Ohne Erweiterung geht es
 // weiter über das Lesezeichen (Zwischenablage, siehe unten).
-let tdocLauf = 0;
+let tdocLauf = 0, tdocEigen = false;
 async function tdocAbfrage(n){
   const lauf = ++tdocLauf;
   const hint = t => { $("#nameHint").innerHTML = t; $("#nameHint").hidden = !t; };
@@ -875,7 +875,7 @@ async function tdocAbfrage(n){
   if(!st.ok) return hint(esc(st.error));
   hint(st.hintergrund ? "T-Doc sucht die Bezeichnung im Hintergrund …" : "T-Doc sucht die Bezeichnung im Browser …");
   const t0 = Date.now();
-  while(lauf === tdocLauf && $("#teilDlg").open && Date.now() - t0 < 75000){
+  while(lauf === tdocLauf && $("#teilDlg").open && Date.now() - t0 < 100000){
     await new Promise(r => setTimeout(r, 700));
     let s; try{ s = await (await fetch("/api/tdoc/status?token=" + st.token)).json(); }catch(e){ continue; }
     if(!s.ok) break;
@@ -883,20 +883,34 @@ async function tdocAbfrage(n){
       tdocWarten = "";
       if(s.name){ $("#fName").value = s.name; nameVonHand = false; hint("✓ Bezeichnung aus T-Doc übernommen."); setTimeout(() => window.focus(), 50); $("#fName").focus();
         if(!state.erwOk){ state.erwOk = true; persist(); } }
+      else if(s.anmelden) hint(esc(s.error) + ' <button type="button" class="link" id="tdocAnmelden">Bei Toyota anmelden</button>');
       else hint(esc(s.error || "T-Doc hat keine Bezeichnung zu dieser Nummer gefunden."));
       return;
     }
     // Im Hintergrund nichts gekommen: einmal sichtbar versuchen (z. B. Toyota-Anmeldung nötig)
-    if(st.hintergrund && !st.nochmal && s.sekunden >= 20){
+    if(st.hintergrund && !st.eigen && !st.nochmal && s.sekunden >= 20){
       hint("Im Hintergrund kam nichts – T-Doc wird sichtbar geöffnet …");
       try{ const n2 = await (await fetch("/api/tdoc/start", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({nr: n, sichtbar: true})})).json(); if(n2.ok){ st.token = n2.token; st.nochmal = true; st.hintergrund = false; } }catch(e){}
       continue;
     }
-    if(!s.erweiterung && s.sekunden >= 12 && s.sekunden < 14)
+    if(!st.eigen && !s.erweiterung && s.sekunden >= 12 && s.sekunden < 14)
       hint('Keine Antwort aus dem Browser. Ist die <b>T-Doc-Verbindung</b> eingerichtet? <button type="button" class="link" id="erwBtn">Jetzt einrichten</button> – oder in T-Doc das Lesezeichen „T-Doc → Excel“ klicken.');
   }
 }
 document.addEventListener("click", e => { if(e.target && e.target.id === "erwBtn") erweiterungEinrichten(); });
+// Einmalige Toyota-Anmeldung im eigenen Edge-Fenster; sobald es geschlossen ist, wird neu gesucht.
+document.addEventListener("click", async e => {
+  if(!e.target || e.target.id !== "tdocAnmelden") return;
+  const n = teileNr($("#fNr").value), lauf = ++tdocLauf;
+  let r; try{ r = await (await fetch("/api/tdoc/anmelden", {method: "POST"})).json(); }catch(x){ return toast("Ging nicht."); }
+  if(!r.ok) return toast(r.error, 8000);
+  $("#nameHint").innerHTML = "Im Toyota-Fenster anmelden (am besten „Angemeldet bleiben“) und das Fenster danach <b>schließen</b> – dann geht es hier automatisch weiter.";
+  while(lauf === tdocLauf && $("#teilDlg").open){
+    await new Promise(x => setTimeout(x, 1500));
+    try{ r = await (await fetch("/api/tdoc/anmelden")).json(); }catch(x){ continue; }
+    if(!r.offen){ if(nrGueltig(n)) tdocAbfrage(n); return; }
+  }
+});
 async function erweiterungEinrichten(){
   let r; try{ r = await (await fetch("/api/tdoc/erweiterung", {method: "POST"})).json(); }catch(e){ return toast("Ging nicht."); }
   if(!r.ok) return toast(r.error, 8000);
@@ -1155,7 +1169,11 @@ $("#etForm").addEventListener("submit", e => {
 async function tdocStatus(){
   try{
     const i = await (await fetch("/api/info", {cache: "no-store"})).json();
-    const c = $("#tdocChip"); c.hidden = !state.erwOk && !i.tdocHintergrund;
+    tdocEigen = !!i.tdocEigen;
+    $("#erwTeil").hidden = tdocEigen;
+    const c = $("#tdocChip");
+    if(tdocEigen){ c.hidden = false; c.className = "chip ok"; c.textContent = "✓ Bezeichnungen kommen automatisch aus T-Doc (im Hintergrund)"; return; }
+    c.hidden = !state.erwOk && !i.tdocHintergrund;
     c.className = "chip " + (i.tdocHintergrund ? "ok" : "warn");
     c.innerHTML = i.tdocHintergrund ? "✓ T-Doc im Hintergrund verbunden" : 'T-Doc-Hintergrund nicht verbunden <button type="button" class="link" id="tdocHilfe">Was tun?</button>';
   }catch(e){}
