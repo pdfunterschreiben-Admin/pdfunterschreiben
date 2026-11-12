@@ -180,7 +180,7 @@ function toast(t, ms, btn){
 
 function teileNr(v){
   var roh = String(v || "").trim().toUpperCase(), c = roh.replace(/[\s-]/g, ""), m;
-  if(/^BT\d{7}$/.test(c)) return c;
+  if(/^BT\d{5,8}$/.test(c)) return c;
   m = c.match(/^(\d{5})([A-Z0-9]{5})(\d{2})$/);
   return m ? m[1] + "-" + m[2] + "-" + m[3] : roh;
 }
@@ -392,12 +392,12 @@ function kandidaten(text){
   var t = String(text || "").toUpperCase(), alt;
   do{ alt = t; t = t.replace(/O(?=\d)|(\d)O/g, function(m, d){ return d ? d + "0" : "0"; }); }while(t !== alt);
   var gut = [], rest = [];
-  (t.match(/\d{5}[\s-]*[A-Z0-9]{5}[\s-]*\d{2}/g) || []).concat(t.match(/BT[\s-]?\d{7}/g) || []).forEach(function(x){ x = teileNr(x); if(gut.indexOf(x) < 0) gut.push(x); });
+  (t.match(/\d{5}[\s-]*[A-Z0-9]{5}[\s-]*\d{2}/g) || []).concat(t.match(/BT[\s-]?\d{5,8}(?!\d)/g) || []).forEach(function(x){ x = teileNr(x); if(gut.indexOf(x) < 0) gut.push(x); });
   if(!gut.length) (t.match(/\b\d{7}\b/g) || []).forEach(function(x){ if(gut.indexOf(x) < 0) gut.push(x); });
   (t.match(/[A-Z0-9][A-Z0-9.\/-]{3,}/g) || []).forEach(function(x){ if(/\d/.test(x)){ x = teileNr(x); if(gut.indexOf(x) < 0 && rest.indexOf(x) < 0) rest.push(x); } });
   return {gut: gut, rest: rest.slice(0, 10)};
 }
-function gueltig(n){ return /^(BT\d{7}|\d{7}|\d{5}-[A-Z0-9]{5}-\d{2})$/.test(teileNr(n)); }
+function gueltig(n){ return /^(BT\d{5,8}|\d{7}|\d{5}-[A-Z0-9]{5}-\d{2})$/.test(teileNr(n)); }
 function verkleinern(file){
   return new Promise(function(ok, no){
     var url = URL.createObjectURL(file), img = new Image();
@@ -440,7 +440,7 @@ function nummerGefunden(nr){
   if(gueltig(nr)) hinweisName('Bezeichnung bitte eintragen – <a href="' + tdocLink(nr) + '" target="_blank" rel="noopener">in T-Doc nachsehen</a>.');
 }
 function tdocLink(nr){
-  var n = teileNr(nr), bt = /^(BT)?\d{7}$/.test(n);
+  var n = teileNr(nr), bt = /^(BT\d{5,8}|\d{7})$/.test(n);
   return "https://tdoc.toyota-forklifts.eu/?partNumber=" + encodeURIComponent(bt ? n.replace(/^BT/, "") : n.replace(/-/g, "")) + "&truckType=" + (bt ? "warehouseTrucks&flag=Standard%2CSpecial" : "counterBalanceTrucks") + "&reset=false&source=partsSearch";
 }
 function hinweisName(html){ $("nameHint").innerHTML = html; $("nameHint").hidden = !html; }

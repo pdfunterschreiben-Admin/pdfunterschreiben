@@ -1,5 +1,5 @@
 async function readToyotaPart(requested,timeoutMs=45000){
- const compact=s=>String(s||'').replace(/[\s-]/g,'').replace(/^BT/i,'').toUpperCase();
+ const compact=s=>String(s||'').replace(/[\s-]/g,'').replace(/^BT/i,'').replace(/^0+(?=\d)/,'').toUpperCase();
  const normalize=s=>String(s||'').toLowerCase().replace(/[\s\-_/()]/g,'');
  const target=compact(requested);const deadline=Date.now()+timeoutMs;
  // Angeklickte Zeilen merken – auch über mehrere Aufrufe auf derselben Seite (ein zweiter Klick klappt sie wieder zu)
