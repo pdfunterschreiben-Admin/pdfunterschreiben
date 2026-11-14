@@ -46,63 +46,12 @@ func (a *app) handleKontakt(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	err := olNativAuftrag(olAuftrag{art: "fn", fn: func(app *ole.IDispatch) error {
-		nv, err := oleutil.CallMethod(app, "GetNamespace", "MAPI")
+		items, fertig, err := olKontaktOrdner(app)
 		if err != nil {
 			return err
 		}
-		ns := nv.ToIDispatch()
-		defer ns.Release()
-		fv, err := oleutil.CallMethod(ns, "GetDefaultFolder", 10) // olFolderContacts
-		if err != nil {
-			return err
-		}
-		folder := fv.ToIDispatch()
-		defer folder.Release()
-		iv, err := oleutil.GetProperty(folder, "Items")
-		if err != nil {
-			return err
-		}
-		items := iv.ToIDispatch()
-		defer items.Release()
-		// Gibt es die E-Mail-Adresse schon? Dann nichts anlegen (keine Dubletten).
-		if hasMail {
-			if fv, err := oleutil.CallMethod(items, "Find", "[Email1Address] = '"+strings.ReplaceAll(in.Email, "'", "''")+"'"); err == nil {
-				if d := fv.ToIDispatch(); d != nil {
-					d.Release()
-					return nil
-				}
-			}
-		}
-		cv, err := oleutil.CallMethod(app, "CreateItem", 2) // olContactItem
-		if err != nil {
-			return err
-		}
-		c := cv.ToIDispatch()
-		defer c.Release()
-		name := in.Name
-		if name == "" {
-			name = in.Firma
-		}
-		if name != "" {
-			_, _ = oleutil.PutProperty(c, "FullName", name)
-		}
-		if in.Firma != "" {
-			_, _ = oleutil.PutProperty(c, "CompanyName", in.Firma)
-		}
-		if hasMail {
-			_, _ = oleutil.PutProperty(c, "Email1Address", in.Email)
-			_, _ = oleutil.PutProperty(c, "Email1DisplayName", strings.TrimSpace(name+" ("+in.Firma+")"))
-		}
-		if in.Tel != "" {
-			_, _ = oleutil.PutProperty(c, "BusinessTelephoneNumber", in.Tel)
-		}
-		if in.Strasse != "" {
-			_, _ = oleutil.PutProperty(c, "BusinessAddressStreet", in.Strasse)
-		}
-		if in.Ort != "" {
-			_, _ = oleutil.PutProperty(c, "BusinessAddressCity", in.Ort)
-		}
-		_, err = oleutil.CallMethod(c, "Save")
+		defer fertig()
+		_, err = olKontaktAnlegen(app, items, olKontakt{in.Firma, in.Name, in.Email, in.Tel, in.Strasse, in.Ort})
 		return err
 	}}, 60*time.Second)
 	if err != nil {
@@ -197,4 +146,129 @@ func (a *app) handleKontaktImport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, map[string]any{"ok": true, "liste": liste})
+}
+
+type olKontakt struct{ Firma, Name, Email, Tel, Strasse, Ort string }
+
+// Kontakte-Ordner von Outlook (olFolderContacts) – fertig() gibt alles wieder frei
+func olKontaktOrdner(app *ole.IDispatch) (*ole.IDispatch, func(), error) {
+	nv, err := oleutil.CallMethod(app, "GetNamespace", "MAPI")
+	if err != nil {
+		return nil, nil, err
+	}
+	ns := nv.ToIDispatch()
+	fv, err := oleutil.CallMethod(ns, "GetDefaultFolder", 10)
+	if err != nil {
+		ns.Release()
+		return nil, nil, err
+	}
+	folder := fv.ToIDispatch()
+	iv, err := oleutil.GetProperty(folder, "Items")
+	if err != nil {
+		folder.Release()
+		ns.Release()
+		return nil, nil, err
+	}
+	items := iv.ToIDispatch()
+	return items, func() { items.Release(); folder.Release(); ns.Release() }, nil
+}
+
+func olFinde(items *ole.IDispatch, filter string) bool {
+	fv, err := oleutil.CallMethod(items, "Find", filter)
+	if err != nil {
+		return false
+	}
+	if d := fv.ToIDispatch(); d != nil {
+		d.Release()
+		return true
+	}
+	return false
+}
+
+// Legt einen Outlook-Kontakt an – außer es gibt ihn schon (gleiche E-Mail, ohne E-Mail: gleicher Name + Firma).
+func olKontaktAnlegen(app, items *ole.IDispatch, k olKontakt) (bool, error) {
+	q := func(v string) string { return strings.ReplaceAll(v, "'", "''") }
+	hasMail := kontaktMail.MatchString(k.Email)
+	if !hasMail && k.Tel == "" {
+		return false, nil
+	}
+	name := k.Name
+	if name == "" {
+		name = k.Firma
+	}
+	if hasMail {
+		if olFinde(items, "[Email1Address] = '"+q(k.Email)+"'") {
+			return false, nil
+		}
+	} else if name != "" && olFinde(items, "[FullName] = '"+q(name)+"' And [CompanyName] = '"+q(k.Firma)+"'") {
+		return false, nil
+	}
+	cv, err := oleutil.CallMethod(app, "CreateItem", 2) // olContactItem
+	if err != nil {
+		return false, err
+	}
+	c := cv.ToIDispatch()
+	defer c.Release()
+	if name != "" {
+		_, _ = oleutil.PutProperty(c, "FullName", name)
+	}
+	if k.Firma != "" {
+		_, _ = oleutil.PutProperty(c, "CompanyName", k.Firma)
+	}
+	if hasMail {
+		_, _ = oleutil.PutProperty(c, "Email1Address", k.Email)
+		_, _ = oleutil.PutProperty(c, "Email1DisplayName", strings.TrimSpace(name+" ("+k.Firma+")"))
+	}
+	if k.Tel != "" {
+		_, _ = oleutil.PutProperty(c, "BusinessTelephoneNumber", k.Tel)
+	}
+	if k.Strasse != "" {
+		_, _ = oleutil.PutProperty(c, "BusinessAddressStreet", k.Strasse)
+	}
+	if k.Ort != "" {
+		_, _ = oleutil.PutProperty(c, "BusinessAddressCity", k.Ort)
+	}
+	_, err = oleutil.CallMethod(c, "Save")
+	return err == nil, err
+}
+
+// Alle Kundendaten auf einmal ins Outlook dieses PCs übernehmen (vorhandene werden übersprungen)
+func (a *app) handleKontaktAlle(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "POST", http.StatusMethodNotAllowed)
+		return
+	}
+	var in struct {
+		Liste []olKontakt `json:"liste"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8<<20)).Decode(&in); err != nil || len(in.Liste) > 5000 {
+		writeJSON(w, map[string]any{"ok": false, "error": "Ungültige Anfrage."})
+		return
+	}
+	neu, da := 0, 0
+	err := olNativAuftrag(olAuftrag{art: "fn", fn: func(app *ole.IDispatch) error {
+		items, fertig, err := olKontaktOrdner(app)
+		if err != nil {
+			return err
+		}
+		defer fertig()
+		for _, k := range in.Liste {
+			k = olKontakt{strings.TrimSpace(k.Firma), strings.TrimSpace(k.Name), strings.TrimSpace(k.Email), strings.TrimSpace(k.Tel), strings.TrimSpace(k.Strasse), strings.TrimSpace(k.Ort)}
+			ok, err := olKontaktAnlegen(app, items, k)
+			if err != nil {
+				return err
+			}
+			if ok {
+				neu++
+			} else {
+				da++
+			}
+		}
+		return nil
+	}}, 10*time.Minute)
+	if err != nil {
+		writeJSON(w, map[string]any{"ok": false, "error": err.Error(), "neu": neu})
+		return
+	}
+	writeJSON(w, map[string]any{"ok": true, "neu": neu, "vorhanden": da})
 }

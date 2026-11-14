@@ -687,7 +687,7 @@ body{padding-bottom:172px}
     <div class="dlg-head"><strong>👤 Kundendaten</strong><button type="button" class="ghost" id="kdZu">Schließen</button></div>
     <div class="et-kopf"><input type="search" id="kdSuche" placeholder="Suchen: Firma, Name oder E-Mail …"></div>
     <div class="dlg-body"><table class="et-tab"><thead><tr><th>Firma</th><th>Name</th><th>E-Mail</th><th>Telefon</th><th></th></tr></thead><tbody id="kdListe"></tbody></table></div>
-    <div class="dlg-foot"><span class="hint" id="kdStand"></span><span style="display:flex;gap:8px"><button type="button" class="ghost" id="kdImport">📥 Aus Outlook übernehmen</button><button type="button" class="ghost" id="kdScan">📱 Visitenkarte scannen</button><button type="button" class="primary" id="kdNeu">＋ Kunde hinzufügen</button></span></div>
+    <div class="dlg-foot"><span class="hint" id="kdStand"></span><span style="display:flex;gap:8px"><button type="button" class="ghost" id="kdImport">📥 Aus Outlook übernehmen</button><button type="button" class="ghost" id="kdExport" title="Alle Kundendaten als Kontakte ins Outlook dieses PCs übernehmen – vorhandene werden übersprungen">📤 Alle in Outlook übernehmen</button><button type="button" class="ghost" id="kdScan">📱 Visitenkarte scannen</button><button type="button" class="primary" id="kdNeu">＋ Kunde hinzufügen</button></span></div>
   </form>
 </dialog>
 
@@ -5493,6 +5493,23 @@ async function kontaktImportieren(){
   btn.disabled = false; btn.textContent = alt;
 }
 $("#kdImport").onclick = kontaktImportieren;
+async function kontakteNachOutlook(){
+  const btn = $("#kdExport"); btn.disabled = true; const alt = btn.textContent;
+  try{
+    btn.textContent = "Lade Kundendaten …";
+    await meineKundenLaden(); kdZeigen();
+    const liste = (meineKunden || []).filter(k => k.email || k.tel)
+      .map(k => ({firma: k.firma || "", name: k.name || "", email: k.email || "", tel: k.tel || "", strasse: k.strasse || "", ort: k.ort || ""}));
+    if(!liste.length){ toast("Keine Kundendaten mit E-Mail oder Telefon vorhanden."); return; }
+    if(!confirm(liste.length + " Kundendaten ins Outlook-Adressbuch dieses PCs übernehmen?\n\nKontakte, die es dort schon gibt (gleiche E-Mail-Adresse), werden übersprungen.")) return;
+    btn.textContent = "Übernehme nach Outlook …";
+    const r = await (await fetch("/api/kontakt/alle", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({liste})})).json();
+    if(!r.ok) throw new Error(r.error || "Übernahme fehlgeschlagen.");
+    toast(r.neu + " Kontakt(e) neu in Outlook angelegt, " + r.vorhanden + " waren schon da.", 8000);
+  }catch(e){ toast("Outlook: " + (e.message || e), 8000); }
+  finally{ btn.disabled = false; btn.textContent = alt; }
+}
+$("#kdExport").onclick = kontakteNachOutlook;
 $("#kdEditZu").onclick = () => $("#kdEditDlg").close();
 $("#kdEditSave").onclick = async () => {
   const f = $("#kdEditFehler"), firma = $("#kdFirma").value.trim(), name = $("#kdName").value.trim(), email = $("#kdEmail").value.trim(), tel = $("#kdTel").value.trim(), strasse = $("#kdStrasse").value.trim(), ort = $("#kdOrt").value.trim();
