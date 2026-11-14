@@ -136,6 +136,22 @@ function wagenlagerAnfrage(d) {
   const ev = String(d.event || '');
   const ueber = d.quelle === 'handy' ? 'Handy' : 'PC';
 
+  // Handy als Kamera für den PC: Das Handy legt die erkannte Nummer kurz ab, der PC holt sie ab
+  if (ev === 'wl_kopplung_senden' || ev === 'wl_kopplung_holen') {
+    const token = String(d.token || '');
+    if (!/^[a-f0-9]{16,40}$/.test(token)) return { ok: false, error: 'Ungültige Kopplung.' };
+    const cache = CacheService.getScriptCache(), k = 'wlk_' + mail + '_' + token;
+    if (ev === 'wl_kopplung_senden') {
+      const nr = wlText(d.nummer, 40);
+      if (nr.length < 3) return { ok: false, error: 'Keine Teilenummer.' };
+      cache.put(k, nr, 600);
+      return { ok: true };
+    }
+    const nr = cache.get(k) || '';
+    if (nr) cache.remove(k);
+    return { ok: true, nummer: nr };
+  }
+
   if (ev === 'wl_liste') {
     const st = wlStand(mail);
     if (String(d.stand || '') === st && String(d.kstand || '') === wlKatalogStand()) return { ok: true, unveraendert: true, stand: st };

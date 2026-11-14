@@ -21,7 +21,7 @@ import (
 var lagerEvents = map[string]bool{
 	"wl_liste": true, "wl_speichern": true, "wl_menge": true, "wl_loeschen": true,
 	"wl_umbuchen": true, "wl_import": true, "wl_katalog": true, "wl_fahrzeug": true,
-	"wl_nachbestellen": true, "wl_bestellt": true,
+	"wl_nachbestellen": true, "wl_bestellt": true, "wl_kopplung_senden": true, "wl_kopplung_holen": true,
 }
 
 func cachePath() string { return filepath.Join(dataDir(), "bestand.json") }

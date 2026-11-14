@@ -278,7 +278,7 @@ dialog::backdrop{background:rgba(10,15,30,.55)}
         <span class="row" style="flex-wrap:nowrap">
           <input type="text" id="fNr" class="mono" placeholder="67405-T1000-71 oder BT7643266" required>
           <label class="btn file-btn" title="Teilenummer vom Foto lesen">📷<input type="file" id="fFoto" accept="image/*"></label>
-          <button type="button" id="fQr" title="QR-Code oder Strichcode mit der Kamera scannen">QR</button>
+          <button type="button" id="fHandy" title="QR-Code mit dem Handy scannen und die Teilenummer mit dem Handy fotografieren">📱 Handy</button>
           <button type="button" id="fTdoc" title="Diese Nummer in Toyota T-Doc nachschlagen">T-Doc ↗</button>
         </span>
       </label>
@@ -363,12 +363,13 @@ dialog::backdrop{background:rgba(10,15,30,.55)}
   </form>
 </dialog>
 
-<dialog id="qrDlg">
-  <form method="dialog" class="dlg" style="max-width:min(720px,95vw)">
-    <div class="dlg-head"><strong>QR-Code scannen</strong><button class="ghost" value="x">Abbrechen</button></div>
-    <div class="dlg-body col" style="gap:10px">
-      <video id="qrVideo" playsinline muted style="width:100%;max-height:60vh;border-radius:10px;background:#000"></video>
-      <span class="hint" id="qrInfo">Kamera wird gestartet …</span>
+<dialog id="handyKDlg">
+  <form method="dialog" class="dlg" style="max-width:min(460px,95vw)">
+    <div class="dlg-head"><strong>Mit dem Handy fotografieren</strong><button class="ghost" value="x">Abbrechen</button></div>
+    <div class="dlg-body col" style="gap:10px;align-items:center;text-align:center">
+      <canvas id="hkCanvas" width="29" height="29" style="width:240px;height:240px;image-rendering:pixelated;border:1px solid var(--line,#ddd);border-radius:8px" aria-label="QR-Code zum Koppeln mit dem Handy"></canvas>
+      <span class="hint">1. QR-Code mit der Handy-Kamera scannen (Anmeldung mit derselben Arbeits-E-Mail).<br>2. Teilenummer am Handy fotografieren.<br>3. Die Nummer erscheint hier automatisch.</span>
+      <span class="hint" id="hkInfo">Wartet auf das Handy …</span>
     </div>
   </form>
 </dialog>
@@ -1060,8 +1061,8 @@ function kandidatenZeigen(text, leerText){
   return true;
 }
 
-/* ---------- QR-Code / Strichcode: Kamera oder Foto → Teilenummer ---------- */
-let bcDetektor = null, codeCanvas = null, qrLauf = 0, qrStrom = null;
+/* ---------- QR-Code / Strichcode auf einem Foto → Teilenummer ---------- */
+let bcDetektor = null, codeCanvas = null;
 async function qrDetektor(){
   if(bcDetektor !== null) return bcDetektor;
   bcDetektor = false;
@@ -1105,41 +1106,43 @@ function nummerAusCode(text, strikt){
   }
   return kandidatenZeigen(roh, "");
 }
-function qrStopp(){
-  qrLauf++;
-  if(qrStrom){ qrStrom.getTracks().forEach(t => t.stop()); qrStrom = null; }
-  $("#qrVideo").srcObject = null;
+/* ---------- Handy als Kamera: QR-Code am PC, Foto am Handy, Nummer kommt hierher zurück ---------- */
+let hkLauf = 0;
+function hkZeichnen(url){
+  const m = qrMatrix(url), n = m.length, rand = 2, c = $("#hkCanvas"); c.dataset.url = url;
+  c.width = c.height = n + rand * 2;
+  const g = c.getContext("2d"); g.fillStyle = "#fff"; g.fillRect(0, 0, c.width, c.height); g.fillStyle = "#000";
+  for(let y = 0; y < n; y++) for(let x = 0; x < n; x++) if(m[y][x]) g.fillRect(x + rand, y + rand, 1, 1);
 }
-async function qrStart(){
-  if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return toast("Die Kamera ist hier nicht verfügbar – bitte das Foto-Symbol 📷 nehmen.", 6000);
-  const lauf = ++qrLauf;
-  $("#qrInfo").textContent = "Kamera wird gestartet …";
-  if(!$("#qrDlg").open) $("#qrDlg").showModal();
-  let strom;
-  try{ strom = await navigator.mediaDevices.getUserMedia({video: {facingMode: {ideal: "environment"}, width: {ideal: 1280}, height: {ideal: 720}}, audio: false}); }
-  catch(e){
-    $("#qrInfo").textContent = e && e.name === "NotAllowedError" ? "Der Kamerazugriff ist nicht erlaubt. Bitte in Windows unter Einstellungen → Datenschutz → Kamera für Desktop-Apps erlauben." : "Es wurde keine Kamera gefunden. Bitte das Foto-Symbol 📷 nehmen.";
-    return;
-  }
-  if(lauf !== qrLauf || !$("#qrDlg").open){ strom.getTracks().forEach(t => t.stop()); return; } // inzwischen abgebrochen
-  qrStrom = strom;
-  const v = $("#qrVideo"); v.srcObject = strom; try{ await v.play(); }catch(e){}
-  if(lauf !== qrLauf || !$("#qrDlg").open){ qrStopp(); return; }
-  $("#qrInfo").textContent = "QR-Code oder Strichcode ruhig vor die Kamera halten …";
-  while(lauf === qrLauf && $("#qrDlg").open){
-    if(v.videoWidth){
-      const t = await codeLesen(v, v.videoWidth, v.videoHeight, 1000);
-      if(t && lauf === qrLauf){
-        if(nummerAusCode(t)){ qrStopp(); $("#qrDlg").close(); return; }
-        $("#qrInfo").textContent = "Gelesen, aber keine Teilenummer darin: „" + t.slice(0, 50) + "“ – weiter suchen …";
-        await new Promise(r => setTimeout(r, 1500));
-      }
+async function hkStart(){
+  if(locked()) return checkAccess();
+  if(!window.HANDY_URL) return toast("Die Handy-Seite ist hier nicht eingerichtet.", 5000);
+  if(!$("#teilDlg").open) oeffneTeil(null);
+  const lauf = ++hkLauf;
+  const token = Array.from(crypto.getRandomValues(new Uint8Array(10)), b => b.toString(16).padStart(2, "0")).join("");
+  try{ hkZeichnen(window.HANDY_URL.split("?")[0] + "?koppeln=" + token); }catch(e){ return toast("Der QR-Code konnte nicht erstellt werden.", 5000); }
+  $("#hkInfo").textContent = "Wartet auf das Handy …";
+  $("#handyKDlg").showModal();
+  const t0 = Date.now(); let fehler = 0;
+  while(lauf === hkLauf && $("#handyKDlg").open && Date.now() - t0 < 590000){
+    await new Promise(r => setTimeout(r, 1800));
+    if(lauf !== hkLauf || !$("#handyKDlg").open) return;
+    const r = await server("wl_kopplung_holen", {token});
+    if(lauf !== hkLauf || !$("#handyKDlg").open) return;
+    if(!r.ok){ if(++fehler > 5){ $("#hkInfo").textContent = r.error || "Keine Verbindung."; return; } continue; }
+    fehler = 0;
+    if(r.nummer){
+      $("#handyKDlg").close();
+      $("#ocrBox").hidden = true; $("#fNr").value = teileNr(r.nummer); nrUebernehmen();
+      toast("Teilenummer vom Handy: " + $("#fNr").value, 4000);
+      ($("#fName").value ? $("#fMenge") : $("#fName")).focus();
+      return;
     }
-    await new Promise(r => setTimeout(r, 120));
   }
+  if(lauf === hkLauf && $("#handyKDlg").open) $("#hkInfo").textContent = "Abgelaufen – bitte noch einmal „Handy“ drücken.";
 }
-$("#fQr").onclick = () => { if(locked()) return checkAccess(); if(!$("#teilDlg").open) oeffneTeil(null); qrStart(); };
-$("#qrDlg").addEventListener("close", qrStopp);
+$("#fHandy").onclick = hkStart;
+$("#handyKDlg").addEventListener("close", () => { hkLauf++; });
 $("#cands").addEventListener("click", e => { const b = e.target.closest("button"); if(!b) return; $("#fNr").value = b.textContent; nrUebernehmen(); ($("#fName").value ? $("#fMenge") : $("#fName")).focus(); });
 $("#fotoIn").addEventListener("change", e => { const f = e.target.files[0]; e.target.value = ""; if(locked()) return checkAccess(); fotoLesen(f); });
 $("#fFoto").addEventListener("change", e => { const f = e.target.files[0]; e.target.value = ""; fotoLesen(f); });

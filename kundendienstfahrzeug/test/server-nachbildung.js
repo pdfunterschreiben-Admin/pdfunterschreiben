@@ -42,6 +42,7 @@ function machUmgebung() {
     insertSheet: n => (sheets[n] = machSheet(n)),
     getSheets: () => Object.values(sheets),
   };
+  const cache = {};
   const ctx = {
     console,
     SpreadsheetApp: { getActiveSpreadsheet: () => ss },
@@ -51,7 +52,7 @@ function machUmgebung() {
     MailApp: { sendEmail: m => mails.push(m), getRemainingDailyQuota: () => 100 },
     Utilities: { getUuid: () => crypto.randomUUID(), formatDate: d => d.toISOString().slice(0, 10), newBlob: s => ({ getBytes: () => Array.from(Buffer.from(String(s))) }), base64Encode: b => Buffer.from(b).toString('base64') },
     ContentService: { MimeType: { JSON: 'json', TEXT: 'text' }, createTextOutput: t => ({ text: t, setMimeType() { return this; } }) },
-    CacheService: { getScriptCache: () => ({ get: () => null, put() {} }) },
+    CacheService: { getScriptCache: () => ({ get: k => (k in cache ? cache[k] : null), put(k, v) { cache[k] = String(v); }, remove(k) { delete cache[k]; } }) },
   };
   vm.createContext(ctx);
   const admin = path.join(__dirname, '..', '..', 'admin');

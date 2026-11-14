@@ -1,15 +1,15 @@
-// Prüft QR-/Strichcode-Scan im Dialog „Neues Teil“: Live-Kamera (simuliert) und Foto.
+// Prüft die Handy-Kopplung: PC zeigt QR-Code, das Handy (nachgebaut) fotografiert die Teilenummer, sie erscheint am PC.
 //   node test/qr-test.js http://127.0.0.1:PORT/ http://127.0.0.1:8765/ ordner-mit-qr-bildern
-//   (Ordner: cam0.y4m = QR „7601465-002“, cam1.y4m = QR „BT7601465-002“, foto-gross.jpg, qr2.png = Link ohne Nummer)
+//   (Ordner: foto-gross.jpg = QR „BT7601465-002“, qr2.png = Link ohne Nummer)
 'use strict';
 const { chromium } = require('playwright');
 const path = require('path'), assert = require('assert');
 const [app, mock, dir] = process.argv.slice(2);
+const handySeite = 'file://' + path.join(__dirname, '..', '..', 'docs', 'kundendienstfahrzeug', 'index.html');
 let schritt = 0; const ok = t => console.log(`✓ ${++schritt}. ${t}`);
 
 async function anmelden(page) {
   await page.goto(app);
-  // Das Programm merkt sich die Anmeldung – beim zweiten Browser ist sie schon da
   await page.waitForSelector('#regDlg[open], #syncChip.ok');
   if (await page.$('#syncChip.ok')) return;
   await page.fill('#regName', 'Max Muster');
@@ -25,59 +25,51 @@ async function anmelden(page) {
   await page.waitForSelector('#fzDlg[open]', { state: 'detached' });
 }
 
-async function neueSeite(cam) {
-  const browser = await chromium.launch({ args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', '--use-file-for-fake-video-capture=' + path.join(dir, cam)] });
-  const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 }, locale: 'de-DE' });
-  await ctx.grantPermissions(['camera'], { origin: app.replace(/\/$/, '') });
-  const page = await ctx.newPage();
-  const fehler = []; page.on('pageerror', e => fehler.push(String(e))); page.on('console', m => { if (m.type() === 'error') fehler.push(m.text()); });
-  return { browser, page, fehler };
-}
-
 (async () => {
-  // 1. Live-Kamera mit QR „7601465-002“ (ohne BT) – bleibt wie gelesen
-  let { browser, page, fehler } = await neueSeite('cam0.y4m');
-  await anmelden(page);
-  await page.click('#neuBtn');
-  await page.click('#fQr');
-  await page.waitForSelector('#qrDlg[open]');
-  await page.waitForFunction(() => document.querySelector('#fNr').value === '7601465-002', null, { timeout: 20000 });
-  await page.waitForSelector('#qrDlg[open]', { state: 'detached', timeout: 5000 });
-  assert.strictEqual(await page.evaluate(() => !!document.querySelector('#qrVideo').srcObject), false, 'Kamera muss danach aus sein');
-  ok('Live-Scan: Nummer 7601465-002 eingetragen, Kamera wieder aus');
+  const browser = await chromium.launch();
+  const pc = await (await browser.newContext({ viewport: { width: 1280, height: 900 }, locale: 'de-DE' })).newPage();
+  const fehler = []; pc.on('pageerror', e => fehler.push(String(e))); pc.on('console', m => { if (m.type() === 'error') fehler.push(m.text()); });
+  await anmelden(pc);
+  const user = (await (await fetch(app + 'api/settings')).json()).user;
+  assert(user && user.id && user.email, 'Nutzer fehlt');
 
-  // 2. Tippen mit BT davor behält den Bindestrich
-  await page.fill('#fNr', 'bt 7601465-002'); await page.press('#fNr', 'Tab');
-  assert.strictEqual(await page.inputValue('#fNr'), 'BT7601465-002');
-  ok('BT7601465-002 bleibt mit Bindestrich');
+  // Handy nachbauen: gleiche Anmeldung, Serveranfragen an die Nachbildung umleiten
+  const hctx = await browser.newContext({ viewport: { width: 390, height: 800 }, locale: 'de-DE' });
+  await hctx.route('https://script.google.com/**', async route => {
+    const r = await fetch(mock, { method: 'POST', body: route.request().postData() });
+    await route.fulfill({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: await r.text() });
+  });
+  const handy = await hctx.newPage();
+  handy.on('pageerror', e => fehler.push('Handy: ' + e));
+  const handyStart = async url => {
+    await handy.goto(handySeite); // gleicher Ursprung für localStorage
+    await handy.evaluate(u => localStorage.setItem('wl_nutzer', JSON.stringify({ id: u.id, name: u.name || 'Max Muster', email: u.email, verified: true })), user);
+    await handy.goto(url);
+  };
 
-  // 3. Foto: kleiner schräger QR in großem Bild
-  await page.fill('#fNr', ''); await page.setInputFiles('#fFoto', path.join(dir, 'foto-gross.jpg'));
-  await page.waitForFunction(() => document.querySelector('#fNr').value === 'BT7601465-002', null, { timeout: 20000 });
-  ok('Foto mit kleinem schrägem QR-Code gelesen');
+  // 1. PC: Dialog „Neues Teil“ → „Handy“ zeigt QR-Code mit Link
+  await pc.click('#neuBtn'); await pc.click('#fHandy');
+  await pc.waitForSelector('#handyKDlg[open]');
+  const url = await pc.evaluate(() => document.querySelector('#hkCanvas').dataset.url);
+  assert(/^https:\/\/.+\?koppeln=[a-f0-9]{20}$/.test(url), 'Link: ' + url);
+  ok('PC zeigt QR-Code mit Kopplungs-Link');
 
-  // 4. Foto mit QR ohne Teilenummer (nur ein Link) → Texterkennung übernimmt
-  await page.fill('#fNr', ''); await page.setInputFiles('#fFoto', path.join(dir, 'qr2.png'));
-  await page.waitForFunction(() => document.querySelector('#fNr').value === '67405-T1000-71', null, { timeout: 20000 });
-  ok('QR ohne Teilenummer: Texterkennung wie bisher');
-  assert.deepStrictEqual(fehler, [], 'Konsolenfehler: ' + fehler.join(' | '));
-  await browser.close();
+  // 2. Handy öffnet den Link → Foto-Blatt, Foto mit QR → Nummer kommt am PC an
+  await handyStart(handySeite + '?koppeln=' + url.split('=')[1]);
+  await handy.waitForSelector('#koppelBlatt:not([hidden])');
+  await handy.setInputFiles('#koppelIn', path.join(dir, 'foto-gross.jpg'));
+  await handy.waitForFunction(() => /angekommen/.test(document.querySelector('#koppelInfo').textContent), null, { timeout: 20000 });
+  ok('Handy fotografiert: „Nummer ist am PC angekommen“');
+  await pc.waitForFunction(() => document.querySelector('#fNr').value === 'BT7601465-002', null, { timeout: 15000 });
+  await pc.waitForSelector('#handyKDlg[open]', { state: 'detached', timeout: 5000 });
+  ok('PC trägt BT7601465-002 ein und schließt den QR-Dialog');
 
-  // 5. Live-Kamera mit QR „BT7601465-002“
-  ({ browser, page, fehler } = await neueSeite('cam1.y4m'));
-  await anmelden(page);
-  await page.click('#neuBtn'); await page.click('#fQr');
-  await page.waitForFunction(() => document.querySelector('#fNr').value === 'BT7601465-002', null, { timeout: 20000 });
-  ok('Live-Scan: BT7601465-002 eingetragen');
-
-  // 6. Kamera öffnen und wieder abbrechen schaltet die Kamera aus
-  await page.fill('#fNr', ''); await page.click('#fQr'); await page.waitForSelector('#qrDlg[open]');
-  await page.click('#qrDlg button.ghost');
-  await page.waitForSelector('#qrDlg[open]', { state: 'detached' });
-  const stand = async () => page.evaluate(() => ({ video: !!document.querySelector('#qrVideo').srcObject, dialog: document.querySelector('#qrDlg').open, nr: document.querySelector('#fNr').value }));
-  const aus = await page.waitForFunction(() => !document.querySelector('#qrVideo').srcObject, null, { timeout: 4000 }).then(() => true, () => false);
-  assert(aus, 'Kamera noch an: ' + JSON.stringify(await stand()));
-  ok('Abbrechen schaltet die Kamera aus');
+  // 3. Abbrechen beendet die Abfrage; zweite Kopplung hat ein neues Kennzeichen (Token)
+  await pc.fill('#fNr', ''); await pc.click('#fHandy'); await pc.waitForSelector('#handyKDlg[open]');
+  const url2 = await pc.evaluate(() => document.querySelector('#hkCanvas').dataset.url);
+  assert.notStrictEqual(url2, url);
+  await pc.click('#handyKDlg button.ghost'); await pc.waitForSelector('#handyKDlg[open]', { state: 'detached' });
+  ok('Abbrechen schließt den Dialog, neuer Token pro Kopplung');
   assert.deepStrictEqual(fehler, [], 'Konsolenfehler: ' + fehler.join(' | '));
   await browser.close();
   console.log(`${schritt} Schritte bestanden.`);

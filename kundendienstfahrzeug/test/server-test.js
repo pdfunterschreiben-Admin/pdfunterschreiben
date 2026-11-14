@@ -166,6 +166,21 @@ pruefe('Nachbestellen und als bestellt markieren', () => {
   assert.strictEqual(r.teile.filter(t => t.liste === 'fehlt' && t.nr === b.nr).length, 2);
   assert.strictEqual(u.sheets['Kundendienstfahrzeug'].rows[0][10], 'Bestellt am');
 });
+pruefe('Handy-Kopplung: Nummer vom Handy zum PC', () => {
+  const tok = 'a1b2c3d4e5f60718';
+  let r = u.post({ ...pc, event: 'wl_kopplung_holen', token: tok });
+  assert(r.ok && r.nummer === '', JSON.stringify(r));
+  r = u.post({ ...handy, event: 'wl_kopplung_senden', token: tok, nummer: '67405-T1000-71' });
+  assert(r.ok);
+  r = u.post({ ...fremd, event: 'wl_kopplung_holen', token: tok });
+  assert(r.ok && r.nummer === '', 'fremde Mail darf nichts bekommen');
+  r = u.post({ ...pc, event: 'wl_kopplung_holen', token: tok });
+  assert.strictEqual(r.nummer, '67405-T1000-71');
+  r = u.post({ ...pc, event: 'wl_kopplung_holen', token: tok });
+  assert.strictEqual(r.nummer, '');
+  r = u.post({ ...handy, event: 'wl_kopplung_senden', token: 'zu kurz', nummer: 'BT7601465-002' });
+  assert(!r.ok);
+});
 pruefe('Service-Mappe-Anmeldung bleibt unberührt', () => {
   const r = u.post({ key: KEY, id: 'sm-1', name: 'Max Muster', email: 'm.muster@schlueter-gabelstapler.de', event: 'register', version: '1.20.14' });
   assert(r.ok && r.sent && u.sheets['Nutzer'] && /Service-Mappe/.test(u.mails[u.mails.length - 1].subject));

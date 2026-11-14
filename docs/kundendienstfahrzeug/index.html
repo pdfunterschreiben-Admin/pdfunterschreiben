@@ -117,7 +117,7 @@ label{display:flex;flex-direction:column;gap:5px;font-size:13.5px;font-weight:50
   <form id="teilForm" autocomplete="off">
     <div class="zeile" style="justify-content:space-between"><h2 id="teilTitel">Neues Teil</h2><button type="button" class="ghost" id="teilZu">Schließen</button></div>
     <div class="tabs"><button type="button" id="tlBestand">Im Wagen</button><button type="button" id="tlFehlt">Fehlt</button></div>
-    <label>Teilenummer<span class="zeile"><input id="fNr" class="mono" placeholder="67405-T1000-71 / BT7643266" autocapitalize="characters" required><label class="knopfLabel" title="QR-Code fotografieren">QR<input type="file" id="qrIn" accept="image/*" capture="environment" hidden></label></span></label>
+    <label>Teilenummer<input id="fNr" class="mono" placeholder="67405-T1000-71 / BT7643266" autocapitalize="characters" required></label>
     <div class="treffer" id="treffer" hidden></div>
     <label>Bezeichnung<span class="zeile"><input id="fName" placeholder="z. B. Filter-Teilgruppe" required><button type="button" id="fTdoc" hidden>T-Doc</button></span></label>
     <p class="hint" id="nameHint" hidden></p>
@@ -137,6 +137,17 @@ label{display:flex;flex-direction:column;gap:5px;font-size:13.5px;font-weight:50
     <label>Fahrer (Vor- und Nachname)<input id="fzFahrerIn" placeholder="Max Mustermann" maxlength="100"></label>
     <p class="err" id="fzErr" hidden></p>
     <button class="primary" id="fzOk">Speichern</button>
+  </form>
+</div>
+
+<div class="blatt" id="koppelBlatt" hidden>
+  <form onsubmit="return false">
+    <h2>Teilenummer für den PC</h2>
+    <p class="hint">Das Foto der Teilenummer wird gelesen und an den PC geschickt, von dem du den QR-Code gescannt hast.</p>
+    <label class="primary fab" style="position:static;justify-content:center;text-align:center">📷 Teilenummer fotografieren<input type="file" id="koppelIn" accept="image/*" capture="environment" hidden></label>
+    <p class="hint" id="koppelInfo"></p>
+    <div class="cands" id="koppelCands"></div>
+    <button type="button" class="ghost" id="koppelZu">Fertig</button>
   </form>
 </div>
 
@@ -447,16 +458,6 @@ function nummerAusCode(text){
   var k = kandidaten(roh);
   return k.gut.length === 1 ? k.gut[0] : "";
 }
-$("qrIn").onchange = function(e){
-  var f = e.target.files[0]; e.target.value = ""; if(!f) return;
-  $("teilErr").hidden = true; hinweisName("QR-Code wird gelesen …");
-  codeAusDatei(f).then(function(t){
-    var nr = t && nummerAusCode(t);
-    if(!nr){ hinweisName(t ? "Im QR-Code steht keine Teilenummer." : "Kein QR-Code erkannt. Bitte näher und gerade fotografieren – oder die Nummer eintippen."); return; }
-    $("fNr").value = nr; hinweisName(""); $("fNr").onblur();
-    if(APP && !$("fName").value.trim() && gueltig(nr)) $("fTdoc").onclick(); // in der App gleich die Bezeichnung aus T-Doc holen
-  });
-};
 $("scanIn").onchange = function(e){
   var f = e.target.files[0]; e.target.value = ""; if(!f) return;
   if(lager.offline) return toast("Ohne Verbindung geht das Scannen nicht.");
@@ -534,6 +535,31 @@ $("fTdoc").onclick = function(){
   else window.open(tdocLink(nr), "_blank", "noopener");
 };
 
+/* ---------- Handy als Kamera für den PC (QR-Code am PC → ?koppeln=…) ---------- */
+var KOPPEL = (function(){ var m = /[?&]koppeln=([a-f0-9]{16,40})/.exec(location.search); return m ? m[1] : ""; })();
+function koppelSenden(nr){
+  nr = teileNr(nr);
+  $("koppelCands").innerHTML = ""; $("koppelInfo").textContent = "Wird an den PC geschickt …";
+  anfrage({event: "wl_kopplung_senden", token: KOPPEL, nummer: nr}).then(function(r){
+    $("koppelInfo").textContent = r && r.ok ? "✓ " + nr + " ist am PC angekommen. Mit „Fertig“ schließen oder noch ein Foto machen." : ((r && r.error) || "Senden fehlgeschlagen.") + " Bitte noch einmal fotografieren.";
+  });
+}
+$("koppelIn").onchange = function(e){
+  var f = e.target.files[0]; e.target.value = ""; if(!f) return;
+  $("koppelInfo").textContent = "Teilenummer wird gelesen …"; $("koppelCands").innerHTML = "";
+  codeAusDatei(f).then(function(t){ var nr = t && nummerAusCode(t); if(nr){ koppelSenden(nr); return null; } return verkleinern(f).then(function(b64){ return anfrage({event: "wl_ocr", b64: b64, mime: "image/jpeg"}); }); }).then(function(r){
+    if(r === null) return;
+    if(!r.ok) throw new Error(r.error || "Texterkennung fehlgeschlagen.");
+    var k = kandidaten(r.text);
+    if(k.gut.length === 1) return koppelSenden(k.gut[0]);
+    if(!k.gut.length && !k.rest.length){ $("koppelInfo").textContent = "Keine Teilenummer erkannt. Bitte näher und schärfer fotografieren."; return; }
+    $("koppelInfo").textContent = "Bitte die richtige Nummer antippen:";
+    $("koppelCands").innerHTML = k.gut.map(function(n){ return '<button type="button" class="gut">' + esc(n) + '</button>'; }).join("") + k.rest.map(function(n){ return '<button type="button">' + esc(n) + '</button>'; }).join("");
+  }).catch(function(err){ $("koppelInfo").textContent = err.message; });
+};
+$("koppelCands").onclick = function(e){ var b = e.target.closest("button"); if(b) koppelSenden(b.textContent); };
+$("koppelZu").onclick = function(){ $("koppelBlatt").hidden = true; };
+
 /* ---------- Start ---------- */
 var timer = null;
 function starten(){
@@ -541,6 +567,7 @@ function starten(){
   $("userLine").innerHTML = "Angemeldet als " + esc(nutzer.name) + " · <a href='#' id='abmelden'>abmelden</a>";
   $("abmelden").onclick = function(e){ e.preventDefault(); if(!confirm("Abmelden?")) return; nutzer.verified = false; speicher("nutzer", nutzer); speicher("teile", []); lager.teile = []; lager.fahrzeug = null; fzGefragt = false; zeigeAnmeldung(false); };
   zeichnen(); laden();
+  if(KOPPEL) $("koppelBlatt").hidden = false;
   if(!timer) timer = setInterval(function(){ if(!document.hidden) laden(); }, 30000);
 }
 document.addEventListener("visibilitychange", function(){ if(!document.hidden && nutzer && nutzer.verified) laden(); });

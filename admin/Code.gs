@@ -87,7 +87,7 @@ function doPost(e) {
   if (d && d.app === 'wagenlager' && d.event === 'wl_ocr') {
     try { return out(wagenlagerOcr(d)); } catch (x) { return out({ ok: false, error: 'Texterkennung: ' + x.message }); }
   }
-  if (d && d.app === 'wagenlager' && /^wl_[a-z]+$/.test(String(d.event || ''))) {
+  if (d && d.app === 'wagenlager' && /^wl_[a-z_]+$/.test(String(d.event || ''))) {
     const l = LockService.getScriptLock();
     l.waitLock(25000);
     try { return out(wagenlagerAnfrage(d)); }
