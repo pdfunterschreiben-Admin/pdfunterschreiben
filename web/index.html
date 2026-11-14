@@ -3970,16 +3970,27 @@ function teilName(t){
   if(t === t.toUpperCase()) t = t.toLowerCase().replace(/(^|[\s\/-])([a-zäöü])/g, (m, a, b) => a + b.toUpperCase());
   return t.split(/,\s*|\s+/).filter(Boolean).map((w, i) => { const k = w.replace(/\.$/, "").toUpperCase(); return TEIL_ABK[k] || (i ? w.replace(/^[A-ZÄÖÜ]/, c => TEIL_ABK[k] ? c : c) : w); }).join(" ").replace(/^./, c => c.toUpperCase());
 }
+// Ersatzteile aus T-Doc automatisch übernehmen, sobald man aus T-Doc ins Programm zurückwechselt
+let tdocAuto = null, tdocAutoLaeuft = false;
+async function tdocAutoPruefen(){
+  if(!tdocAuto || tdocAutoLaeuft || document.hidden || !document.hasFocus()) return;
+  if(!document.body.contains(tdocAuto.b) || !tdocAuto.b.offsetParent) return;   // Formular mit Ersatzteilen ist gerade nicht offen
+  tdocAutoLaeuft = true;
+  try{ await tdocAuto.einfuegen(true); }catch(e){}
+  tdocAutoLaeuft = false;
+}
+window.addEventListener("focus", () => setTimeout(tdocAutoPruefen, 300));
+document.addEventListener("visibilitychange", () => { if(!document.hidden) setTimeout(tdocAutoPruefen, 300); });
 function tdocWerkzeug(f, w){
   const r = document.createElement("div"); r.className = "form-tools";
   const b = document.createElement("button"); b.type = "button"; b.textContent = "Ersatzteile aus T-Doc einfügen";
-  const s = document.createElement("span"); s.className = "hint"; s.textContent = "Vorher in T-Doc die Teile mit dem Lesezeichen „T-Doc → Excel“ sammeln.";
+  const s = document.createElement("span"); s.className = "hint"; s.textContent = "In T-Doc einmal das Lesezeichen „T-Doc → Excel“ klicken, dann die Teile anklicken – beim Zurückwechseln werden sie hier automatisch eingefügt.";
   const e = document.createElement("button"); e.type = "button"; e.className = "ghost"; e.textContent = "Lesezeichen einrichten";
   e.onclick = () => $("#formTdoc").click();
-  b.onclick = async () => {
-    let t = ""; try{ t = await navigator.clipboard.readText(); }catch(e){ formMeldung("Die Zwischenablage konnte nicht gelesen werden."); return; }
+  const einfuegen = async still => {
+    let t = ""; try{ t = await navigator.clipboard.readText(); }catch(e){ if(!still) formMeldung("Die Zwischenablage konnte nicht gelesen werden."); return; }
     t = String(t).replace(/\r/g, "");
-    if(t.indexOf("TDOC-ERSATZTEILE") !== 0){ formMeldung("In der Zwischenablage sind keine T-Doc-Ersatzteile."); return; }
+    if(t.indexOf("TDOC-ERSATZTEILE") !== 0){ if(!still) formMeldung("In der Zwischenablage sind keine T-Doc-Ersatzteile."); return; }
     const tab = f.abschnitte.flatMap(a => a.felder).find(x => x.t === "tabelle");
     const [SA, SN, SB] = tab.s.map(c => c[0]);
     const da = new Set(tabZeilen(tab, w).map(r => (w[SN + r] || "").trim()).filter(Boolean));
@@ -3991,9 +4002,12 @@ function tdocWerkzeug(f, w){
       if(!frei){ w["#mehr"] = (w["#mehr"] || 0) + 1; frei = tabZeilen(tab, w).pop(); }
       w[SA + frei] = mg || "1"; w[SN + frei] = teileNr(nr); w[SB + frei] = teilName(nm || bm); da.add(teileNr(nr)); n++;
     }
-    formMerken(); formRender(); formMeldung(n ? `${n} Ersatzteil(e) eingefügt.` : "Diese Teile stehen schon in der Tabelle.");
+    if(still && !n) return;
+    formMerken(); formRender(); formMeldung(n ? `${n} Ersatzteil(e) aus T-Doc eingefügt.` : "Diese Teile stehen schon in der Tabelle.");
     try{ await navigator.clipboard.writeText("TDOC-EINGEFUEGT"); }catch(e){}
   };
+  b.onclick = () => einfuegen(false);
+  tdocAuto = {b, einfuegen};   // beim Zurückwechseln aus T-Doc automatisch einfügen
   const et = document.createElement("button"); et.type = "button"; et.textContent = "📋 Ersatzteilliste";
   et.onclick = () => etOeffnen(f, w);
   r.append(b, et, e, s); return r;
