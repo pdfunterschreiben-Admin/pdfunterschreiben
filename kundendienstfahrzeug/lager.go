@@ -127,15 +127,20 @@ func (a *app) handleLager(w http.ResponseWriter, r *http.Request) {
 /* ---------------- Teilenummern ---------------- */
 
 var (
-	reBT     = regexp.MustCompile(`^BT\d{3,12}$`)
-	reBTKurz = regexp.MustCompile(`^\d{7}$`)
-	reToyota = regexp.MustCompile(`^(\d{5})([A-Z0-9]{5})(\d{2})$`)
-	reLeer   = regexp.MustCompile(`[\s-]`)
+	reBT      = regexp.MustCompile(`^BT\d{3,12}$`)
+	reBTKurz  = regexp.MustCompile(`^\d{7}(-\d{1,6})?$`)
+	reBTBind  = regexp.MustCompile(`^BT\d{3,12}(-\d{1,6})+$`)
+	reLeerNur = regexp.MustCompile(`\s+`)
+	reToyota  = regexp.MustCompile(`^(\d{5})([A-Z0-9]{5})(\d{2})$`)
+	reLeer    = regexp.MustCompile(`[\s-]`)
 )
 
 // teileNr bringt Toyota- (12345-ABCDE-12) und BT-Nummern (BT1234567) in eine einheitliche Form.
 func teileNr(v string) string {
 	c := reLeer.ReplaceAllString(strings.ToUpper(strings.TrimSpace(v)), "")
+	if bt := reLeerNur.ReplaceAllString(strings.ToUpper(strings.TrimSpace(v)), ""); reBTBind.MatchString(bt) {
+		return bt // BT-Nummern mit Bindestrich bleiben wie getippt
+	}
 	switch {
 	case reBT.MatchString(c):
 		return c
@@ -149,7 +154,7 @@ func teileNr(v string) string {
 // tdocURL: Suchadresse in Toyota T-Doc für eine Teilenummer ("" = keine gültige Nummer).
 func tdocURL(nr string) string {
 	n := teileNr(nr)
-	bt := reBT.MatchString(n) || reBTKurz.MatchString(n)
+	bt := reBT.MatchString(n) || reBTKurz.MatchString(n) || reBTBind.MatchString(n)
 	if !bt && !regexp.MustCompile(`^\d{5}-[A-Z0-9]{5}-\d{2}$`).MatchString(n) {
 		return ""
 	}

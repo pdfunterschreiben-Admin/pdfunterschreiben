@@ -59,6 +59,7 @@ main{padding:12px 16px;display:flex;flex-direction:column;gap:10px}
 .blatt h2{margin:0;font:600 19px var(--f-body)}
 label{display:flex;flex-direction:column;gap:5px;font-size:13.5px;font-weight:500}
 .zeile{display:flex;gap:8px;align-items:center}
+.knopfLabel{display:inline-flex;align-items:center;justify-content:center;min-width:54px;min-height:44px;padding:0 12px;border:1px solid var(--line,#cfd6e4);border-radius:10px;background:var(--card,#fff);font-weight:700;cursor:pointer;margin:0}
 .mengen{display:flex;gap:6px}
 .mengen input{text-align:center;font:600 18px var(--f-mono)}
 .mengen button{width:54px;font-size:20px;padding:8px 0}
@@ -116,7 +117,7 @@ label{display:flex;flex-direction:column;gap:5px;font-size:13.5px;font-weight:50
   <form id="teilForm" autocomplete="off">
     <div class="zeile" style="justify-content:space-between"><h2 id="teilTitel">Neues Teil</h2><button type="button" class="ghost" id="teilZu">Schließen</button></div>
     <div class="tabs"><button type="button" id="tlBestand">Im Wagen</button><button type="button" id="tlFehlt">Fehlt</button></div>
-    <label>Teilenummer<input id="fNr" class="mono" placeholder="67405-T1000-71 / BT7643266" autocapitalize="characters" required></label>
+    <label>Teilenummer<span class="zeile"><input id="fNr" class="mono" placeholder="67405-T1000-71 / BT7643266" autocapitalize="characters" required><label class="knopfLabel" title="QR-Code fotografieren">QR<input type="file" id="qrIn" accept="image/*" capture="environment" hidden></label></span></label>
     <div class="treffer" id="treffer" hidden></div>
     <label>Bezeichnung<span class="zeile"><input id="fName" placeholder="z. B. Filter-Teilgruppe" required><button type="button" id="fTdoc" hidden>T-Doc</button></span></label>
     <p class="hint" id="nameHint" hidden></p>
@@ -149,6 +150,7 @@ label{display:flex;flex-direction:column;gap:5px;font-size:13.5px;font-weight:50
 
 <div id="toast" hidden><span id="toastText"></span><button type="button" id="toastBtn" hidden></button></div>
 
+<script src="jsqr.js"></script>
 <script>
 // Läuft ohne Google-Anmeldung direkt gegen den Server der Service-Mappe (Apps Script, doPost).
 // Angemeldet wird wie im Programm mit Name + Arbeits-E-Mail und einem Code per E-Mail.
@@ -179,7 +181,8 @@ function toast(t, ms, btn){
 }
 
 function teileNr(v){
-  var roh = String(v || "").trim().toUpperCase(), c = roh.replace(/[\s-]/g, ""), m;
+  var roh = String(v || "").trim().toUpperCase(), c = roh.replace(/[\s-]/g, ""), m, bt = roh.replace(/\s+/g, "");
+  if(/^BT\d{3,12}(-\d{1,6})+$/.test(bt)) return bt; // BT-Nummern mit Bindestrich bleiben wie getippt
   if(/^BT\d{3,12}$/.test(c)) return c;
   m = c.match(/^(\d{5})([A-Z0-9]{5})(\d{2})$/);
   return m ? m[1] + "-" + m[2] + "-" + m[3] : roh;
@@ -392,12 +395,12 @@ function kandidaten(text){
   var t = String(text || "").toUpperCase(), alt;
   do{ alt = t; t = t.replace(/O(?=\d)|(\d)O/g, function(m, d){ return d ? d + "0" : "0"; }); }while(t !== alt);
   var gut = [], rest = [];
-  (t.match(/\d{5}[\s-]*[A-Z0-9]{5}[\s-]*\d{2}/g) || []).concat(t.match(/BT[\s-]?\d{3,12}(?!\d)/g) || []).forEach(function(x){ x = teileNr(x); if(gut.indexOf(x) < 0) gut.push(x); });
+  (t.match(/\d{5}[\s-]*[A-Z0-9]{5}[\s-]*\d{2}/g) || []).concat(t.match(/BT[\s-]?\d{3,12}(?:-\d{1,6})*(?![\d-]*\d)/g) || []).forEach(function(x){ x = teileNr(x); if(gut.indexOf(x) < 0) gut.push(x); });
   if(!gut.length) (t.match(/\b\d{7}\b/g) || []).forEach(function(x){ if(gut.indexOf(x) < 0) gut.push(x); });
   (t.match(/[A-Z0-9][A-Z0-9.\/-]{3,}/g) || []).forEach(function(x){ if(/\d/.test(x)){ x = teileNr(x); if(gut.indexOf(x) < 0 && rest.indexOf(x) < 0) rest.push(x); } });
   return {gut: gut, rest: rest.slice(0, 10)};
 }
-function gueltig(n){ return /^(BT\d{3,12}|\d{7}|\d{5}-[A-Z0-9]{5}-\d{2})$/.test(teileNr(n)); }
+function gueltig(n){ return /^(BT\d{3,12}(-\d{1,6})*|\d{7}(-\d{1,6})?|\d{5}-[A-Z0-9]{5}-\d{2})$/.test(teileNr(n)); }
 function verkleinern(file){
   return new Promise(function(ok, no){
     var url = URL.createObjectURL(file), img = new Image();
@@ -408,11 +411,61 @@ function verkleinern(file){
     img.src = url;
   });
 }
+/* QR-Code / Strichcode aus einem Foto lesen (zuerst der eingebaute Detektor des Geräts, sonst jsQR) */
+var qrDet = null, qrCv = null;
+function codeLesen(quelle, b, h, maxSeite){
+  var p = Promise.resolve("");
+  if(qrDet === null){
+    qrDet = false;
+    try{ if(window.BarcodeDetector) qrDet = new BarcodeDetector(); }catch(e){}
+  }
+  if(qrDet) p = qrDet.detect(quelle).then(function(r){ return r.length ? r[0].rawValue : ""; }).catch(function(){ return ""; });
+  return p.then(function(t){
+    if(t || typeof jsQR !== "function") return t;
+    var f = Math.min(1, maxSeite / Math.max(b, h)), w = Math.round(b * f), hh = Math.round(h * f);
+    qrCv = qrCv || document.createElement("canvas"); qrCv.width = w; qrCv.height = hh;
+    var x = qrCv.getContext("2d", {willReadFrequently: true}); x.drawImage(quelle, 0, 0, w, hh);
+    var d = x.getImageData(0, 0, w, hh), r = jsQR(d.data, w, hh, {inversionAttempts: "attemptBoth"});
+    return r ? r.data : "";
+  });
+}
+function codeAusDatei(file){
+  return new Promise(function(ok){
+    var url = URL.createObjectURL(file), img = new Image();
+    img.onload = function(){
+      codeLesen(img, img.naturalWidth, img.naturalHeight, 1000).then(function(t){ return t || codeLesen(img, img.naturalWidth, img.naturalHeight, 1800); })
+        .then(function(t){ URL.revokeObjectURL(url); ok(t || ""); }, function(){ URL.revokeObjectURL(url); ok(""); });
+    };
+    img.onerror = function(){ URL.revokeObjectURL(url); ok(""); };
+    img.src = url;
+  });
+}
+/* Nummer aus dem Code-Text holen: gibt die Nummer zurück oder "" */
+function nummerAusCode(text){
+  var roh = String(text || "").trim();
+  if(roh.length <= 40 && gueltig(roh)) return teileNr(roh);
+  var k = kandidaten(roh);
+  return k.gut.length === 1 ? k.gut[0] : "";
+}
+$("qrIn").onchange = function(e){
+  var f = e.target.files[0]; e.target.value = ""; if(!f) return;
+  $("teilErr").hidden = true; hinweisName("QR-Code wird gelesen …");
+  codeAusDatei(f).then(function(t){
+    var nr = t && nummerAusCode(t);
+    if(!nr){ hinweisName(t ? "Im QR-Code steht keine Teilenummer." : "Kein QR-Code erkannt. Bitte näher und gerade fotografieren – oder die Nummer eintippen."); return; }
+    $("fNr").value = nr; hinweisName(""); $("fNr").onblur();
+    if(APP && !$("fName").value.trim() && gueltig(nr)) $("fTdoc").onclick(); // in der App gleich die Bezeichnung aus T-Doc holen
+  });
+};
 $("scanIn").onchange = function(e){
   var f = e.target.files[0]; e.target.value = ""; if(!f) return;
   if(lager.offline) return toast("Ohne Verbindung geht das Scannen nicht.");
   $("scanBlatt").hidden = false; $("scanInfo").textContent = "Teilenummer wird gelesen …"; $("scanCands").innerHTML = "";
-  verkleinern(f).then(function(b64){ return anfrage({event: "wl_ocr", b64: b64, mime: "image/jpeg"}); }).then(function(r){
+  codeAusDatei(f).then(function(t){ var nr = t && nummerAusCode(t); if(nr){ $("scanBlatt").hidden = true; nummerGefunden(nr); return true; } return false; }).then(function(fertig){
+    if(fertig) return null;
+    return verkleinern(f).then(function(b64){ return anfrage({event: "wl_ocr", b64: b64, mime: "image/jpeg"}); });
+  }).then(function(r){
+    if(r === null) return;
     if(!r.ok) throw new Error(r.error || "Texterkennung fehlgeschlagen.");
     var k = kandidaten(r.text);
     if(k.gut.length === 1){ $("scanBlatt").hidden = true; return nummerGefunden(k.gut[0]); }
@@ -440,7 +493,7 @@ function nummerGefunden(nr){
   if(gueltig(nr)) hinweisName('Bezeichnung bitte eintragen – <a href="' + tdocLink(nr) + '" target="_blank" rel="noopener">in T-Doc nachsehen</a>.');
 }
 function tdocLink(nr){
-  var n = teileNr(nr), bt = /^(BT\d{3,12}|\d{7})$/.test(n);
+  var n = teileNr(nr), bt = /^(BT\d{3,12}(-\d{1,6})*|\d{7}(-\d{1,6})?)$/.test(n);
   return "https://tdoc.toyota-forklifts.eu/?partNumber=" + encodeURIComponent(bt ? n.replace(/^BT/, "") : n.replace(/-/g, "")) + "&truckType=" + (bt ? "warehouseTrucks&flag=Standard%2CSpecial" : "counterBalanceTrucks") + "&reset=false&source=partsSearch";
 }
 function hinweisName(html){ $("nameHint").innerHTML = html; $("nameHint").hidden = !html; }

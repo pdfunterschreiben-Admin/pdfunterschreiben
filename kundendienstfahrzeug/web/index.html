@@ -278,6 +278,7 @@ dialog::backdrop{background:rgba(10,15,30,.55)}
         <span class="row" style="flex-wrap:nowrap">
           <input type="text" id="fNr" class="mono" placeholder="67405-T1000-71 oder BT7643266" required>
           <label class="btn file-btn" title="Teilenummer vom Foto lesen">📷<input type="file" id="fFoto" accept="image/*"></label>
+          <button type="button" id="fQr" title="QR-Code oder Strichcode mit der Kamera scannen">QR</button>
           <button type="button" id="fTdoc" title="Diese Nummer in Toyota T-Doc nachschlagen">T-Doc ↗</button>
         </span>
       </label>
@@ -359,6 +360,16 @@ dialog::backdrop{background:rgba(10,15,30,.55)}
       <p class="err" id="bestellErr" hidden></p>
     </div>
     <div class="dlg-foot"><span class="hint">Outlook öffnet die E-Mail mit der Excel-Mappe – du schickst sie selbst ab.</span><button class="primary" id="bestellOk">E-Mail erstellen</button></div>
+  </form>
+</dialog>
+
+<dialog id="qrDlg">
+  <form method="dialog" class="dlg" style="max-width:min(720px,95vw)">
+    <div class="dlg-head"><strong>QR-Code scannen</strong><button class="ghost" value="x">Abbrechen</button></div>
+    <div class="dlg-body col" style="gap:10px">
+      <video id="qrVideo" playsinline muted style="width:100%;max-height:60vh;border-radius:10px;background:#000"></video>
+      <span class="hint" id="qrInfo">Kamera wird gestartet …</span>
+    </div>
   </form>
 </dialog>
 
@@ -499,6 +510,7 @@ dialog::backdrop{background:rgba(10,15,30,.55)}
 
 <script>var Utilities = {newBlob: s => ({getBytes: () => Array.from(new TextEncoder().encode(s))})};</script>
 <script src="/qr.js"></script>
+<script src="/jsqr.js"></script>
 <script>
 (() => {
 const $ = s => document.querySelector(s);
@@ -529,19 +541,22 @@ function toast(msg, ms = 4500, btn){
 // Toyota: 12345-ABCDE-12 · BT: BT1234567 · alles andere bleibt, wie es ist (z. B. 4010-004)
 function teileNr(v){
   const roh = String(v || "").trim().toUpperCase(), c = roh.replace(/[\s-]/g, "");
+  // BT-Nummern mit Bindestrich (z. B. BT7601465-002) bleiben genau so, wie sie getippt wurden
+  const bt = roh.replace(/\s+/g, "");
+  if(/^BT\d{3,12}(-\d{1,6})+$/.test(bt)) return bt;
   if(/^BT\d{3,12}$/.test(c)) return c;
   const m = c.match(/^(\d{5})([A-Z0-9]{5})(\d{2})$/);
   return m ? `${m[1]}-${m[2]}-${m[3]}` : roh;
 }
 const nrKey = n => teileNr(n).replace(/[\s-]/g, "");
 // Für T-Doc: Toyota-Nummer, BT-Nummer oder 7 Ziffern ohne Trennzeichen (wird als BT-Nummer gesucht)
-const nrGueltig = n => /^(BT\d{3,12}|\d{7}|\d{5}-[A-Z0-9]{5}-\d{2})$/.test(teileNr(n));
+const nrGueltig = n => /^(BT\d{3,12}(-\d{1,6})*|\d{7}(-\d{1,6})?|\d{5}-[A-Z0-9]{5}-\d{2})$/.test(teileNr(n));
 // Kandidaten aus erkanntem Text: zuerst vollständige Toyota-/BT-Nummern, dann sonstige Zeichenfolgen mit Ziffern
 function kandidaten(text){
   // O ↔ 0 verwechselt die Texterkennung oft – neben Ziffern ist es fast immer eine Null
   let t = String(text || "").toUpperCase(), vorher;
   do{ vorher = t; t = t.replace(/O(?=\d)|(?<=\d)O/g, "0"); }while(t !== vorher);
-  const gut = [...new Set([...(t.match(/\d{5}[\s-]*[A-Z0-9]{5}[\s-]*\d{2}/g) || []), ...(t.match(/BT[\s-]?\d{3,12}(?!\d)/g) || [])].map(teileNr))];
+  const gut = [...new Set([...(t.match(/\d{5}[\s-]*[A-Z0-9]{5}[\s-]*\d{2}/g) || []), ...(t.match(/BT[\s-]?\d{3,12}(?:-\d{1,6})*(?![\d-]*\d)/g) || [])].map(teileNr))];
   const rest = [...new Set((t.match(/[A-Z0-9][A-Z0-9.\/-]{3,}/g) || []).filter(s => /\d/.test(s)).map(teileNr))].filter(s => !gut.includes(s));
   if(!gut.length) for(const s of (t.match(/\b\d{7}\b/g) || [])) if(!rest.includes(s)) rest.unshift(s);
   return {gut, rest: rest.slice(0, 12)};
@@ -1025,16 +1040,106 @@ async function fotoLesen(file){
   if(!$("#teilDlg").open) oeffneTeil(null);
   $("#ocrBox").hidden = false; $("#cands").innerHTML = ""; $("#ocrInfo").textContent = "Teilenummer wird gelesen …"; teilErr("");
   try{
+    // Ist auf dem Foto ein QR-Code mit einer Teilenummer, braucht es keine Texterkennung
+    const code = await codeAusDatei(file);
+    if(code && nummerAusCode(code, true)){ if($("#ocrInfo").textContent.startsWith("Teilenummer wird")) $("#ocrInfo").textContent = "QR-Code gelesen."; return; }
     const bild = await fotoVerkleinern(file);
     const r = await (await fetch("/api/ocr", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({bild})})).json();
     if(!r.ok) throw new Error(r.error || "Texterkennung fehlgeschlagen.");
-    const k = kandidaten(r.text);
-    if(!k.gut.length && !k.rest.length){ $("#ocrInfo").textContent = "Keine Teilenummer erkannt. Bitte näher und schärfer fotografieren oder die Nummer eintippen."; return; }
-    $("#ocrInfo").textContent = k.gut.length === 1 ? "Erkannt – bitte kurz prüfen:" : "Bitte die richtige Nummer antippen:";
-    $("#cands").innerHTML = [...k.gut.map(n => `<button type="button" class="gut">${esc(n)}</button>`), ...k.rest.map(n => `<button type="button">${esc(n)}</button>`)].join("");
-    if(k.gut.length === 1){ $("#fNr").value = k.gut[0]; nrUebernehmen(); }
+    kandidatenZeigen(r.text, "Keine Teilenummer erkannt. Bitte näher und schärfer fotografieren oder die Nummer eintippen.");
   }catch(e){ $("#ocrInfo").textContent = e.message; }
 }
+// Erkannten Text (Foto oder Code) auswerten: eine sichere Nummer wird eingetragen, sonst zur Auswahl angeboten
+function kandidatenZeigen(text, leerText){
+  const k = kandidaten(text);
+  $("#ocrBox").hidden = false;
+  if(!k.gut.length && !k.rest.length){ $("#cands").innerHTML = ""; $("#ocrInfo").textContent = leerText; return false; }
+  $("#ocrInfo").textContent = k.gut.length === 1 ? "Erkannt – bitte kurz prüfen:" : "Bitte die richtige Nummer antippen:";
+  $("#cands").innerHTML = [...k.gut.map(n => `<button type="button" class="gut">${esc(n)}</button>`), ...k.rest.map(n => `<button type="button">${esc(n)}</button>`)].join("");
+  if(k.gut.length === 1){ $("#fNr").value = k.gut[0]; nrUebernehmen(); }
+  return true;
+}
+
+/* ---------- QR-Code / Strichcode: Kamera oder Foto → Teilenummer ---------- */
+let bcDetektor = null, codeCanvas = null, qrLauf = 0, qrStrom = null;
+async function qrDetektor(){
+  if(bcDetektor !== null) return bcDetektor;
+  bcDetektor = false;
+  try{
+    if("BarcodeDetector" in window){
+      const f = await BarcodeDetector.getSupportedFormats();
+      const wunsch = ["qr_code", "data_matrix", "code_128", "code_39", "ean_13", "ean_8", "itf", "codabar", "upc_a"].filter(x => f.includes(x));
+      if(wunsch.length) bcDetektor = new BarcodeDetector({formats: wunsch});
+    }
+  }catch(e){}
+  return bcDetektor;
+}
+// Liest einen Code aus Video/Bild: erst der eingebaute Detektor des Browsers, sonst jsQR (nur QR)
+async function codeLesen(quelle, breite, hoehe, maxSeite){
+  const det = await qrDetektor();
+  if(det){ try{ const r = await det.detect(quelle); if(r.length) return r[0].rawValue; }catch(e){} }
+  if(typeof jsQR !== "function") return "";
+  const f = Math.min(1, maxSeite / Math.max(breite, hoehe)), w = Math.round(breite * f), h = Math.round(hoehe * f);
+  const c = codeCanvas || (codeCanvas = document.createElement("canvas")); c.width = w; c.height = h;
+  const x = c.getContext("2d", {willReadFrequently: true}); x.drawImage(quelle, 0, 0, w, h);
+  const r = jsQR(x.getImageData(0, 0, w, h).data, w, h, {inversionAttempts: "attemptBoth"});
+  return r ? r.data : "";
+}
+async function codeAusDatei(file){
+  const url = URL.createObjectURL(file);
+  try{
+    const img = await new Promise((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => no(); i.src = url; });
+    return (await codeLesen(img, img.naturalWidth, img.naturalHeight, 1000)) || (await codeLesen(img, img.naturalWidth, img.naturalHeight, 1800));
+  }catch(e){ return ""; }
+  finally{ URL.revokeObjectURL(url); }
+}
+// Code-Text auswerten. Steht nur die Nummer im Code, wird sie direkt eingetragen. Gibt true zurück, wenn etwas Brauchbares drin war.
+function nummerAusCode(text, strikt){
+  const roh = String(text || "").trim();
+  if(strikt && !(roh.length <= 40 && nrGueltig(roh)) && !kandidaten(roh).gut.length) return false; // z. B. ein Link im Code: weiter mit Texterkennung
+  if(!$("#teilDlg").open) oeffneTeil(null);
+  if(roh.length <= 40 && nrGueltig(roh)){
+    $("#ocrBox").hidden = true; $("#fNr").value = teileNr(roh); nrUebernehmen();
+    ($("#fName").value ? $("#fOrt") : $("#fName")).focus();
+    return true;
+  }
+  return kandidatenZeigen(roh, "");
+}
+function qrStopp(){
+  qrLauf++;
+  if(qrStrom){ qrStrom.getTracks().forEach(t => t.stop()); qrStrom = null; }
+  $("#qrVideo").srcObject = null;
+}
+async function qrStart(){
+  if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return toast("Die Kamera ist hier nicht verfügbar – bitte das Foto-Symbol 📷 nehmen.", 6000);
+  const lauf = ++qrLauf;
+  $("#qrInfo").textContent = "Kamera wird gestartet …";
+  if(!$("#qrDlg").open) $("#qrDlg").showModal();
+  let strom;
+  try{ strom = await navigator.mediaDevices.getUserMedia({video: {facingMode: {ideal: "environment"}, width: {ideal: 1280}, height: {ideal: 720}}, audio: false}); }
+  catch(e){
+    $("#qrInfo").textContent = e && e.name === "NotAllowedError" ? "Der Kamerazugriff ist nicht erlaubt. Bitte in Windows unter Einstellungen → Datenschutz → Kamera für Desktop-Apps erlauben." : "Es wurde keine Kamera gefunden. Bitte das Foto-Symbol 📷 nehmen.";
+    return;
+  }
+  if(lauf !== qrLauf || !$("#qrDlg").open){ strom.getTracks().forEach(t => t.stop()); return; } // inzwischen abgebrochen
+  qrStrom = strom;
+  const v = $("#qrVideo"); v.srcObject = strom; try{ await v.play(); }catch(e){}
+  if(lauf !== qrLauf || !$("#qrDlg").open){ qrStopp(); return; }
+  $("#qrInfo").textContent = "QR-Code oder Strichcode ruhig vor die Kamera halten …";
+  while(lauf === qrLauf && $("#qrDlg").open){
+    if(v.videoWidth){
+      const t = await codeLesen(v, v.videoWidth, v.videoHeight, 1000);
+      if(t && lauf === qrLauf){
+        if(nummerAusCode(t)){ qrStopp(); $("#qrDlg").close(); return; }
+        $("#qrInfo").textContent = "Gelesen, aber keine Teilenummer darin: „" + t.slice(0, 50) + "“ – weiter suchen …";
+        await new Promise(r => setTimeout(r, 1500));
+      }
+    }
+    await new Promise(r => setTimeout(r, 120));
+  }
+}
+$("#fQr").onclick = () => { if(locked()) return checkAccess(); if(!$("#teilDlg").open) oeffneTeil(null); qrStart(); };
+$("#qrDlg").addEventListener("close", qrStopp);
 $("#cands").addEventListener("click", e => { const b = e.target.closest("button"); if(!b) return; $("#fNr").value = b.textContent; nrUebernehmen(); ($("#fName").value ? $("#fMenge") : $("#fName")).focus(); });
 $("#fotoIn").addEventListener("change", e => { const f = e.target.files[0]; e.target.value = ""; if(locked()) return checkAccess(); fotoLesen(f); });
 $("#fFoto").addEventListener("change", e => { const f = e.target.files[0]; e.target.value = ""; fotoLesen(f); });

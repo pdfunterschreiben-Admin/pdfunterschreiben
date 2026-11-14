@@ -253,13 +253,16 @@ public class MainActivity extends Activity {
     /* ---------------- T-Doc ---------------- */
 
     private void suchen(String nummer) {
-        String n = nummer == null ? "" : nummer.trim().toUpperCase(Locale.ROOT).replaceAll("[\\s-]", "");
-        if (!n.matches("(BT)?[0-9]{7}|[0-9]{5}[A-Z0-9]{5}[0-9]{2}")) {
+        String roh = nummer == null ? "" : nummer.trim().toUpperCase(Locale.ROOT).replaceAll("\\s+", "").replaceFirst("^BT-", "BT");
+        String n = roh.replace("-", "");
+        // BT-Nummern: BT + 3–12 Ziffern (auch mit Bindestrich-Teil, z. B. BT7601465-002) oder 7 Ziffern ohne BT
+        boolean btNr = roh.matches("BT[0-9]{3,12}(-[0-9]{1,6})*|[0-9]{7}(-[0-9]{1,6})?");
+        if (!btNr && !n.matches("[0-9]{5}[A-Z0-9]{5}[0-9]{2}")) {
             antwort(nummer, null, "Für T-Doc bitte eine Toyota- (12345-ABCDE-12) oder BT-Nummer.");
             return;
         }
-        boolean bt = n.matches("(BT)?[0-9]{7}");
-        suche = n.replaceFirst("^BT", "");
+        boolean bt = btNr;
+        suche = bt ? roh.replaceFirst("^BT", "") : n;
         sucheOriginal = nummer;
         sucheBis = System.currentTimeMillis() + 70000;
         Uri.Builder u = Uri.parse(TDOC).buildUpon()
