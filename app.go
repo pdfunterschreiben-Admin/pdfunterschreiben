@@ -140,7 +140,7 @@ func (a *app) routes() http.Handler {
 		w.Write([]byte(ownerToken()))
 	})
 	mux.HandleFunc("/api/info", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, map[string]any{"version": Version, "repo": repoSlug(), "updates": RepoOwner != "", "report": ReportURL != ""})
+		writeJSON(w, map[string]any{"version": Version, "repo": repoSlug(), "updates": RepoOwner != "", "report": ReportURL != "", "start": a.started.UnixNano()})
 	})
 	mux.HandleFunc("/api/alive", a.handleAlive)
 	mux.HandleFunc("/api/settings", a.handleSettings)

@@ -608,6 +608,7 @@ body{padding-bottom:172px}
         <li>Fehlt etwas Wichtiges, kommt ein Hinweis – ein zweiter Klick speichert trotzdem.</li>
         <li><b>Fotos im Reparaturauftrag / Kostenvoranschlag:</b> unten im Formular Fotos auswählen oder mit dem Handy aufnehmen – sie hängen an „E-Mail an Kunde“, „An Dispo senden“ und „Unterschreiben / E-Mail“ mit dran.</li>
         <li><b>Neues Formular:</b> „Kundendaten behalten“ (weiterer Auftrag für denselben Kunden) oder „Alles leeren“.</li>
+        <li><b>Beim Programmstart</b> sind alle Formulare automatisch leer – gespeicherte Formulare, Batterie-Verlauf und gemerkte Eingaben bleiben erhalten.</li>
         <li>Alle Eingaben werden laufend gesichert – nach einem Absturz sind sie wieder da.</li>
       </ul>
       <h3>4. Batterieprüfprotokoll</h3>
@@ -2916,6 +2917,7 @@ function initFold(){
     $("#verText").dataset.v = i.version; renderAdmin();
     reportOn = !!i.report; renderAdmin(); checkAccess();
     if(i.updates){ $("#checkBtn").hidden = false; checkUpdates(false); }
+    formNeustartPruefen(i.start);
   }catch(e){}
 })();
 /* Meldungen im Formular-Fenster anzeigen (die normale Meldung liegt hinter dem Fenster) */
@@ -3110,6 +3112,21 @@ async function formSicherungHolen(){
       formRender(); if(s.zeit > lokal && lokal) formMeldung("Deine letzten Eingaben wurden aus der Sicherung wiederhergestellt.", 6000);
     }
   }catch(e){}
+}
+// Bei jedem Programmstart alle Formulare leeren – man kann sofort mit einem neuen Auftrag loslegen.
+// (Gespeicherte Formulare im Verlauf, Batterie-Verlauf und gemerkte Eingaben bleiben erhalten.)
+function formNeustartPruefen(start){
+  if(!start) return;
+  // neu = anderes Programm (Neustart) oder neues Fenster; bloßes Neuladen im selben Fenster zählt nicht
+  let alt = null, fenster = null;
+  try{ alt = localStorage.getItem("formProgrammStart"); fenster = sessionStorage.getItem("formFenster"); }catch(e){}
+  if(alt === String(start) && fenster) return;
+  try{ localStorage.setItem("formProgrammStart", String(start)); sessionStorage.setItem("formFenster", "1"); }catch(e){}
+  formLaden();
+  for(const f of FORMULARE){ delete formState.daten[f.id]; formFotoLeeren(f.id); }
+  formState.daten._gemeinsam = {stand: Date.now(), v: {}};
+  formMerken(); formSichern();   // auch die Sicherungsdatei gleich auf „leer“ setzen
+  if($("#formDlg").open) formRender();
 }
 const formDef = () => FORMULARE.find(f => f.id === formState.akt);
 // gemerkte Zellen eines Feldes: [[Zelle, Schlüssel]]
