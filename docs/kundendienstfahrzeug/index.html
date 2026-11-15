@@ -551,9 +551,8 @@ $("koppelIn").onchange = function(e){
     if(r === null) return;
     if(!r.ok) throw new Error(r.error || "Texterkennung fehlgeschlagen.");
     var k = kandidaten(r.text);
-    if(k.gut.length === 1) return koppelSenden(k.gut[0]);
     if(!k.gut.length && !k.rest.length){ $("koppelInfo").textContent = "Keine Teilenummer erkannt. Bitte näher und schärfer fotografieren."; return; }
-    $("koppelInfo").textContent = "Bitte die richtige Nummer antippen:";
+    $("koppelInfo").textContent = "Gelesen – bitte die richtige Nummer antippen (Teilenummer P/N oder Seriennummer S/N):";
     $("koppelCands").innerHTML = k.gut.map(function(n){ return '<button type="button" class="gut">' + esc(n) + '</button>'; }).join("") + k.rest.map(function(n){ return '<button type="button">' + esc(n) + '</button>'; }).join("");
   }).catch(function(err){ $("koppelInfo").textContent = err.message; });
 };
