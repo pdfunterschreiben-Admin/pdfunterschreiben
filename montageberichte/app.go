@@ -263,7 +263,7 @@ func repoSlug() string {
 	return RepoOwner + "/" + RepoName
 }
 
-// Freigegebene Versionen liegen im Release „kundendienstfahrzeug-stabil“, Testversionen in „kundendienstfahrzeug-adminkanal“.
+// Freigegebene Versionen liegen im Release „montageberichte-stabil“, Testversionen in „montageberichte-adminkanal“.
 func fetchChannel(test bool) (*release, error) {
 	if RepoOwner == "" {
 		return nil, errors.New("keine Update-Quelle eingestellt")
@@ -373,7 +373,7 @@ func (a *app) handleUpdateApply(w http.ResponseWriter, r *http.Request) {
 		fehler("Du hast schon die neueste Version.")
 		return
 	}
-	if !strings.HasPrefix(rel.URL, "https://github.com/"+repoSlug()+"/releases/download/kundendienstfahrzeug-") {
+	if !strings.HasPrefix(rel.URL, "https://github.com/"+repoSlug()+"/releases/download/montageberichte-") {
 		fehler("Die Update-Adresse ist ungültig.")
 		return
 	}
