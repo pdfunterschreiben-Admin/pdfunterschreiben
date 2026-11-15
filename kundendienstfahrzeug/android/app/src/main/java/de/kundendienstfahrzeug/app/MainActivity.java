@@ -208,7 +208,8 @@ public class MainActivity extends Activity {
 
     private void zeigeToyota(boolean an) {
         toyotaSichtbar = an;
-        toyotaBoxView.setVisibility(an ? View.VISIBLE : View.INVISIBLE);
+        // Bleibt immer VISIBLE (liegt nur hinter unserer Seite): ein unsichtbarer WebView hält Animationen an, dann klappen die T-Doc-Zeilen nie auf
+        toyotaBoxView.setVisibility(View.VISIBLE);
         seite.setVisibility(an ? View.GONE : View.VISIBLE);
     }
 
@@ -281,10 +282,6 @@ public class MainActivity extends Activity {
         final String adresse = u.build().toString();
         toyota.loadUrl(adresse);
         final String meine = suche;
-        // Hängt T-Doc nach 25 Sekunden noch, einmal neu laden (die erste Anfrage bleibt oft stecken)
-        handler.postDelayed(() -> {
-            if (meine.equals(suche)) toyota.loadUrl(adresse);
-        }, 25000);
         handler.postDelayed(() -> {
             if (meine.equals(suche)) {
                 String alt = sucheOriginal;
@@ -294,7 +291,7 @@ public class MainActivity extends Activity {
                 final String ortF = ort;
                 if (!seiteUrl.startsWith(TDOC)) { toyotaText.setText("Bitte bei Toyota anmelden."); zeigeToyota(true); }
                 // Was sieht die App auf der T-Doc-Seite? Kurze Diagnose an die Meldung hängen
-                toyota.evaluateJavascript("(function(){try{var t=(document.body&&document.body.innerText||'').replace(/\\s+/g,' ');var a=globalThis.__kdfAufgeklappt||{};return 'Breite '+window.innerWidth+', Zeilen '+document.querySelectorAll('tr').length+', aufgeklappt '+(a.count||0)+', Text: '+t.slice(0,140);}catch(e){return 'Fehler '+e;}})()", wert -> {
+                toyota.evaluateJavascript("(function(){try{var t=(document.body&&document.body.innerText||'').replace(/\\s+/g,' ');var a=globalThis.__kdfAufgeklappt||{};return 'Breite '+window.innerWidth+', Zeilen '+document.querySelectorAll('tr').length+', aufgeklappt '+(a.count||0)+', Köpfe '+(a.koepfe||0)+', Detail '+(a.detailSeit?'ja':'nein')+', Spalten: '+Array.from(document.querySelectorAll('th')).map(function(h){return h.innerText.trim();}).filter(Boolean).slice(0,8).join('|')+', Sichtbar: '+document.visibilityState;}catch(e){return 'Fehler '+e;}})()", wert -> {
                     String d = wert == null ? "" : wert.replace("\"", "");
                     antwort(alt, null, "T-Doc hat nicht rechtzeitig geantwortet (" + ortF + (leser.isEmpty() ? "; Lese-Skript fehlt" : "") + "). [" + d + "] Oben „T-Doc“ öffnen, bei Toyota anmelden und noch einmal versuchen.");
                 });
