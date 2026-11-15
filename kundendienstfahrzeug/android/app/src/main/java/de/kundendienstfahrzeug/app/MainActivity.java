@@ -150,14 +150,24 @@ public class MainActivity extends Activity {
             }
             @Override public void onCloseWindow(WebView w) { }
         });
+        toyota.getSettings().setBlockNetworkImage(true);
         toyota.setWebViewClient(new WebViewClient() {
+            // Bilder und Schriften braucht die Suche nicht – das spart Ladezeit
+            @Override
+            public android.webkit.WebResourceResponse shouldInterceptRequest(WebView v, WebResourceRequest r) {
+                String p = r.getUrl().getPath() == null ? "" : r.getUrl().getPath().toLowerCase(Locale.ROOT);
+                if (p.matches(".*\\.(png|jpe?g|gif|svg|ico|webp|woff2?|ttf|otf)$"))
+                    return new android.webkit.WebResourceResponse("text/plain", "utf-8", new java.io.ByteArrayInputStream(new byte[0]));
+                return super.shouldInterceptRequest(v, r);
+            }
             @Override
             public void onPageFinished(WebView v, String url) {
+                tdocBereit = url != null && url.startsWith(TDOC);
                 if (suche == null) return;
                 if (url != null && url.startsWith(TDOC)) {
                     // Breites Layout (1280 px) erzwingen, dann lesen
                     v.evaluateJavascript("(function(){var m=document.querySelector('meta[name=viewport]');if(!m){m=document.createElement('meta');m.name='viewport';document.head.appendChild(m);}m.content='width=1280';})();", null);
-                    handler.postDelayed(() -> lesen(), 700);
+                    handler.postDelayed(() -> lesen(), 250);
                 } else {
                     toyotaText.setText("Bitte einmal bei Toyota anmelden – danach geht die Suche von selbst weiter.");
                     zeigeToyota(true);
@@ -173,6 +183,7 @@ public class MainActivity extends Activity {
         updater.pruefen(false);
     }
 
+    private boolean tdocBereit = false; // T-Doc ist geladen: weitere Suchen ohne Neuladen
     private View toyotaBoxView;
     private FrameLayout rahmen;
     private final java.util.ArrayList<WebView> popups = new java.util.ArrayList<>();
@@ -280,8 +291,15 @@ public class MainActivity extends Activity {
         if (bt) u.appendQueryParameter("flag", "Standard,Special");
         toyotaText.setText("T-Doc sucht " + nummer + " …");
         final String adresse = u.build().toString();
-        toyota.loadUrl(adresse);
         final String meine = suche;
+        String jetzt = String.valueOf(toyota.getUrl());
+        if (tdocBereit && jetzt.startsWith(TDOC)) {
+            // Wechsel innerhalb von T-Doc ohne Neuladen (wie am Laptop): alte Zeilen markieren, Suche per Adresswechsel starten
+            toyota.evaluateJavascript("globalThis.__kdfAufgeklappt=null;document.querySelectorAll('tr,[role=row]').forEach(function(e){e.setAttribute('data-kdf-alt','1');});history.pushState({},''," + JSONObject.quote(adresse) + ");dispatchEvent(new PopStateEvent('popstate',{state:{}}));true", null);
+            handler.postDelayed(() -> { if (meine.equals(suche)) lesen(); }, 300);
+        } else {
+            toyota.loadUrl(adresse);
+        }
         handler.postDelayed(() -> {
             if (meine.equals(suche)) {
                 String alt = sucheOriginal;
@@ -332,7 +350,7 @@ public class MainActivity extends Activity {
                 } catch (Exception ignored) { }
                 abfragen(meine);
             });
-        }, 800);
+        }, 250);
     }
 
     private void antwort(String nummer, String name, String fehler) {
