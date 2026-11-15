@@ -130,6 +130,7 @@ var (
 	reBT      = regexp.MustCompile(`^BT\d{3,12}$`)
 	reBTKurz  = regexp.MustCompile(`^\d{7}(-\d{1,6})?$`)
 	reBTBind  = regexp.MustCompile(`^BT\d{3,12}(-\d{1,6})+$`)
+	reZiffernBind = regexp.MustCompile(`^\d{6,12}(-\d{1,6})+$`)
 	reLeerNur = regexp.MustCompile(`\s+`)
 	reToyota  = regexp.MustCompile(`^(\d{5})([A-Z0-9]{5})(\d{2})$`)
 	reLeer    = regexp.MustCompile(`[\s-]`)
@@ -147,6 +148,10 @@ func teileNr(v string) string {
 	}
 	if m := reToyota.FindStringSubmatch(c); m != nil {
 		return m[1] + "-" + m[2] + "-" + m[3]
+	}
+	// Ziffern mit Bindestrich, aber kein Toyota-Format (…-71): BT-Nummer
+	if bt := reLeerNur.ReplaceAllString(strings.ToUpper(strings.TrimSpace(v)), ""); reZiffernBind.MatchString(bt) {
+		return "BT" + bt
 	}
 	return strings.ToUpper(strings.TrimSpace(v))
 }

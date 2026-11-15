@@ -196,7 +196,9 @@ function teileNr(v){
   if(/^BT\d{3,12}(-\d{1,6})+$/.test(bt)) return bt; // BT-Nummern mit Bindestrich bleiben wie getippt
   if(/^BT\d{3,12}$/.test(c)) return c;
   m = c.match(/^(\d{5})([A-Z0-9]{5})(\d{2})$/);
-  return m ? m[1] + "-" + m[2] + "-" + m[3] : roh;
+  if(m) return m[1] + "-" + m[2] + "-" + m[3];
+  if(/^\d{6,12}(-\d{1,6})+$/.test(bt)) return "BT" + bt; // Ziffern mit Bindestrich, aber kein Toyota-Format (…-71): BT-Nummer
+  return roh;
 }
 function nrKey(n){ return teileNr(n).replace(/[\s-]/g, ""); }
 function menge(t){ return t.menge + (offen[t.id] ? offen[t.id].delta : 0); }
@@ -406,7 +408,7 @@ function kandidaten(text){
   var t = String(text || "").toUpperCase(), alt;
   do{ alt = t; t = t.replace(/O(?=\d)|(\d)O/g, function(m, d){ return d ? d + "0" : "0"; }); }while(t !== alt);
   var gut = [], rest = [];
-  (t.match(/\d{5}[\s-]*[A-Z0-9]{5}[\s-]*\d{2}/g) || []).concat(t.match(/BT[\s-]?\d{3,12}(?:-\d{1,6})*(?![\d-]*\d)/g) || []).forEach(function(x){ x = teileNr(x); if(gut.indexOf(x) < 0) gut.push(x); });
+  (t.match(/\d{5}[\s-]*[A-Z0-9]{5}[\s-]*\d{2}/g) || []).concat(t.match(/(?<![\w-])\d{6,12}(?:-\d{1,6})+(?![\w-])/g) || []).concat(t.match(/BT[\s-]?\d{3,12}(?:-\d{1,6})*(?![\d-]*\d)/g) || []).forEach(function(x){ x = teileNr(x); if(gut.indexOf(x) < 0) gut.push(x); });
   if(!gut.length) (t.match(/\b\d{7}\b/g) || []).forEach(function(x){ if(gut.indexOf(x) < 0) gut.push(x); });
   (t.match(/[A-Z0-9][A-Z0-9.\/-]{3,}/g) || []).forEach(function(x){ if(/\d/.test(x)){ x = teileNr(x); if(gut.indexOf(x) < 0 && rest.indexOf(x) < 0) rest.push(x); } });
   return {gut: gut, rest: rest.slice(0, 10)};
@@ -415,9 +417,9 @@ function gueltig(n){ return /^(BT\d{3,12}(-\d{1,6})*|\d{7}(-\d{1,6})?|\d{5}-[A-Z
 function verkleinern(file){
   return new Promise(function(ok, no){
     var url = URL.createObjectURL(file), img = new Image();
-    img.onload = function(){ var f = Math.min(1, 1800 / Math.max(img.naturalWidth, img.naturalHeight)), c = document.createElement("canvas");
+    img.onload = function(){ var f = Math.min(1, 1500 / Math.max(img.naturalWidth, img.naturalHeight)), c = document.createElement("canvas");
       c.width = Math.round(img.naturalWidth * f); c.height = Math.round(img.naturalHeight * f); c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
-      URL.revokeObjectURL(url); ok(c.toDataURL("image/jpeg", .88).split(",")[1]); };
+      URL.revokeObjectURL(url); ok(c.toDataURL("image/jpeg", .8).split(",")[1]); };
     img.onerror = function(){ URL.revokeObjectURL(url); no(new Error("Das Foto konnte nicht geöffnet werden.")); };
     img.src = url;
   });
@@ -547,7 +549,9 @@ function koppelSenden(nr){
 $("koppelIn").onchange = function(e){
   var f = e.target.files[0]; e.target.value = ""; if(!f) return;
   $("koppelInfo").textContent = "Teilenummer wird gelesen …"; $("koppelCands").innerHTML = "";
-  codeAusDatei(f).then(function(t){ var nr = t && nummerAusCode(t); if(nr){ koppelSenden(nr); return null; } return verkleinern(f).then(function(b64){ return anfrage({event: "wl_ocr", b64: b64, mime: "image/jpeg"}); }); }).then(function(r){
+  // Texterkennung startet sofort und läuft neben der QR-Suche, damit man nicht nacheinander wartet
+  var ocr = verkleinern(f).then(function(b64){ return anfrage({event: "wl_ocr", b64: b64, mime: "image/jpeg"}); }); ocr.catch(function(){});
+  codeAusDatei(f).then(function(t){ var nr = t && nummerAusCode(t); if(nr){ koppelSenden(nr); return null; } return ocr; }).then(function(r){
     if(r === null) return;
     if(!r.ok) throw new Error(r.error || "Texterkennung fehlgeschlagen.");
     var k = kandidaten(r.text);
