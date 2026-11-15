@@ -12,6 +12,8 @@ const MB_BLATT = 'Montageberichte';
 const MB_HEAD = ['Eingang', 'Monteur', 'E-Mail', 'Berichtsdatum', 'Jahr', 'KW', 'Auftragsnummer', 'Art', 'Seriennummer', 'Dateiname', 'Datei-ID', 'Prüfsumme'];
 const MB_NUTZER = 'Nutzer Montageberichte';
 const MB_ARTEN = { montage: 'Montagebericht', uvv: 'UVV Bericht', dguv: 'DGUV V3 Bericht' };
+// Wer schon Berichte schicken darf: erstmal nur die Admins. Weitere E-Mails hier eintragen, '*' = alle Monteure.
+const MB_FREI = [];
 
 function mbBlatt(ss) {
   const s = sheet(ss || SpreadsheetApp.getActiveSpreadsheet(), MB_BLATT, MB_HEAD);
@@ -53,6 +55,7 @@ function mbHoch(d) {
   const mail = clean(d.email, 150).toLowerCase(), name = clean(d.name, 100);
   if (ADMIN_MAILS.indexOf(mail) < 0 && !mail.endsWith('@' + DOMAIN)) throw new Error('Nicht berechtigt.');
   if (!name) throw new Error('Name fehlt.');
+  if (ADMIN_MAILS.indexOf(mail) < 0 && MB_FREI.indexOf('*') < 0 && MB_FREI.indexOf(mail) < 0) return 'noch nicht freigegeben';
   const b64 = String(d.b64 || '').replace(/\s/g, '');
   if (b64.length < 200 || b64.length > 40000000) throw new Error('Keine gültige PDF.');
   const bytes = Utilities.base64Decode(b64);
