@@ -196,7 +196,10 @@ function handle(d) {
 
   const col = { start: 9, save: 10, print: 11, mail: 12 }[ev];
   if (col) { const cell = users.getRange(row, col); cell.setValue((Number(cell.getValue()) || 0) + n); }
-  return { ok: true, verified: String(r[6]).toLowerCase() === 'ja', blocked: blocked };
+  // kd: Schaltfläche „An Kundendienst senden“ zeigen (nur Service-Mappe; mbFreiFuer steht in Montageberichte.js)
+  let kd = false;
+  if (!pptx && (ev === 'start' || ev === 'check')) { try { kd = mbFreiFuer(mail, users); } catch (x) { } }
+  return { ok: true, verified: String(r[6]).toLowerCase() === 'ja', blocked: blocked, kd: kd };
 }
 
 // Verbesserungsvorschläge: landen im Blatt „Vorschläge“; der Admin bekommt zusätzlich eine E-Mail.
