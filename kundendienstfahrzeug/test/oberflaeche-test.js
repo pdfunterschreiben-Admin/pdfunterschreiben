@@ -52,7 +52,8 @@ const [app, mock, out = '.'] = process.argv.slice(2);
   await page.fill('#fOrt', 'Fach A');
   await page.fill('#fMenge', '3');
   await page.click('#teilOk');
-  await page.waitForSelector('#teilDlg[open]', { state: 'detached' });
+  try { await page.waitForSelector('#teilDlg[open]', { state: 'detached', timeout: 10000 }); }
+  catch (e) { throw new Error('Dialog bleibt offen. Fehlertext: «' + await page.textContent('#teilErr') + '», Toast: «' + await page.textContent('#toastText').catch(() => '') + '», Speichern deaktiviert: ' + await page.$eval('#teilOk', b => b.disabled)); }
   await page.waitForSelector('tr[data-id]');
   ok('Teil gespeichert, Nummer formatiert');
 
@@ -113,7 +114,7 @@ const [app, mock, out = '.'] = process.argv.slice(2);
   const erw = await fetch(app + 'api/tdoc/ergebnis', { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: 'chrome-extension://abc' }, body: JSON.stringify({ token: tok, nr: '7550609', name: 'Rad', version: '1.0.0' }) });
   assert.strictEqual(erw.status, 204);
   await page.waitForFunction(() => document.querySelector('#fName').value === 'Rad', null, { timeout: 5000 });
-  assert.strictEqual(await page.inputValue('#fNr'), '7550609');
+  assert.strictEqual(await page.inputValue('#fNr'), 'BT7550609');
   await page.click('#teilAbbr');
   ok('Bezeichnung automatisch über die T-Doc-Erweiterung');
   // danach: Nummer eintippen reicht, die Abfrage startet von selbst

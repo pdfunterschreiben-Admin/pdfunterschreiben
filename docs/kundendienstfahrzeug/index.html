@@ -197,6 +197,7 @@ function teileNr(v){
   if(/^BT\d{3,12}$/.test(c)) return c;
   m = c.match(/^(\d{5})([A-Z0-9]{5})(\d{2})$/);
   if(m) return m[1] + "-" + m[2] + "-" + m[3];
+  if(/^[1-9]\d{5,6}$/.test(bt)) return "BT" + bt; // 6–7 Ziffern ohne Zusatz (z. B. 254326): BT-Nummer
   if(/^\d{6,12}(-\d{1,6})+$/.test(bt)) return "BT" + bt; // Ziffern mit Bindestrich, aber kein Toyota-Format (…-71): BT-Nummer
   return roh;
 }

@@ -130,7 +130,7 @@ var (
 	reBT      = regexp.MustCompile(`^BT\d{3,12}$`)
 	reBTKurz  = regexp.MustCompile(`^\d{7}(-\d{1,6})?$`)
 	reBTBind  = regexp.MustCompile(`^BT\d{3,12}(-\d{1,6})+$`)
-	reZiffernBind = regexp.MustCompile(`^\d{6,12}(-\d{1,6})+$`)
+	reZiffernBind = regexp.MustCompile(`^(\d{6,12}(-\d{1,6})+|[1-9]\d{5,6})$`)
 	reLeerNur = regexp.MustCompile(`\s+`)
 	reToyota  = regexp.MustCompile(`^(\d{5})([A-Z0-9]{5})(\d{2})$`)
 	reLeer    = regexp.MustCompile(`[\s-]`)

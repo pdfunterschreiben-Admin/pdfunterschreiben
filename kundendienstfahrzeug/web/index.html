@@ -542,6 +542,7 @@ function toast(msg, ms = 4500, btn){
 
 /* ---------- Teilenummern ---------- */
 // Toyota: 12345-ABCDE-12 · BT: BT1234567 · alles andere bleibt, wie es ist (z. B. 4010-004)
+const etRoh = new Set(); // Nummern aus der eigenen Ersatzteilliste (z. B. 402560) – das sind keine BT-Nummern
 function teileNr(v){
   const roh = String(v || "").trim().toUpperCase(), c = roh.replace(/[\s-]/g, "");
   // BT-Nummern mit Bindestrich (z. B. BT7601465-002) bleiben genau so, wie sie getippt wurden
@@ -550,6 +551,7 @@ function teileNr(v){
   if(/^BT\d{3,12}$/.test(c)) return c;
   const m = c.match(/^(\d{5})([A-Z0-9]{5})(\d{2})$/);
   if(m) return `${m[1]}-${m[2]}-${m[3]}`;
+  if(/^[1-9]\d{5,6}$/.test(bt) && !etRoh.has(bt)) return "BT" + bt; // 6–7 Ziffern ohne Zusatz (z. B. 254326): BT-Nummer
   if(/^\d{6,12}(-\d{1,6})+$/.test(bt)) return "BT" + bt; // Ziffern mit Bindestrich, aber kein Toyota-Format (…-71): BT-Nummer
   return roh;
 }
@@ -1250,6 +1252,7 @@ async function etLaden(){
   if(etDaten) return etDaten;
   etDaten = await (await fetch("/ersatzteilliste.json")).json();
   etKatalog = new Map();
+  for(const l of etDaten.listen) for(const g of l.gruppen) for(const a of g.artikel) if(a.nr) etRoh.add(String(a.nr).replace(/\s+/g, "").toUpperCase());
   for(const l of etDaten.listen) for(const g of l.gruppen) for(const a of g.artikel) if(a.nr && !etKatalog.has(nrKey(a.nr))) etKatalog.set(nrKey(a.nr), a.name);
   return etDaten;
 }

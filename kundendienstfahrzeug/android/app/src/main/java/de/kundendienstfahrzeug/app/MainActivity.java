@@ -78,6 +78,10 @@ public class MainActivity extends Activity {
         rahmen = new FrameLayout(this);
         seite = browser();
         toyota = browser();
+        // T-Doc soll wie am Laptop (breite Ansicht) laufen – die Handy-Ansicht zeigt die Teileliste anders
+        toyota.getSettings().setUserAgentString("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36");
+        toyota.getSettings().setUseWideViewPort(true);
+        toyota.getSettings().setLoadWithOverviewMode(true);
         LinearLayout toyotaBox = new LinearLayout(this);
         toyotaBox.setOrientation(LinearLayout.VERTICAL);
         toyotaLeiste = new LinearLayout(this);
@@ -151,7 +155,9 @@ public class MainActivity extends Activity {
             public void onPageFinished(WebView v, String url) {
                 if (suche == null) return;
                 if (url != null && url.startsWith(TDOC)) {
-                    lesen();
+                    // Breites Layout (1280 px) erzwingen, dann lesen
+                    v.evaluateJavascript("(function(){var m=document.querySelector('meta[name=viewport]');if(!m){m=document.createElement('meta');m.name='viewport';document.head.appendChild(m);}m.content='width=1280';})();", null);
+                    handler.postDelayed(() -> lesen(), 700);
                 } else {
                     toyotaText.setText("Bitte einmal bei Toyota anmelden – danach geht die Suche von selbst weiter.");
                     zeigeToyota(true);
@@ -256,7 +262,7 @@ public class MainActivity extends Activity {
         String roh = nummer == null ? "" : nummer.trim().toUpperCase(Locale.ROOT).replaceAll("\\s+", "").replaceFirst("^BT-", "BT");
         String n = roh.replace("-", "");
         // BT-Nummern: BT + 3–12 Ziffern (auch mit Bindestrich-Teil, z. B. BT7601465-002) oder 7 Ziffern ohne BT
-        boolean btNr = roh.matches("BT[0-9]{3,12}(-[0-9]{1,6})*|[0-9]{7}(-[0-9]{1,6})?");
+        boolean btNr = roh.matches("BT[0-9]{3,12}(-[0-9]{1,6})*|[0-9]{6,7}(-[0-9]{1,6})?");
         if (!btNr && !n.matches("[0-9]{5}[A-Z0-9]{5}[0-9]{2}")) {
             antwort(nummer, null, "Für T-Doc bitte eine Toyota- (12345-ABCDE-12) oder BT-Nummer.");
             return;
