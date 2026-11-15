@@ -1808,6 +1808,31 @@ async function saveExcel(doc){
   }catch(e){ if(!e || e.name !== "AbortError") toast("Speichern fehlgeschlagen: " + (e && e.message || e)); }
 }
 
+// Kundendienst Montageberichte: jeden unterschriebenen Bericht im Hintergrund ans Büro schicken
+// (Auftragsnummer, Art, Datum und Seriennummer aus dem Bericht; UVV/DGUV ohne Auftragsnummer bekommen
+// die des Montageberichts mit derselben Seriennummer).
+let bueroAus = false;
+async function anBuero(list){
+  if(bueroAus) return;
+  for(const d of list){
+    if(!d || d.excel || !d.stamp || d.bueroGesendet) continue;
+    try{
+      const bytes = await signed(d); if(!bytes) continue;
+      const info = await reportInfo(d), art = await reportKind(d);
+      let nr = info.nr || "";
+      if(!nr && info.serial){
+        const ser = normSer(info.serial);
+        for(const o of state.docs){ if(o === d || o.excel) continue; const oi = await reportInfo(o); if(oi.nr && oi.serial && normSer(oi.serial) === ser){ nr = oi.nr; break; } }
+      }
+      const tage = [...(info.main && info.main.size ? info.main : info.dates || [])].sort();
+      const datum = tage.length ? tage[tage.length - 1] : "";
+      const r = await (await fetch("/api/montagebericht", {method: "POST", headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({nr, art, datum, serie: info.serial || "", datei: outName(d), b64: b64(bytes)})})).json();
+      if(r.aus){ bueroAus = true; return; }
+      if(r.ok) d.bueroGesendet = true;
+    }catch(e){}
+  }
+}
 async function saveDoc(doc){
   if(!ready(doc)) return;
   const bytes = await signed(doc); if(!bytes) return;
@@ -1818,7 +1843,7 @@ async function saveDoc(doc){
       if(doc.handle) opts.startIn = doc.handle;
       const fh = await showSaveFilePicker(opts);
       const w = await fh.createWritable(); await w.write(bytes); await w.close();
-      doc.saved = true; updateHead(doc); report("save"); toast(`Gespeichert: ${fh.name}`);
+      doc.saved = true; updateHead(doc); report("save"); toast(`Gespeichert: ${fh.name}`); anBuero([doc]);
     }catch(e){
       if(e && e.name === "AbortError") return;
       toast("Speichern fehlgeschlagen: " + (e && e.message || e));
@@ -1828,7 +1853,7 @@ async function saveDoc(doc){
   const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([bytes], {type: "application/pdf"}));
   a.download = name; document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 4000);
-  doc.saved = true; updateHead(doc); toast(`In „Downloads“ gespeichert: ${name}`);
+  doc.saved = true; updateHead(doc); toast(`In „Downloads“ gespeichert: ${name}`); anBuero([doc]);
 }
 // Outlook im Hintergrund schon bereit machen, sobald man auf das Versenden zugeht (höchstens alle 2 Minuten)
 let outlookVorZeit = 0;
@@ -1909,6 +1934,7 @@ async function printDocs(list){
   if(!list.length){ toast("Doppelklick auf eine Seite, um die Unterschrift zu setzen."); return; }
   const ohneMsg = `${ohne.length} ${ohne.length === 1 ? "Bericht hat" : "Berichte haben"} keine Unterschrift und ${ohne.length === 1 ? "wurde" : "wurden"} nicht gedruckt.`;
   printing = true; toast("Druck wird vorbereitet …", 20000);
+  setTimeout(() => anBuero(list), 3000);   // gedruckte Berichte gehen auch ans Büro
   const urls = [], berichte = [];
   try{
     for(const doc of list){
@@ -2027,7 +2053,7 @@ async function mailDocs(list){
       : to ? `E-Mail mit ${files.length} ${files.length === 1 ? "Bericht" : "Berichten"} geöffnet – Empfänger ${to} ist eingetragen, bitte prüfen und senden.`
       : `E-Mail mit ${files.length} ${files.length === 1 ? "Bericht" : "Berichten"} geöffnet – Empfänger eintragen und senden.`;
     if(ohne) msg += ` ${ohne} ohne Unterschrift ${ohne === 1 ? "wurde" : "wurden"} nicht angehängt.`;
-    toast(msg, 8000); report("mail", files.length);
+    toast(msg, 8000); report("mail", files.length); anBuero(list);
   }catch(e){ toast("E-Mail konnte nicht geöffnet werden."); }
   finally{ mailing = false; }
 }
@@ -2060,6 +2086,7 @@ $("#saveAll").onclick = async () => {
   }
   if(n) report("save", n);
   if(n) toast(`${n} ${n === 1 ? "Datei" : "Dateien"} in „${dir.name}“ gespeichert.`);
+  anBuero(list.filter(d => d.saved));
 };
 
 /* ---------- Dateien öffnen ---------- */

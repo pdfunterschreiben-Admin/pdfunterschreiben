@@ -621,3 +621,39 @@ func (a *app) handleFormularAblage(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, map[string]any{"ok": true, "pfade": pfade})
 }
+
+// Kundendienst Montageberichte: unterschriebenen Bericht (PDF) ans Büro schicken (Server legt ihn ab)
+func (a *app) handleMontagebericht(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "POST", http.StatusMethodNotAllowed)
+		return
+	}
+	var in struct {
+		Nr    string `json:"nr"`
+		Art   string `json:"art"`
+		Datum string `json:"datum"`
+		Serie string `json:"serie"`
+		Datei string `json:"datei"`
+		B64   string `json:"b64"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 40<<20)).Decode(&in); err != nil || len(in.B64) < 200 {
+		writeJSON(w, map[string]any{"ok": false, "error": "Ungültige Anfrage."})
+		return
+	}
+	u := angemeldeterNutzer()
+	if ReportURL == "" || u == nil || u.Email == "" {
+		writeJSON(w, map[string]any{"ok": false, "aus": true})
+		return
+	}
+	t, err := serverText(map[string]any{"key": ReportKey, "event": "mb_hoch", "id": u.ID, "name": u.Name, "email": u.Email,
+		"nr": in.Nr, "art": in.Art, "datum": in.Datum, "serie": in.Serie, "datei": in.Datei, "b64": in.B64}, 90*time.Second)
+	if err != nil {
+		writeJSON(w, map[string]any{"ok": false, "error": "Keine Verbindung zum Server."})
+		return
+	}
+	if strings.HasPrefix(t, "OK\n") {
+		writeJSON(w, map[string]any{"ok": true, "text": strings.TrimPrefix(t, "OK\n")})
+		return
+	}
+	writeJSON(w, map[string]any{"ok": false, "error": strings.TrimPrefix(t, "FEHLER\n")})
+}

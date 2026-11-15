@@ -73,6 +73,19 @@ function doPost(e) {
     finally { if (l) l.releaseLock(); }
     return ContentService.createTextOutput(t).setMimeType(ContentService.MimeType.TEXT);
   }
+  // Kundendienst Montageberichte: unterschriebene Berichte von der Service-Mappe ablegen (Montageberichte.js)
+  if (d && d.key === KEY && d.event === 'mb_hoch') {
+    const l = LockService.getScriptLock();
+    l.waitLock(25000);
+    let t;
+    try { t = 'OK\n' + mbHoch(d); } catch (x) { t = 'FEHLER\n' + x.message; }
+    finally { l.releaseLock(); }
+    return ContentService.createTextOutput(t).setMimeType(ContentService.MimeType.TEXT);
+  }
+  // … und vom Büro-Programm lesen (nur freigeschaltete und berechtigte Rechner, ohne Sperre)
+  if (d && d.key === KEY && d.app === 'montageberichte' && /^mb_(monteure|liste|datei)$/.test(String(d.event || ''))) {
+    try { return out(montageberichteAnfrage(d)); } catch (x) { return out({ ok: false, error: x.message }); }
+  }
   // Fotos vom Handy (QR-Code) – ohne Sperre
   if (d && d.key === KEY && /^foto(start|liste|holen|ende|vorschau)$/.test(String(d.event || ''))) {
     try { return out(fotoAnfrage(d)); } catch (x) { return out({ ok: false, error: 'Fotos: ' + x.message }); }
@@ -114,10 +127,10 @@ function handle(d) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   // „PDF zu PowerPoint“ meldet sich mit app: 'pptx' – eigene Nutzerliste, sonst gleicher Ablauf.
   // Das Kundendienstfahrzeug meldet sich mit app: 'wagenlager' – eigene Nutzerliste, nur Anmeldung/Start/Prüfen.
-  const wl = d.app === 'wagenlager';
-  const pptx = d.app === 'pptx' || wl;
-  const APP_NAME = wl ? 'Kundendienstfahrzeug' : d.app === 'pptx' ? 'PDF zu PowerPoint' : 'Service-Mappe';
-  const users = sheet(ss, wl ? 'Nutzer Kundendienstfahrzeug' : d.app === 'pptx' ? 'Nutzer PDF zu PowerPoint' : 'Nutzer', ['Name', 'E-Mail', 'Rechner-ID', 'Version', 'Erste Anmeldung', 'Zuletzt aktiv',
+  const wl = d.app === 'wagenlager', mb = d.app === 'montageberichte';
+  const pptx = d.app === 'pptx' || wl || mb;
+  const APP_NAME = mb ? 'Kundendienst Montageberichte' : wl ? 'Kundendienstfahrzeug' : d.app === 'pptx' ? 'PDF zu PowerPoint' : 'Service-Mappe';
+  const users = sheet(ss, mb ? 'Nutzer Montageberichte' : wl ? 'Nutzer Kundendienstfahrzeug' : d.app === 'pptx' ? 'Nutzer PDF zu PowerPoint' : 'Nutzer', ['Name', 'E-Mail', 'Rechner-ID', 'Version', 'Erste Anmeldung', 'Zuletzt aktiv',
     'Freigeschaltet', 'Gesperrt (ja)', 'Starts', 'Gespeichert', 'Gedruckt', 'Per E-Mail']);
   const log = sheet(ss, 'Protokoll', ['Zeit', 'Name', 'E-Mail', 'Ereignis', 'Version', 'Anzahl']);
 
@@ -137,7 +150,7 @@ function handle(d) {
   if (ev === 'adminblock') return adminBlock(users, id, mail, d.code, d.text);
   if (ev === 'adminuserdelete') return adminUserDelete(users, id, mail, d.code);
   if (ev === 'admindelete') return adminDelete(ss, users, id, mail, d.code, d.text);
-  if (ev !== 'check') log.appendRow([now, name, mail, ev, "'" + (wl ? (d.quelle === 'handy' ? 'KDF-Handy ' : 'KDF ') : pptx ? 'PPTX ' : '') + ver, n]);
+  if (ev !== 'check') log.appendRow([now, name, mail, ev, "'" + (mb ? 'MB ' : wl ? (d.quelle === 'handy' ? 'KDF-Handy ' : 'KDF ') : pptx ? 'PPTX ' : '') + ver, n]);
   protokollKuerzen(log, now);
 
   let row = findRow(users, id);
