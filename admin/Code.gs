@@ -73,7 +73,7 @@ function doPost(e) {
     finally { if (l) l.releaseLock(); }
     return ContentService.createTextOutput(t).setMimeType(ContentService.MimeType.TEXT);
   }
-  // Kundendienst Montageberichte: unterschriebene Berichte von der Service-Mappe ablegen (Montageberichte.js)
+  // Kundendienst Montageberichte: unterschriebene Berichte von der Service-Mappe ablegen (server/Montageberichte.js im Repository kundendienst-montageberichte)
   if (d && d.key === KEY && d.event === 'mb_hoch') {
     const l = LockService.getScriptLock();
     l.waitLock(25000);
