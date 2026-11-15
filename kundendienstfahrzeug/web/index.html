@@ -597,6 +597,7 @@ function uebernehmen(r){
   if(r.fahrzeug) lager.fahrzeug = r.fahrzeug;
   lager.geladen = true; lager.offline = !!r.offline; lager.fehler = r.offline ? (r.error || "") : "";
   lager.zeit = r.offline && r.zeit ? new Date(r.zeit) : new Date();
+  if(typeof teil !== "undefined" && teil && $("#teilDlg").open) teilSperre();
   return true;
 }
 let ladeLaeuft = null;
@@ -843,13 +844,23 @@ function oeffneTeil(t, titel){
   nameVonHand = !!teil.name;
   $("#nameListe").innerHTML = [...new Set([...lager.katalog.values(), ...lager.teile.map(x => x.name)])].slice(0, 400).map(n => `<option value="${esc(n)}">`).join("");
   teilListe(teil.liste || "bestand");
-  const ro = !kannAendern();
-  for(const id of ["#teilOk", "#teilDel", "#teilNachbestellen"]) $(id).disabled = ro;
+  const ro = teilSperre();
   // T-Doc schon im Hintergrund vorbereiten, während die Nummer getippt wird
   if(tdocEigen && !teil.name && !ro) fetch("/api/tdoc/vorwaermen", {method: "POST"}).catch(() => {});
   if(!$("#teilDlg").open) $("#teilDlg").showModal();
   setTimeout(() => (teil.nr ? (teil.name ? $("#fMenge") : $("#fName")) : $("#fNr")).focus(), 30);
-  if(ro) teilErr(lager.offline ? "Offline – Änderungen sind erst wieder mit Verbindung möglich." : "");
+}
+// Speichern ist gesperrt, solange nichts geändert werden darf – mit Grund, damit man nicht rätseln muss
+function teilSperre(){
+  const ro = !kannAendern();
+  for(const id of ["#teilOk", "#teilDel", "#teilNachbestellen"]) $(id).disabled = ro;
+  if(ro){
+    teilErr(lager.offline ? "Offline – Änderungen sind erst wieder mit Verbindung möglich."
+      : !lager.geladen ? "Der Bestand wird noch geladen … Speichern geht gleich."
+      : locked() ? "Der Zugang ist noch nicht freigeschaltet. Bitte oben anmelden."
+      : "Bitte zuerst anmelden.");
+  }else if(/Offline|geladen|freigeschaltet|anmelden/.test($("#teilErr").textContent)) teilErr("");
+  return ro;
 }
 function nrUebernehmen(){
   const n = teileNr($("#fNr").value);
