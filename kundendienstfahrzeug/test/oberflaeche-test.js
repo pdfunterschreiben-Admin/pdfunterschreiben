@@ -160,6 +160,18 @@ const [app, mock, out = '.'] = process.argv.slice(2);
   await page.click('#bestellOk'); await page.waitForSelector('#bestellDlg[open]', { state: 'detached' });
   await page.waitForSelector('#rows .chip.ok:has-text("bestellt")');
   ok('Bestellliste per E-Mail ans Lager (ins Fach), Teile als bestellt markiert');
+  await page.waitForSelector('#blDlg[open]');
+  assert(/2 bestellten Teile/.test(await page.textContent('#blText')));
+  await page.click('#blNein'); await page.waitForSelector('#blDlg[open]', { state: 'detached' });
+  assert.strictEqual(await page.locator('#rows .chip.ok:has-text("bestellt")').count(), 2);
+  ok('Rückfrage „Bestellliste leeren?“ – Nein behält die Teile');
+  // Ja löscht: nur das Teil, das nicht „Rad (Lenkrad“ ist (das wird unten noch gebraucht)
+  const anderes = await page.locator('#rows tr[data-id]', { hasText: 'bestellt' }).filter({ hasNotText: 'Rad (Lenkrad' }).first().getAttribute('data-id');
+  await page.evaluate(id => bestellLoeschenFragen([{ id, v: 0 }]), anderes);
+  await page.click('#blJa'); await page.waitForSelector('#blDlg[open]', { state: 'detached' });
+  await page.waitForFunction(id => !document.querySelector(`#rows tr[data-id="${id}"]`), anderes);
+  assert.strictEqual(await page.locator('#rows .chip.ok:has-text("bestellt")').count(), 1);
+  ok('Ja löscht das bestellte Teil von der Liste');
   await shot('05-fehlteile');
   // eingetroffen
   await page.locator('tr', { hasText: 'Rad (Lenkrad' }).locator('[data-a=da]').click();

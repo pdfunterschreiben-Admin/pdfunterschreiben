@@ -272,13 +272,21 @@ public class MainActivity extends Activity {
             .appendQueryParameter("source", "partsSearch");
         if (bt) u.appendQueryParameter("flag", "Standard,Special");
         toyotaText.setText("T-Doc sucht " + nummer + " …");
-        toyota.loadUrl(u.build().toString());
+        final String adresse = u.build().toString();
+        toyota.loadUrl(adresse);
         final String meine = suche;
+        // Hängt T-Doc nach 25 Sekunden noch, einmal neu laden (die erste Anfrage bleibt oft stecken)
+        handler.postDelayed(() -> {
+            if (meine.equals(suche)) toyota.loadUrl(adresse);
+        }, 25000);
         handler.postDelayed(() -> {
             if (meine.equals(suche)) {
                 String alt = sucheOriginal;
                 suche = null;
-                antwort(alt, null, "T-Doc hat nicht rechtzeitig geantwortet. Bitte die Toyota-Anmeldung prüfen (oben „T-Doc“).");
+                String seiteUrl = String.valueOf(toyota.getUrl());
+                String ort = seiteUrl.startsWith(TDOC) ? "T-Doc ist erreichbar, hat aber kein Ergebnis geliefert" : "die Toyota-Seite steht auf einer Anmeldung";
+                antwort(alt, null, "T-Doc hat nicht rechtzeitig geantwortet (" + ort + (leser.isEmpty() ? "; Lese-Skript fehlt" : "") + "). Oben „T-Doc“ öffnen, bei Toyota anmelden und noch einmal versuchen.");
+                if (!seiteUrl.startsWith(TDOC)) { toyotaText.setText("Bitte bei Toyota anmelden."); zeigeToyota(true); }
             }
         }, 70000);
     }

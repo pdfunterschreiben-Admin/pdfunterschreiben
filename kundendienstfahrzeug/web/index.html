@@ -208,14 +208,8 @@ dialog::backdrop{background:rgba(10,15,30,.55)}
         <div class="row" style="justify-content:space-between"><span class="chip info" id="syncChip">Wird geladen …</span><button class="ghost" id="syncBtn" title="Jetzt mit dem Server abgleichen">↻ Abgleichen</button></div>
       </section>
 
-      <section class="panel" id="handyPanel" aria-labelledby="h-handy">
-        <div class="step fold" id="handyFold" tabindex="0" role="button" aria-expanded="true"><b>03</b><h2 id="h-handy">Auf dem Handy</h2><span class="chev">▾</span></div>
-        <div class="qr"><canvas id="qrCanvas" width="29" height="29" aria-label="QR-Code zur Handy-Seite"></canvas>
-          <div class="col" style="gap:6px"><span class="hint">Mit der Handy-Kamera scannen und einmal mit derselben Arbeits-E-Mail anmelden.</span><span class="val" id="handyUrl"></span><button class="link" id="handyCopy" style="align-self:flex-start">Link kopieren</button></div></div>
-      </section>
-
       <section class="panel" aria-labelledby="h-excel">
-        <div class="step"><b>04</b><h2 id="h-excel">Excel</h2></div>
+        <div class="step"><b>03</b><h2 id="h-excel">Excel</h2></div>
         <div class="grid2" style="gap:8px">
           <button id="exportBtn" style="justify-content:center">⬇ Exportieren</button>
           <label class="btn file-btn" style="justify-content:center">⬆ Importieren<input type="file" id="importIn" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"></label>
@@ -360,6 +354,14 @@ dialog::backdrop{background:rgba(10,15,30,.55)}
       <p class="err" id="bestellErr" hidden></p>
     </div>
     <div class="dlg-foot"><span class="hint">Outlook öffnet die E-Mail mit der Excel-Mappe – du schickst sie selbst ab.</span><button class="primary" id="bestellOk">E-Mail erstellen</button></div>
+  </form>
+</dialog>
+
+<dialog id="blDlg">
+  <form method="dialog" class="dlg" style="max-width:min(420px,95vw)">
+    <div class="dlg-head"><strong>Bestellliste leeren?</strong></div>
+    <div class="dlg-body col" style="gap:10px"><span id="blText"></span><span class="hint">Die Teile bleiben sonst als „bestellt“ markiert auf der Liste.</span></div>
+    <div class="dlg-foot"><button type="button" class="ghost" id="blNein">Nein, behalten</button><button type="button" class="primary" id="blJa">Ja, löschen</button></div>
   </form>
 </dialog>
 
@@ -1380,9 +1382,31 @@ $("#bestellForm").addEventListener("submit", async e => {
   if(!r.ok) return bestellErr(r.error || "Die E-Mail konnte nicht erstellt werden.");
   state.bestellAn = [an.join("; "), ...(state.bestellAn || []).filter(x => x !== an.join("; "))].slice(0, 8); state.lieferung = lieferung; persist();
   $("#bestellDlg").close();
-  await aendern("wl_bestellt", {ids: teile.map(t => t.id)});
-  toast(r.via === "explorer" ? "Kein Outlook gefunden – die Excel-Datei liegt im geöffneten Ordner." : "E-Mail ist geöffnet – bitte in Outlook abschicken. Die Teile sind als bestellt markiert.", 8000);
+  await aendern("wl_bestellt", {ids: teile.map(t => t.id)}); // erst mal als bestellt markieren – falls die Rückfrage übersprungen wird
+  toast(r.via === "explorer" ? "Kein Outlook gefunden – die Excel-Datei liegt im geöffneten Ordner." : "E-Mail ist geöffnet – bitte in Outlook abschicken.", 5000);
+  bestellLoeschenFragen(teile);
 });
+
+// Nach dem Senden: bestellte Teile von der Bestellliste löschen (kurze Rückfrage)
+let bestelltListe = [];
+function bestellLoeschenFragen(teile){
+  bestelltListe = teile.map(t => ({id: t.id, v: t.v}));
+  $("#blText").textContent = `Wenn die E-Mail abgeschickt ist: die ${teile.length} bestellten ${teile.length === 1 ? "Teil" : "Teile"} von der Liste löschen?`;
+  $("#blDlg").showModal();
+}
+window.bestellLoeschenFragen = bestellLoeschenFragen; // auch für die Tests
+$("#blNein").onclick = () => $("#blDlg").close();
+$("#blJa").onclick = async () => {
+  $("#blJa").disabled = true;
+  let n = 0;
+  for(const t of bestelltListe){
+    const cur = lager.teile.find(x => x.id === t.id);
+    const r = await server("wl_loeschen", {teilId: t.id, v: cur ? cur.v : 0});
+    if(r.ok){ uebernehmen(r); n++; } else if(r.offline) break;
+  }
+  $("#blJa").disabled = false; $("#blDlg").close(); render();
+  toast(n === bestelltListe.length ? "Bestellliste geleert." : `${n} von ${bestelltListe.length} gelöscht.`, 4000);
+};
 
 /* ---------- Excel-Export ---------- */
 async function saveBlob(blob, name){
@@ -1413,21 +1437,6 @@ $("#exportBtn").onclick = async () => {
   }catch(e){ toast(e.message || "Export fehlgeschlagen.", 7000); }
 };
 
-/* ---------- Handy ---------- */
-function qrZeichnen(){
-  const u = window.HANDY_URL; if(!u) return;
-  $("#handyUrl").textContent = u.replace(/^https:\/\//, "");
-  try{
-    const m = qrMatrix(u), n = m.length, rand = 2, c = $("#qrCanvas");
-    c.width = c.height = n + rand * 2;
-    const g = c.getContext("2d"); g.fillStyle = "#fff"; g.fillRect(0, 0, c.width, c.height); g.fillStyle = "#000";
-    for(let y = 0; y < n; y++) for(let x = 0; x < n; x++) if(m[y][x]) g.fillRect(x + rand, y + rand, 1, 1);
-  }catch(e){ $("#qrCanvas").hidden = true; }
-}
-$("#handyCopy").onclick = async () => { try{ await navigator.clipboard.writeText(window.HANDY_URL); toast("Link kopiert – z. B. per Teams oder E-Mail ans Handy schicken."); }catch(e){ toast("Kopieren ging nicht."); } };
-function handyFold(zu){ state.handyZu = zu; $("#handyPanel").classList.toggle("closed", zu); $("#handyFold").setAttribute("aria-expanded", !zu); }
-$("#handyFold").onclick = () => { handyFold(!state.handyZu); persist(); };
-$("#handyFold").addEventListener("keydown", e => { if(e.key === "Enter" || e.key === " "){ e.preventDefault(); $("#handyFold").click(); } });
 
 $("#helpBtn").onclick = () => $("#helpDlg").showModal();
 
@@ -1636,12 +1645,11 @@ async function refreshBlock(event){
     const s = await (await fetch("/api/settings", {cache: "no-store"})).json();
     for(const k of ["user", "blocked", "testChannel", "people", "lastStart", "tab", "sort", "handyZu", "erwOk", "bestellAn", "lieferung"]) if(s[k] !== undefined && s[k] !== null) state[k] = s[k];
   }catch(e){}
-  handyFold(!!state.handyZu);
   renderUser(); render();
   try{
     const i = await (await fetch("/api/info", {cache: "no-store"})).json();
     $("#verText").dataset.v = i.version;
-    window.HANDY_URL = i.handy; qrZeichnen();
+    window.HANDY_URL = i.handy;
     reportOn = !!i.report; renderAdmin(); render();
     checkAccess();
     laden(false);
