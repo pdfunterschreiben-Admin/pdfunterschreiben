@@ -2056,13 +2056,23 @@ $("#printAll").onclick = () => printDocs(state.docs);
 /* ---------- Per E-Mail senden ---------- */
 // Berichtsart aus dem Inhalt erkennen: DGUV V3 (Prüfung elektrischer Geräte), UVV (DGUV-Vorschrift 68 / FEM 4.004)
 // oder sonst Montagebericht.
+// Zuerst zählt die Überschrift oben auf Seite 1 (ein Servicebericht mit „DGUV V3 durchgeführt“ in den Arbeiten bleibt
+// ein Montagebericht), dann der Anfang des Dateinamens („MB …“, „UVV …“, „DGUV …“), erst zuletzt der übrige Text.
 async function reportKind(doc){
   if(doc.kind) return doc.kind;
+  const kopf = (await pageLines(doc, 1)).slice().sort((a, b) => a.vy - b.vy).slice(0, 8).map(l => l.text).join(" ").toLowerCase().replace(/\s+/g, " ");
+  const n = (doc.name || "").toLowerCase().trim();
   let text = "";
   for(let i = 1; i <= Math.min(2, doc.pages.length); i++) for(const ln of await pageLines(doc, i)) text += ln.text + "\n";
-  const t = text.toLowerCase().replace(/\s+/g, " "), n = (doc.name || "").toLowerCase();
-  if(/prüfung elektrischer|dguv v3|dguv[- ]vorschrift 3\b|elektrische betriebsmittel/.test(t) || /dguv|v3/.test(n)) doc.kind = "dguv";
-  else if(/dguv[- ]vorschrift 68|fem 4\.004|uvv[- ]prüfprotokoll|prüfbericht.{0,20}uvv/.test(t) || /uvv/.test(n)) doc.kind = "uvv";
+  const t = text.toLowerCase().replace(/\s+/g, " ");
+  if(/prüfung elektrischer geräte|prüfprotokoll.{0,30}dguv v3/.test(kopf)) doc.kind = "dguv";
+  else if(/dguv[- ]vorschrift 68|fem 4\.004|uvv[- ]prüf/.test(kopf)) doc.kind = "uvv";
+  else if(/\b(service|montage|arbeits|reparatur)bericht\b/.test(kopf)) doc.kind = "montage";
+  else if(/^(mb|montage|service)\b/.test(n)) doc.kind = "montage";
+  else if(/^(dguv|v3)\b/.test(n)) doc.kind = "dguv";
+  else if(/^uvv\b/.test(n)) doc.kind = "uvv";
+  else if(/prüfung elektrischer|dguv[- ]vorschrift 3\b|elektrische betriebsmittel/.test(t)) doc.kind = "dguv";
+  else if(/dguv[- ]vorschrift 68|fem 4\.004|uvv[- ]prüfprotokoll|prüfbericht.{0,20}uvv/.test(t)) doc.kind = "uvv";
   else doc.kind = "montage";
   return doc.kind;
 }
@@ -2513,13 +2523,42 @@ async function docText(d){
   for(let i = 1; i <= d.pages.length; i++) for(const ln of await pageLines(d, i)) t += ln.text + "\n";
   return d.textAll = t;
 }
+// Wert, der in Formularen (z. B. DGUV-V3-Prüfprotokoll) UNTER der Beschriftung steht: in derselben Spalte,
+// höchstens drei Zeilenhöhen tiefer. Die Spalte reicht bis zur nächsten Beschriftung in der Zeile.
+async function wertUnter(d, rx){
+  for(let i = 1; i <= Math.min(2, d.pages.length); i++){
+    const lines = await pageLines(d, i);
+    for(const ln of lines){
+      const m = rx.exec(ln.text); if(!m) continue;
+      const x0 = ln.xAt(m.index) - 6;
+      const weiter = ln.segs.find(sg => sg.start >= m.index + m[0].length && sg.x > x0 + 20);
+      const x1 = weiter ? weiter.x - 6 : x0 + 170;
+      const unten = lines.filter(l => l.vy > ln.vy + 1 && l.vy - ln.vy < ln.fh * 3.2).sort((a, b) => a.vy - b.vy);
+      for(const l of unten){
+        const teil = l.segs.filter(sg => sg.x >= x0 && sg.x < x1).map(sg => l.text.substr(sg.start, sg.len)).join(" ").trim();
+        if(teil) return teil;
+      }
+    }
+  }
+  return "";
+}
 async function reportInfo(d){
   if(d.info) return d.info;
   const text = await docText(d);
   let nr = "";
   for(const rx of NR_RX){ const m = text.match(rx); if(m){ nr = m[1]; break; } }
+  if(!nr){ const w = await wertUnter(d, /Auftrags?\s*-?\s*(?:nr\.?|nummer)\s*:?/i); const m = w.match(/^([A-Za-z]{0,4}[\-\/]?\d[\w\-\/]{2,})$/); if(m) nr = m[1]; }
+  if(!nr){
+    // UVV-Prüfbericht: die Auftragsnummer steht ohne Beschriftung allein oben im Kopf
+    const l1 = (await pageLines(d, 1)).slice().sort((a, b) => a.vy - b.vy);
+    const oben = l1.length ? l1[0].vy + 260 : 0;
+    const m = l1.filter(l => l.vy < oben).map(l => l.text.trim().match(/^(\d{7,10})$/)).find(Boolean);
+    if(m) nr = m[1];
+  }
   if(!nr){ const m = d.name.match(/auftrag\D{0,3}(\d{4,})/i) || d.name.match(/^(\d{6,})/); if(m) nr = m[1]; }
   const sm = text.match(SER_RX);
+  // „Fahrgestellnummer : RRE140H #7080017“ (DGUV-Formular) → „RRE140H-7080017“ wie im Servicebericht
+  if(sm){ const z = text.slice(sm.index + sm[0].length).match(/^\s*#\s*([A-Za-z0-9][A-Za-z0-9\-\/]{3,})/); if(z) sm[1] = sm[1] + "-" + z[1]; }
   // „Datum:“/„Termin:“ im Kopf zählen zuerst; andere Daten (z. B. Unterschriftsdatum unten) nur zur Not
   const dates = new Set(), main = new Set();
   const key = m => `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
