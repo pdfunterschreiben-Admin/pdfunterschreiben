@@ -149,6 +149,7 @@ function handle(d) {
   if (ev === 'feedbackdelete') return feedbackDelete(ss, users, id, mail, d.code, d.text);
   if (ev === 'adminblock') return adminBlock(users, id, mail, d.code, d.text);
   if (ev === 'adminkd') return adminKd(users, id, mail, d.code, d.text);
+  if (ev === 'adminfarbe') return adminFarbe(users, id, mail, d.code, d.text);
   if (ev === 'adminuserdelete') return adminUserDelete(users, id, mail, d.code);
   if (ev === 'admindelete') return adminDelete(ss, users, id, mail, d.code, d.text);
   if (ev !== 'check') log.appendRow([now, name, mail, ev, "'" + (mb ? 'MB ' : wl ? (d.quelle === 'handy' ? 'KDF-Handy ' : 'KDF ') : pptx ? 'PPTX ' : '') + ver, n]);
@@ -200,7 +201,10 @@ function handle(d) {
   // kd: Schaltfläche „An Kundendienst senden“ zeigen (nur Service-Mappe; mbFreiFuer steht in Montageberichte.js)
   let kd = false;
   if (!pptx && (ev === 'start' || ev === 'check')) { try { kd = mbFreiFuer(mail, users); } catch (x) { } }
-  return { ok: true, verified: String(r[6]).toLowerCase() === 'ja', blocked: blocked, kd: kd };
+  // farbe: Hintergrundfarbe der Service-Mappe zum Spaß (in der Admin-App gesetzt, leer = Standard)
+  let farbe = '';
+  if (!pptx && (ev === 'start' || ev === 'check')) { try { farbe = nutzerFarbe(String(users.getRange(row, nutzerSpalte(users, FARBE_SPALTE)).getValue())); } catch (x) { } }
+  return { ok: true, verified: String(r[6]).toLowerCase() === 'ja', blocked: blocked, kd: kd, farbe: farbe };
 }
 
 // Verbesserungsvorschläge: landen im Blatt „Vorschläge“; der Admin bekommt zusätzlich eine E-Mail.
@@ -364,10 +368,13 @@ function adminList(ss, users, log, id, mail) {
   try { kdSp = mbFreiSpalte(users); } catch (x) { }
   const kdW = kdSp && u.length ? users.getRange(2, kdSp, u.length, 1).getValues().map(r => String(r[0]).trim().toLowerCase()) : [];
   const kd = u.map((r, i) => ADMIN_MAILS.indexOf(String(r[1]).toLowerCase()) >= 0 ? kdW[i] !== 'nein' : kdW[i] === 'ja');
-  return { ok: true, listen: lu.listen, vorlage: lu.vorlage, kdDa: !!kdSp,
+  let faSp = 0;
+  try { faSp = nutzerSpalte(users, FARBE_SPALTE); } catch (x) { }
+  const fa = faSp && u.length ? users.getRange(2, faSp, u.length, 1).getValues().map(r => nutzerFarbe(r[0])) : [];
+  return { ok: true, listen: lu.listen, vorlage: lu.vorlage, kdDa: !!kdSp, farbeDa: !!faSp,
     users: u.map((r, i) => ({ name: String(r[0]), email: String(r[1]), id: String(r[2]), version: String(r[3]).replace(/^'/, ''),
       first: iso(r[4]), last: iso(r[5]), verified: String(r[6]).toLowerCase() === 'ja', blocked: String(r[7]).trim().toLowerCase() === 'ja',
-      starts: Number(r[8]) || 0, kd: !!kd[i], kdAdmin: ADMIN_MAILS.indexOf(String(r[1]).toLowerCase()) >= 0 })),
+      starts: Number(r[8]) || 0, kd: !!kd[i], farbe: fa[i] || '', kdAdmin: ADMIN_MAILS.indexOf(String(r[1]).toLowerCase()) >= 0 })),
     log: l.map(r => ({ row: r[6], zeit: iso(r[0]), name: String(r[1]), email: String(r[2]), event: String(r[3]), version: String(r[4]).replace(/^'/, '') })) };
 }
 
@@ -393,6 +400,26 @@ function adminKd(users, id, mail, targetId, value) {
   const mails = users.getRange(2, 2, last - 1, 1).getValues();
   mails.forEach((m, i) => { if (String(m[0]).trim().toLowerCase() === ziel) users.getRange(i + 2, sp).setValue(an ? 'ja' : admin ? 'nein' : ''); });
   return { ok: true, kd: an, email: ziel };
+}
+
+// Admin-App: Hintergrundfarbe der Service-Mappe einer Person (alle Anmeldungen mit derselben E-Mail) – zum Spaß
+const FARBE_SPALTE = 'Farbe';
+function nutzerFarbe(v) { v = String(v || '').trim().toLowerCase(); return /^#[0-9a-f]{6}$/.test(v) ? v : ''; }
+function nutzerSpalte(users, name) {
+  const lc = Math.max(users.getLastColumn(), 1);
+  const head = users.getRange(1, 1, 1, lc).getValues()[0].map(h => String(h).trim());
+  let c = head.indexOf(name);
+  if (c < 0) { c = Math.max(lc, 12); users.getRange(1, c + 1).setValue(name).setFontWeight('bold'); }
+  return c + 1;
+}
+function adminFarbe(users, id, mail, targetId, value) {
+  if (!isAdmin(users, id, mail)) return { ok: false, error: 'Nur für den Administrator.' };
+  const row = findRow(users, String(targetId || ''));
+  if (row < 0) return { ok: false, error: 'Nutzer nicht gefunden.' };
+  const ziel = String(users.getRange(row, 2).getValue()).trim().toLowerCase(), farbe = nutzerFarbe(value);
+  const sp = nutzerSpalte(users, FARBE_SPALTE), mails = users.getRange(2, 2, users.getLastRow() - 1, 1).getValues();
+  mails.forEach((m, i) => { if (String(m[0]).trim().toLowerCase() === ziel) users.getRange(i + 2, sp).setValue(farbe); });
+  return { ok: true, farbe: farbe, email: ziel };
 }
 
 // Anmeldung (Zeile in „Nutzer“) löschen – auf dem Rechner muss man sich danach neu anmelden

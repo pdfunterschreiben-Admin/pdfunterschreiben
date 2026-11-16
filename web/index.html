@@ -2347,6 +2347,16 @@ async function checkAccess(){
   await refreshBlock("start");
   setInterval(() => refreshBlock("check"), 10 * 60 * 1000);
 }
+// Hintergrundfarbe zum Spaß – der Admin setzt sie in der Admin-App, leer = Standardfarbe
+function hintergrund(f){
+  f = /^#[0-9a-f]{6}$/i.test(f) ? f : "";
+  try{ if(f) localStorage.setItem("farbe", f); else localStorage.removeItem("farbe"); }catch(e){}
+  const root = document.documentElement;
+  if(!f){ root.style.removeProperty("--paper"); return; }
+  const dunkel = matchMedia("(prefers-color-scheme: dark)").matches;
+  root.style.setProperty("--paper", dunkel ? `color-mix(in srgb, ${f} 30%, #0f131b)` : f);
+}
+try{ hintergrund(localStorage.getItem("farbe") || ""); }catch(e){}
 async function refreshBlock(event){
   if(!state.user || !state.user.verified) return;
   const r = await call(event);
@@ -2355,6 +2365,7 @@ async function refreshBlock(event){
   const kdWar = !!state.kd; state.kd = !!r.kd;
   if(was !== state.blocked || kdWar !== state.kd) persist();
   if(kdWar !== state.kd) updateSaveAll();
+  hintergrund(r.farbe || "");
   if(state.blocked && !$("#blockDlg").open) $("#blockDlg").showModal();
   if(!state.blocked && $("#blockDlg").open){ $("#blockDlg").close(); toast("Zugang ist wieder freigegeben."); }
 }
