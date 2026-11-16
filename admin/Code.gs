@@ -148,6 +148,7 @@ function handle(d) {
   if (ev === 'adminlist') return adminList(ss, users, log, id, mail);
   if (ev === 'feedbackdelete') return feedbackDelete(ss, users, id, mail, d.code, d.text);
   if (ev === 'adminblock') return adminBlock(users, id, mail, d.code, d.text);
+  if (ev === 'adminkd') return adminKd(users, id, mail, d.code, d.text);
   if (ev === 'adminuserdelete') return adminUserDelete(users, id, mail, d.code);
   if (ev === 'admindelete') return adminDelete(ss, users, id, mail, d.code, d.text);
   if (ev !== 'check') log.appendRow([now, name, mail, ev, "'" + (mb ? 'MB ' : wl ? (d.quelle === 'handy' ? 'KDF-Handy ' : 'KDF ') : pptx ? 'PPTX ' : '') + ver, n]);
@@ -358,10 +359,14 @@ function adminList(ss, users, log, id, mail) {
   const first = log.getLastRow() - nLog + 1;
   const l = nLog ? log.getRange(first, 1, nLog, 6).getValues().map((r, i) => r.concat([first + i])).reverse() : [];
   const lu = listenUebersicht(ss);
-  return { ok: true, listen: lu.listen, vorlage: lu.vorlage,
-    users: u.map(r => ({ name: String(r[0]), email: String(r[1]), id: String(r[2]), version: String(r[3]).replace(/^'/, ''),
+  // „An Kundendienst senden“ (Spalte und mbFreiSpalte stehen in Montageberichte.js)
+  let kdSp = 0;
+  try { kdSp = mbFreiSpalte(users); } catch (x) { }
+  const kd = kdSp && u.length ? users.getRange(2, kdSp, u.length, 1).getValues().map(r => String(r[0]).trim().toLowerCase() === 'ja') : [];
+  return { ok: true, listen: lu.listen, vorlage: lu.vorlage, kdDa: !!kdSp,
+    users: u.map((r, i) => ({ name: String(r[0]), email: String(r[1]), id: String(r[2]), version: String(r[3]).replace(/^'/, ''),
       first: iso(r[4]), last: iso(r[5]), verified: String(r[6]).toLowerCase() === 'ja', blocked: String(r[7]).trim().toLowerCase() === 'ja',
-      starts: Number(r[8]) || 0 })),
+      starts: Number(r[8]) || 0, kd: !!kd[i], kdAdmin: ADMIN_MAILS.indexOf(String(r[1]).toLowerCase()) >= 0 })),
     log: l.map(r => ({ row: r[6], zeit: iso(r[0]), name: String(r[1]), email: String(r[2]), event: String(r[3]), version: String(r[4]).replace(/^'/, '') })) };
 }
 
@@ -374,6 +379,19 @@ function adminBlock(users, id, mail, targetId, value) {
   const block = String(value) === 'ja';
   users.getRange(row, 8).setValue(block ? 'ja' : '');
   return { ok: true, blocked: block };
+}
+
+// Admin-App: „An Kundendienst senden“ für eine Person (alle Anmeldungen mit derselben E-Mail) ein- oder ausschalten
+function adminKd(users, id, mail, targetId, value) {
+  if (!isAdmin(users, id, mail)) return { ok: false, error: 'Nur für den Administrator.' };
+  const row = findRow(users, String(targetId || ''));
+  if (row < 0) return { ok: false, error: 'Nutzer nicht gefunden.' };
+  const ziel = String(users.getRange(row, 2).getValue()).trim().toLowerCase();
+  if (ADMIN_MAILS.indexOf(ziel) >= 0) return { ok: true, kd: true, email: ziel, admin: true };
+  const an = String(value) === 'ja', sp = mbFreiSpalte(users), last = users.getLastRow();
+  const mails = users.getRange(2, 2, last - 1, 1).getValues();
+  mails.forEach((m, i) => { if (String(m[0]).trim().toLowerCase() === ziel) users.getRange(i + 2, sp).setValue(an ? 'ja' : ''); });
+  return { ok: true, kd: an, email: ziel };
 }
 
 // Anmeldung (Zeile in „Nutzer“) löschen – auf dem Rechner muss man sich danach neu anmelden
