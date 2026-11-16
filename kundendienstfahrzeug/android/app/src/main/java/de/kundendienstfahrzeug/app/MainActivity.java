@@ -55,7 +55,7 @@ public class MainActivity extends Activity {
     private String leser = "";
     private String suche = null;      // laufende T-Doc-Abfrage (Nummer ohne Bindestriche, ohne BT)
     private String sucheOriginal = null;
-    private long sucheBis = 0;
+    private long sucheBis = 0, sucheStart = 0, lesenStart = 0;
     private boolean toyotaSichtbar = false;
     private ValueCallback<Uri[]> auswahl;
     private Uri fotoUri;
@@ -283,6 +283,7 @@ public class MainActivity extends Activity {
         suche = bt ? roh.replaceFirst("^BT", "") : n;
         sucheOriginal = nummer;
         sucheBis = System.currentTimeMillis() + 70000;
+        sucheStart = System.currentTimeMillis(); lesenStart = 0;
         Uri.Builder u = Uri.parse(TDOC).buildUpon()
             .appendQueryParameter("partNumber", suche)
             .appendQueryParameter("truckType", bt ? "warehouseTrucks" : "counterBalanceTrucks")
@@ -320,6 +321,7 @@ public class MainActivity extends Activity {
     private void lesen() {
         if (suche == null || leser.isEmpty()) return;
         final String meine = suche;
+        if (lesenStart == 0) lesenStart = System.currentTimeMillis();
         String js = leser + "\nwindow.__kdfErgebnis=null;readToyotaPart(" + JSONObject.quote(meine)
             + ",45000).then(function(r){window.__kdfErgebnis=r;});void(0);";
         toyota.evaluateJavascript(js, null);
@@ -357,7 +359,12 @@ public class MainActivity extends Activity {
         try {
             JSONObject o = new JSONObject();
             o.put("nr", nummer == null ? "" : nummer);
-            if (name != null) o.put("name", name);
+            if (name != null) {
+                o.put("name", name);
+                long jetzt = System.currentTimeMillis();
+                o.put("sek", Math.round((jetzt - sucheStart) / 100.0) / 10.0);
+                if (lesenStart > 0) o.put("laden", Math.round((lesenStart - sucheStart) / 100.0) / 10.0);
+            }
             if (fehler != null) o.put("error", fehler);
             String js = "window.kdfTdoc&&window.kdfTdoc(" + JSONObject.quote(o.toString()) + ")";
             handler.post(() -> { if (unsereSeite(Uri.parse(String.valueOf(seite.getUrl())))) seite.evaluateJavascript(js, null); });

@@ -513,7 +513,7 @@ window.kdfTdoc = function(json){
   }
   if(teil && !$("teilBlatt").hidden && nrKey($("fNr").value) === nrKey(nr)){
     $("fTdoc").disabled = false;
-    if(r.name){ $("fName").value = r.name; hinweisName("✓ Bezeichnung aus T-Doc übernommen."); }
+    if(r.name){ $("fName").value = r.name; hinweisName("✓ Bezeichnung aus T-Doc übernommen" + (r.sek ? " (" + r.sek + " s" + (r.laden != null ? ", davon Laden " + r.laden + " s" : "") + ")" : "") + "."); }
     else hinweisName(esc(r.error || "T-Doc hat keine Bezeichnung geliefert."));
   }
 };
