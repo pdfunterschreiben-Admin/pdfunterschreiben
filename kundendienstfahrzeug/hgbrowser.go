@@ -653,7 +653,9 @@ func (b *hgBrowser) suche(nr, url string) (e hgErgebnis, ok bool) {
 	ohneNeuladen := false
 	if b.aufTdoc {
 		u, _ := json.Marshal(url)
-		ohneNeuladen = b.rufen("Runtime.evaluate", map[string]any{"expression": "globalThis.__kdfAufgeklappt=null;document.querySelectorAll('tr,[role=row]').forEach(e=>e.setAttribute('data-kdf-alt','1'));history.pushState({},''," + string(u) + ");dispatchEvent(new PopStateEvent('popstate',{state:{}}));true", "returnByValue": true}, true, 5*time.Second, nil) == nil
+		// Leser vorher laden: er hört T-Docs eigene Abfrage mit und nimmt die Bezeichnung direkt aus der Antwort
+		lj, _ := erweiterungFS.ReadFile("chrome/reader.js")
+		ohneNeuladen = b.rufen("Runtime.evaluate", map[string]any{"expression": string(lj) + "\n;globalThis.__kdfDirekt=null;globalThis.__kdfAufgeklappt=null;document.querySelectorAll('tr,[role=row]').forEach(e=>e.setAttribute('data-kdf-alt','1'));history.pushState({},''," + string(u) + ");dispatchEvent(new PopStateEvent('popstate',{state:{}}));true", "returnByValue": true}, true, 5*time.Second, nil) == nil
 	}
 	if ohneNeuladen {
 		b.marke("Wechsel innerhalb von T-Doc (ohne Neuladen)")

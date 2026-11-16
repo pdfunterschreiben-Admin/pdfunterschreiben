@@ -163,6 +163,8 @@ public class MainActivity extends Activity {
             @Override
             public void onPageFinished(WebView v, String url) {
                 tdocBereit = url != null && url.startsWith(TDOC);
+                // Mithören gleich nach dem Laden einschalten (Schnellweg für die nächste Suche)
+                if (tdocBereit && !leser.isEmpty()) v.evaluateJavascript(leser + "\n;void(0);", null);
                 if (suche == null) return;
                 if (url != null && url.startsWith(TDOC)) {
                     // Breites Layout (1280 px) erzwingen, dann lesen
@@ -296,8 +298,9 @@ public class MainActivity extends Activity {
         String jetzt = String.valueOf(toyota.getUrl());
         if (tdocBereit && jetzt.startsWith(TDOC)) {
             // Wechsel innerhalb von T-Doc ohne Neuladen (wie am Laptop): alte Zeilen markieren, Suche per Adresswechsel starten
-            toyota.evaluateJavascript("globalThis.__kdfAufgeklappt=null;document.querySelectorAll('tr,[role=row]').forEach(function(e){e.setAttribute('data-kdf-alt','1');});history.pushState({},''," + JSONObject.quote(adresse) + ");dispatchEvent(new PopStateEvent('popstate',{state:{}}));true", null);
-            handler.postDelayed(() -> { if (meine.equals(suche)) lesen(); }, 300);
+            // Leser vorher laden: er hört T-Docs eigene Abfrage mit und nimmt die Bezeichnung direkt aus der Antwort
+            toyota.evaluateJavascript(leser + "\n;globalThis.__kdfDirekt=null;globalThis.__kdfAufgeklappt=null;document.querySelectorAll('tr,[role=row]').forEach(function(e){e.setAttribute('data-kdf-alt','1');});history.pushState({},''," + JSONObject.quote(adresse) + ");dispatchEvent(new PopStateEvent('popstate',{state:{}}));true", null);
+            handler.postDelayed(() -> { if (meine.equals(suche)) lesen(); }, 150);
         } else {
             toyota.loadUrl(adresse);
         }
@@ -352,7 +355,7 @@ public class MainActivity extends Activity {
                 } catch (Exception ignored) { }
                 abfragen(meine);
             });
-        }, 250);
+        }, 150);
     }
 
     private void antwort(String nummer, String name, String fehler) {
