@@ -50,6 +50,20 @@ type hgBrowser struct {
 type hgAnfrage struct {
 	url, art   string
 	start, end time.Time
+	// nur im Mitschnitt-Modus
+	kopf, body, antwort, mime string
+	status                    int
+}
+
+// hgMitschnitt: schneidet die Netzwerkaufrufe einer Suche genauer mit (ohne Tokens/Cookies), um eine direkte T-Doc-Abfrage zu prüfen.
+var (
+	hgMitschnitt     atomic.Bool
+	hgMitschnittText string
+)
+
+func hgGeheim(name string) bool {
+	n := strings.ToLower(name)
+	return n == "authorization" || n == "cookie" || n == "set-cookie" || strings.Contains(n, "token") || strings.Contains(n, "secret")
 }
 
 func (b *hgBrowser) netzEreignis(roh []byte) {
@@ -59,9 +73,15 @@ func (b *hgBrowser) netzEreignis(roh []byte) {
 			RequestID string `json:"requestId"`
 			Type      string `json:"type"`
 			Request   struct {
-				URL    string `json:"url"`
-				Method string `json:"method"`
+				URL      string            `json:"url"`
+				Method   string            `json:"method"`
+				Headers  map[string]string `json:"headers"`
+				PostData string            `json:"postData"`
 			} `json:"request"`
+			Response struct {
+				Status   int    `json:"status"`
+				MimeType string `json:"mimeType"`
+			} `json:"response"`
 		} `json:"params"`
 	}
 	if json.Unmarshal(roh, &e) != nil || !strings.HasPrefix(e.Method, "Network.") {
@@ -75,11 +95,47 @@ func (b *hgBrowser) netzEreignis(roh []byte) {
 	switch e.Method {
 	case "Network.requestWillBeSent":
 		if e.Params.Type == "XHR" || e.Params.Type == "Fetch" || e.Params.Type == "Document" {
-			b.anfr[e.Params.RequestID] = &hgAnfrage{url: e.Params.Request.Method + " " + e.Params.Request.URL, art: e.Params.Type, start: time.Now()}
+			a := &hgAnfrage{url: e.Params.Request.Method + " " + e.Params.Request.URL, art: e.Params.Type, start: time.Now()}
+			if hgMitschnitt.Load() {
+				var kk []string
+				for k, v := range e.Params.Request.Headers {
+					if hgGeheim(k) {
+						v = fmt.Sprintf("<geschwärzt, %d Zeichen>", len(v))
+					} else if len(v) > 100 {
+						v = v[:100] + "…"
+					}
+					kk = append(kk, k+": "+v)
+				}
+				sort.Strings(kk)
+				a.kopf = strings.Join(kk, "\n      ")
+				a.body = e.Params.Request.PostData
+			}
+			b.anfr[e.Params.RequestID] = a
+		}
+	case "Network.responseReceived":
+		if a := b.anfr[e.Params.RequestID]; a != nil {
+			a.status, a.mime = e.Params.Response.Status, e.Params.Response.MimeType
 		}
 	case "Network.loadingFinished", "Network.loadingFailed":
 		if a := b.anfr[e.Params.RequestID]; a != nil && a.end.IsZero() {
 			a.end = time.Now()
+			if hgMitschnitt.Load() && e.Method == "Network.loadingFinished" && !strings.Contains(a.url, "login.microsoftonline") && !strings.Contains(a.url, "b2clogin") {
+				id := e.Params.RequestID
+				go func() {
+					var r struct {
+						Body          string `json:"body"`
+						Base64Encoded bool   `json:"base64Encoded"`
+					}
+					if b.rufen("Network.getResponseBody", map[string]any{"requestId": id}, true, 5*time.Second, &r) == nil && !r.Base64Encoded {
+						if len(r.Body) > 1500 {
+							r.Body = r.Body[:1500] + "… (gekürzt, " + fmt.Sprint(len(r.Body)) + " Zeichen)"
+						}
+						b.abMu.Lock()
+						a.antwort = r.Body
+						b.abMu.Unlock()
+					}
+				}()
+			}
 		}
 	}
 }
@@ -118,6 +174,25 @@ func (b *hgBrowser) ablaufText(nr string) string {
 		}
 		z = append(z, fmt.Sprintf("%6.1f s  %s (%s)", a.start.Sub(b.abStart).Seconds(), u, d))
 	}
+	if hgMitschnitt.Load() {
+		d := []string{"Mitschnitt der T-Doc-Aufrufe (Tokens und Cookies geschwärzt)"}
+		for _, a := range l {
+			if strings.Contains(a.url, "login.microsoftonline") || strings.Contains(a.url, "b2clogin") {
+				continue
+			}
+			d = append(d, "", a.url, fmt.Sprintf("   Status %d, %s", a.status, a.mime))
+			if a.kopf != "" {
+				d = append(d, "   Kopfzeilen:\n      "+a.kopf)
+			}
+			if a.body != "" {
+				d = append(d, "   Gesendet: "+a.body)
+			}
+			if a.antwort != "" {
+				d = append(d, "   Antwort: "+a.antwort)
+			}
+		}
+		hgMitschnittText = strings.Join(d, "\n")
+	}
 	b.anfr = nil
 	return strings.Join(z, "\n")
 }
@@ -126,6 +201,19 @@ var (
 	hgAblaufMu sync.Mutex
 	hgAblauf   string
 )
+
+func (a *app) handleTdocMitschnitt(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodPost {
+		hgMitschnitt.Store(true)
+		hgAblaufMu.Lock()
+		hgMitschnittText = ""
+		hgAblaufMu.Unlock()
+	}
+	hgAblaufMu.Lock()
+	t := hgMitschnittText
+	hgAblaufMu.Unlock()
+	writeJSON(w, map[string]any{"text": t, "an": hgMitschnitt.Load()})
+}
 
 func (a *app) handleTdocAblauf(w http.ResponseWriter, r *http.Request) {
 	hgAblaufMu.Lock()
