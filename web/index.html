@@ -159,13 +159,6 @@ main{display:flex;flex-direction:column;gap:18px;min-width:0}
   .print-page:last-child{break-after:auto}
   .print-page img{display:block;max-width:100%;max-height:100vh;object-fit:contain}
 }
-#kdHinweis{position:fixed;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.45);padding:16px}
-#kdHinweis[hidden]{display:none}
-#kdHinweis .box{background:var(--warn-soft);color:var(--warn);border:4px solid var(--warn);border-radius:16px;padding:28px 32px;max-width:760px;text-align:center;box-shadow:0 12px 40px rgba(0,0,0,.35)}
-#kdHinweis b{display:block;font-size:34px;line-height:1.2;margin-bottom:12px}
-#kdHinweis p{font-size:24px;line-height:1.35;margin:0 0 20px}
-#kdHinweis .row{justify-content:center;gap:12px}
-#kdHinweis button{font-size:20px;padding:12px 22px}
 #toast{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;background:var(--ink);color:var(--paper);padding:10px 16px;border-radius:8px;font-size:14px;max-width:min(560px,calc(100% - 32px));box-shadow:0 6px 20px rgba(0,0,0,.2);z-index:30}
 /* Ausschneiden aus PDF */
 dialog{border:0;border-radius:12px;padding:0;background:var(--sheet);color:var(--ink);width:min(980px,calc(100vw - 32px));max-height:calc(100vh - 32px);box-shadow:0 20px 60px rgba(0,0,0,.35)}
@@ -568,7 +561,6 @@ body{padding-bottom:172px}
         <button id="saveAll" hidden>💾 Alle speichern</button>
         <button class="primary" id="printAll" hidden>🖨 Drucken</button>
       </div>
-      <div id="kdHinweis" hidden role="alertdialog" aria-labelledby="kdHinweisT"><div class="box"><b id="kdHinweisT">⚠️ Berichte noch nicht beim Kundendienst!</b><p id="kdHinweisText"></p><div class="row"><button class="primary" id="kdHinweisSenden">📤 Jetzt an Kundendienst senden</button><button id="kdHinweisZu">Später</button></div></div></div>
       <div class="drop" id="drop" aria-hidden="true"><div><strong>Loslassen zum Öffnen</strong><p class="hint">PDFs und Excel-Dateien, auch mehrere auf einmal.</p></div></div>
       <div id="docs"></div>
       <section class="kalender panel" id="kalender" aria-label="Kalender">
@@ -1828,7 +1820,7 @@ async function saveExcel(doc){
 /* ---------- An Kundendienst senden (Programm „Kundendienst Montageberichte“) ----------
    Nur wer im Blatt „Nutzer“ in „An Kundendienst senden (ja)“ freigegeben ist, sieht die Schaltfläche und die Hinweise. */
 function kdOffen(){ return state.kd ? state.docs.filter(d => d && !d.excel && d.stamp && !d.kdGesendet) : []; }
-var kdLaeuft = false, kdUpdate = false;
+var kdLaeuft = false;
 async function kdEinen(d){
   const bytes = await signed(d); if(!bytes) return {ok: false, error: "Keine Unterschrift."};
   const info = await reportInfo(d), art = await reportKind(d);
@@ -1864,24 +1856,6 @@ async function kdSenden(){
   else toast((ok ? `${ok} gesendet, ` : "") + `${rest} noch nicht gesendet. ${fehler}`, 9000);
 }
 $("#kdAll").onclick = kdSenden;
-// Beim Schließen des Programms erinnern, wenn noch Berichte fehlen (nur wenn freigegeben)
-// Großer Hinweis: schon wenn die Maus Richtung Schließen-Kreuz aus dem Fenster fährt – dann steht er bereits da,
-// wenn die Windows-Meldung „Seite verlassen?“ kommt (solange die offen ist, kann die Seite nichts Neues anzeigen).
-function kdHinweis(){
-  const n = kdOffen().length; if(!n || kdLaeuft) return false;
-  $("#kdHinweisText").textContent = `${n === 1 ? "Ein unterschriebener Bericht wurde" : n + " unterschriebene Berichte wurden"} noch nicht an den Kundendienst geschickt. Bitte erst auf „📤 An Kundendienst senden“ klicken.`;
-  $("#kdHinweis").hidden = false;
-  return true;
-}
-$("#kdHinweisZu").onclick = () => { $("#kdHinweis").hidden = true; };
-$("#kdHinweisSenden").onclick = async () => { $("#kdHinweis").hidden = true; await kdSenden(); };
-document.documentElement.addEventListener("mouseleave", e => { if(e.clientY <= 8) kdHinweis(); });
-window.addEventListener("beforeunload", e => {
-  if(kdUpdate || !kdOffen().length) return;
-  kdHinweis();
-  e.preventDefault(); e.returnValue = "Die Berichte müssen erst noch an den Kundendienst geschickt werden.";
-  return e.returnValue;
-});
 async function saveDoc(doc){
   if(!ready(doc)) return;
   const bytes = await signed(doc); if(!bytes) return;
@@ -2221,7 +2195,7 @@ $("#updateBtn").onclick = async () => {
     const poll = async () => {
       try{
         const i = await (await fetch("/api/info", {cache: "no-store"})).json();
-        if(i.version === r.version){ kdUpdate = true; location.reload(); return; }
+        if(i.version === r.version){ location.reload(); return; }
       }catch(e){}
       if(Date.now() - t0 > 30000){ b.textContent = "Bitte Programm neu öffnen"; return; }
       setTimeout(poll, 500);
