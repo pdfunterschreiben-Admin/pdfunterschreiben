@@ -248,11 +248,10 @@ function userChip(u){
 // „An Kundendienst senden“ (Service-Mappe → Programm Kundendienst Montageberichte): gilt für die ganze Person (E-Mail)
 function kdZeile(u){
   if(!S.kdDa) return "";
-  if(u.kdAdmin) return `<div class="row" style="margin-top:8px;justify-content:space-between;align-items:center"><span>📤 An Kundendienst senden</span><span class="chip ok">immer an (Admin)</span></div>`;
   return `<div class="row" style="margin-top:8px;justify-content:space-between;align-items:center"><span>📤 An Kundendienst senden</span>
     <button class="${u.kd ? "" : "primary"}" data-kd="${esc(u.id)}" data-v="${u.kd ? "" : "ja"}">${u.kd ? "✓ An – ausschalten" : "Einschalten"}</button></div>`;
 }
-const kdChip = u => S.kdDa && (u.kd || u.kdAdmin) ? '<span class="chip ok" title="An Kundendienst senden">📤</span>' : "";
+const kdChip = u => S.kdDa && u.kd ? '<span class="chip ok" title="An Kundendienst senden">📤</span>' : "";
 function userDetails(u, ohneKd){
   return `<div class="muted">${esc(u.email)}</div>
       <div class="muted">Version ${esc(u.version)} · zuletzt aktiv ${esc(ago(u.last))} · ${u.starts} Starts</div>

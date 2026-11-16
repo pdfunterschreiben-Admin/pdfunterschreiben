@@ -362,7 +362,8 @@ function adminList(ss, users, log, id, mail) {
   // „An Kundendienst senden“ (Spalte und mbFreiSpalte stehen in Montageberichte.js)
   let kdSp = 0;
   try { kdSp = mbFreiSpalte(users); } catch (x) { }
-  const kd = kdSp && u.length ? users.getRange(2, kdSp, u.length, 1).getValues().map(r => String(r[0]).trim().toLowerCase() === 'ja') : [];
+  const kdW = kdSp && u.length ? users.getRange(2, kdSp, u.length, 1).getValues().map(r => String(r[0]).trim().toLowerCase()) : [];
+  const kd = u.map((r, i) => ADMIN_MAILS.indexOf(String(r[1]).toLowerCase()) >= 0 ? kdW[i] !== 'nein' : kdW[i] === 'ja');
   return { ok: true, listen: lu.listen, vorlage: lu.vorlage, kdDa: !!kdSp,
     users: u.map((r, i) => ({ name: String(r[0]), email: String(r[1]), id: String(r[2]), version: String(r[3]).replace(/^'/, ''),
       first: iso(r[4]), last: iso(r[5]), verified: String(r[6]).toLowerCase() === 'ja', blocked: String(r[7]).trim().toLowerCase() === 'ja',
@@ -387,10 +388,10 @@ function adminKd(users, id, mail, targetId, value) {
   const row = findRow(users, String(targetId || ''));
   if (row < 0) return { ok: false, error: 'Nutzer nicht gefunden.' };
   const ziel = String(users.getRange(row, 2).getValue()).trim().toLowerCase();
-  if (ADMIN_MAILS.indexOf(ziel) >= 0) return { ok: true, kd: true, email: ziel, admin: true };
+  const admin = ADMIN_MAILS.indexOf(ziel) >= 0;   // Admins: „nein“ schaltet aus, leer = an
   const an = String(value) === 'ja', sp = mbFreiSpalte(users), last = users.getLastRow();
   const mails = users.getRange(2, 2, last - 1, 1).getValues();
-  mails.forEach((m, i) => { if (String(m[0]).trim().toLowerCase() === ziel) users.getRange(i + 2, sp).setValue(an ? 'ja' : ''); });
+  mails.forEach((m, i) => { if (String(m[0]).trim().toLowerCase() === ziel) users.getRange(i + 2, sp).setValue(an ? 'ja' : admin ? 'nein' : ''); });
   return { ok: true, kd: an, email: ziel };
 }
 
