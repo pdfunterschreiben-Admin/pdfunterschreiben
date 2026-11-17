@@ -843,6 +843,25 @@ body{padding-bottom:172px}
   </form>
 </dialog>
 
+<dialog id="dsDlg">
+  <form method="dialog" class="dlg">
+    <div class="dlg-head"><strong>Datenschutz in der Service-Mappe</strong></div>
+    <div class="dlg-body help">
+      <p>Kurz, was mit welchen Daten passiert:</p>
+      <ul>
+        <li><b>Auf diesem Rechner</b> bleiben deine Unterschrift, deine Einstellungen und die geöffneten Berichte.</li>
+        <li><b>Fotos, Kunden-Unterschriften und Vorschauen vom Handy</b> laufen Ende-zu-Ende verschlüsselt über den Server und werden nach dem Abholen sofort gelöscht.</li>
+        <li><b>Kundendaten</b> (Visitenkarten) liegen nur verschlüsselt auf dem Server. Lesen können sie nur die Service-Mappen der Kollegen.</li>
+        <li><b>Berichte an den Kundendienst</b> gehen verschlüsselt ans Büro. Öffnen kann sie nur das Büro-Programm. Auf dem Server werden sie nach 12 Monaten gelöscht.</li>
+        <li><b>Texterkennung:</b> Fotos von Typenschildern und Visitenkarten werden zum Lesen kurz an die Texterkennung von Google geschickt und sofort wieder gelöscht.</li>
+        <li><b>Für Anmeldung, Updates und Hilfe</b> speichert der Server Name, Firmen-E-Mail, Programmversion, wann das Programm zuletzt genutzt wurde und wie oft gestartet, gespeichert, gedruckt und gemailt wurde. Das Protokoll wird nach 12 Monaten gelöscht.</li>
+      </ul>
+      <p class="hint">Fragen dazu: an den Administrator.</p>
+    </div>
+    <div class="dlg-foot"><span></span><button class="primary" value="ok" id="dsOk">Verstanden</button></div>
+  </form>
+</dialog>
+
 <dialog id="blockDlg">
   <form method="dialog" class="dlg">
     <div class="dlg-head"><strong>Programm gesperrt</strong></div>
@@ -929,8 +948,8 @@ const state = {sig: null, keyword: "Unterschrift Techniker, Servicetechniker", w
 let saveT;
 function persistNow(){
   clearTimeout(saveT);
-  const {sig, keyword, width, addDate, ink, tick, user, lastStart, blocked, testChannel, fold, people} = state;
-  return fetch("/api/settings", {method: "PUT", headers: {"Content-Type": "application/json"}, body: JSON.stringify({sig, keyword, width, addDate, ink, tick, user, lastStart, blocked, testChannel, fold, people})})
+  const {sig, keyword, width, addDate, ink, tick, user, lastStart, blocked, testChannel, fold, people, ds} = state;
+  return fetch("/api/settings", {method: "PUT", headers: {"Content-Type": "application/json"}, body: JSON.stringify({sig, keyword, width, addDate, ink, tick, user, lastStart, blocked, testChannel, fold, people, ds})})
     .catch(() => toast("Einstellungen konnten nicht gespeichert werden."));
 }
 function persist(){
@@ -2357,6 +2376,7 @@ function hintergrund(f){
   root.style.setProperty("--paper", dunkel ? `color-mix(in srgb, ${f} 30%, #0f131b)` : f);
 }
 try{ hintergrund(localStorage.getItem("farbe") || ""); }catch(e){}
+$("#dsDlg").addEventListener("close", () => { state.ds = 1; persist(); });
 async function refreshBlock(event){
   if(!state.user || !state.user.verified) return;
   const r = await call(event);
@@ -2367,6 +2387,8 @@ async function refreshBlock(event){
   if(kdWar !== state.kd) updateSaveAll();
   hintergrund(r.farbe || "");
   if(state.blocked && !$("#blockDlg").open) $("#blockDlg").showModal();
+  // Datenschutz-Hinweis einmal zeigen (ds = Stand des Hinweises)
+  if(!state.blocked && (state.ds || 0) < 1 && !$("#dsDlg").open && !document.querySelector("dialog[open]")) $("#dsDlg").showModal();
   if(!state.blocked && $("#blockDlg").open){ $("#blockDlg").close(); toast("Zugang ist wieder freigegeben."); }
 }
 
@@ -3008,7 +3030,7 @@ function initFold(){
 (async () => {
   try{
     const s = await (await fetch("/api/settings", {cache: "no-store"})).json();
-    for(const k of ["sig","keyword","width","addDate","ink","tick","user","lastStart","blocked","testChannel","fold","people"]) if(s[k] !== undefined && s[k] !== null) state[k] = s[k];
+    for(const k of ["sig","keyword","width","addDate","ink","tick","user","lastStart","blocked","testChannel","fold","people","ds"]) if(s[k] !== undefined && s[k] !== null) state[k] = s[k];
     if(state.keyword.trim() === "Unterschrift Techniker"){ state.keyword = "Unterschrift Techniker, Servicetechniker"; persist(); }
   }catch(e){}
   initFold(); renderSettings(); renderSig(); renderAll(); renderUser();
