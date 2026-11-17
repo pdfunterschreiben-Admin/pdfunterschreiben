@@ -398,6 +398,28 @@ func (a *app) handleFormularGeraete(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]any{"ok": false, "error": "Bitte zuerst im Programm anmelden."})
 		return
 	}
+	// Kundendaten verschlüsselt (kundenkrypto.go); kann der Server das noch nicht, wie bisher
+	if req.Event == "kd_holen" || req.Event == "kd_speichern" || req.Event == "kd_loeschen" {
+		var text string
+		var err error
+		switch req.Event {
+		case "kd_holen":
+			text, err = kdHolen()
+		case "kd_speichern":
+			text, err = kdSpeichern(req.Kd)
+		default:
+			err = kdLoeschen(req.Kd["id"])
+			text = "ok"
+		}
+		if err == nil {
+			writeJSON(w, map[string]any{"ok": true, "text": text})
+			return
+		}
+		if err != errKdAlt {
+			writeJSON(w, map[string]any{"ok": false, "error": err.Error()})
+			return
+		}
+	}
 	t, err := serverText(map[string]any{"key": ReportKey, "event": req.Event, "seit": req.Seit, "geraete": req.Geraete, "pruefung": req.Pruef, "daten": req.Daten, "kunde": req.Kunde, "kd": req.Kd, "token": req.Token,
 		"name": u.Name, "email": u.Email, "version": Version}, 60*time.Second)
 	if err != nil {

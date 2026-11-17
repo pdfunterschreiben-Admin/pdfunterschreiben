@@ -50,6 +50,7 @@ func runApp(relaunch bool) {
 	cleanupOld()
 	_ = os.WriteFile(iconPath(), appIcon, 0o644)
 	go func() { refreshIcon(); migrateName() }()
+	kdHintergrund() // Kundendaten-Schlüssel bereithalten und an neue Kollegen weitergeben
 
 	ln, mine := listenOwn(relaunch)
 	if ln == nil {

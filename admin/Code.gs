@@ -64,9 +64,9 @@ function doPost(e) {
     return ContentService.createTextOutput(t).setMimeType(ContentService.MimeType.TEXT);
   }
   // Service-Mappe: persönliche Kundendaten (nur für den angemeldeten Nutzer)
-  if (d && d.key === KEY && /^kd_(holen|speichern|loeschen|scanstart|scanergebnis)$/.test(String(d.event || ''))) {
+  if (d && d.key === KEY && /^kd_(holen|speichern|loeschen|scanstart|scanergebnis|holen2|speichern2|krypto|krypto_neu|krypto_geben)$/.test(String(d.event || ''))) {
     // Sperre nur beim Schreiben – Lesen und Visitenkarten-Scan (nur Cache) laufen ohne Warten
-    const l = /^kd_(speichern|loeschen)$/.test(d.event) ? LockService.getScriptLock() : null;
+    const l = /^kd_(speichern|loeschen|speichern2|krypto|krypto_neu|krypto_geben)$/.test(d.event) ? LockService.getScriptLock() : null;
     if (l) l.waitLock(20000);
     let t;
     try { t = 'OK\n' + kundendatenAnfrage(d); } catch (x) { t = 'FEHLER\n' + x.message; }
@@ -517,11 +517,63 @@ function berechtigungenPruefen() {
   UrlFetchApp.fetch('https://www.googleapis.com/drive/v3/about?fields=user', { headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() } });
 }
 
+// ---------------- Schlüssel für die verschlüsselten Kundendaten ----------------
+// Jede Service-Mappe hat ein eigenes Schlüsselpaar (Spalte „Geräteschlüssel“ im Blatt „Nutzer“). Der gemeinsame
+// Kundendaten-Schlüssel liegt je Rechner mit dessen öffentlichem Schlüssel verpackt in „KD-Schlüssel“ – Google kann ihn
+// nicht öffnen. Der erste Schlüssel entsteht beim Admin; danach gibt jede Service-Mappe, die ihn hat, ihn an neue
+// Rechner weiter (kd_krypto_geben). Script Property „kd_fp“ = Fingerabdruck des aktuellen Schlüssels.
+function kdKrypto(ev, d, mail) {
+  const users = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Nutzer');
+  const row = users ? findRow(users, clean(d.id, 64)) : -1;
+  if (row < 0) throw new Error('Bitte neu anmelden.');
+  const r = users.getRange(row, 1, 1, 8).getValues()[0];
+  if (String(r[1]).trim().toLowerCase() !== mail || String(r[6]).toLowerCase() !== 'ja' || String(r[7]).trim().toLowerCase() === 'ja') throw new Error('Bitte neu anmelden.');
+  const spPub = nutzerSpalte(users, 'Geräteschlüssel'), spK = nutzerSpalte(users, 'KD-Schlüssel');
+  const p = PropertiesService.getScriptProperties(), fp = p.getProperty('kd_fp') || '';
+  const b64ok = function (x, max) { return /^[A-Za-z0-9+\/=]+$/.test(x) && x.length < max; };
+  if (ev === 'kd_krypto') {
+    const pub = String(d.pub || '');
+    if (pub && b64ok(pub, 2000) && String(users.getRange(row, spPub).getValue()) !== pub) {
+      users.getRange(row, spPub).setValue(pub); users.getRange(row, spK).setValue('');   // neues Schlüsselpaar: neu verpacken
+    }
+    const meinK = String(users.getRange(row, spK).getValue() || '');
+    const out = { k: meinK, fp: fp, neu: !fp && ADMIN_MAILS.indexOf(mail) >= 0, bedarf: [] };
+    if (meinK && fp && users.getLastRow() > 1) {
+      const n = users.getLastRow() - 1, ids = users.getRange(2, 3, n, 1).getValues(), pubs = users.getRange(2, spPub, n, 1).getValues(),
+        ks = users.getRange(2, spK, n, 1).getValues(), frei = users.getRange(2, 7, n, 2).getValues();
+      for (let i = 0; i < n && out.bedarf.length < 50; i++)
+        if (pubs[i][0] && !ks[i][0] && String(frei[i][0]).toLowerCase() === 'ja' && String(frei[i][1]).trim().toLowerCase() !== 'ja')
+          out.bedarf.push({ id: String(ids[i][0]), pub: String(pubs[i][0]) });
+    }
+    return JSON.stringify(out);
+  }
+  if (ev === 'kd_krypto_neu') {
+    if (fp) throw new Error('Es gibt schon einen Schlüssel.');
+    if (ADMIN_MAILS.indexOf(mail) < 0) throw new Error('Nur der Admin.');
+    const k = String(d.k || ''), nfp = String(d.fp || '').replace(/[^0-9a-f]/g, '').slice(0, 24);
+    if (!b64ok(k, 2000) || nfp.length < 12) throw new Error('Ungültige Daten.');
+    users.getRange(row, spK).setValue(k); p.setProperty('kd_fp', nfp);
+    return 'ok';
+  }
+  if (ev === 'kd_krypto_geben') {
+    if (!fp || String(d.fp || '') !== fp || !users.getRange(row, spK).getValue()) throw new Error('Nicht berechtigt.');
+    const liste = Array.isArray(d.liste) ? d.liste.slice(0, 50) : [];
+    let n = 0;
+    liste.forEach(function (e) {
+      const z = findRow(users, clean(e.id, 64)), k = String(e.k || '');
+      if (z > 1 && b64ok(k, 2000) && users.getRange(z, spPub).getValue() && !users.getRange(z, spK).getValue()) { users.getRange(z, spK).setValue(k); n++; }
+    });
+    return String(n);
+  }
+  throw new Error('Unbekannte Anfrage.');
+}
+
 // ---------------- Persönliche Kundendaten (Visitenkarten) ----------------
 // Nur der angemeldete Nutzer sieht und ändert seine eigenen Einträge. Blatt „Kundendaten“, nach Besitzer gefiltert.
 function kundendatenSheet(ss) {
-  const s = sheet(ss || SpreadsheetApp.getActiveSpreadsheet(), 'Kundendaten', ['Angelegt von', 'Firma', 'Name', 'E-Mail', 'Telefon', 'ID', 'Zuletzt', 'Straße', 'Ort', 'Geändert von']);
+  const s = sheet(ss || SpreadsheetApp.getActiveSpreadsheet(), 'Kundendaten', ['Angelegt von', 'Firma', 'Name', 'E-Mail', 'Telefon', 'ID', 'Zuletzt', 'Straße', 'Ort', 'Geändert von', 'Daten (verschlüsselt)']);
   if (s.getLastColumn() < 10) s.getRange(1, 8, 1, 3).setValues([['Straße', 'Ort', 'Geändert von']]);
+  if (s.getLastColumn() < 11) s.getRange(1, 11).setValue('Daten (verschlüsselt)').setFontWeight('bold');
   return s;
 }
 function kundendatenAnfrage(d) {
@@ -542,7 +594,8 @@ function kundendatenAnfrage(d) {
   const s = kundendatenSheet();
   // Kundendaten sind gemeinsam für alle Techniker (seit 1.20.46); doppelte Einträge werden nur einmal geliefert
   const norm = function (x) { return String(x == null ? '' : x).toLowerCase().replace(/\s+/g, ' ').trim(); };
-  const inhalt = function (r) { return [r[1], r[2], r[3], r[4], r[7], r[8]].map(norm).join('|'); };
+  // verschlüsselte Einträge (Spalte K) sind für den Server nie „gleich“ – das prüft die Service-Mappe selbst
+  const inhalt = function (r) { return r[10] ? 'enc:' + r[5] : [r[1], r[2], r[3], r[4], r[7], r[8]].map(norm).join('|'); };
   // gleiche Einträge (z. B. von zwei Kollegen doppelt angelegt) werden nur einmal angezeigt – beim Ändern/Löschen mit entfernen
   const doppelteWeg = function (v, row) {
     const schl = inhalt(v[row - 1]);
@@ -570,7 +623,7 @@ function kundendatenAnfrage(d) {
     for (let i = 1; i < v.length; i++) if (String(v[i][5]) === id) { row = i + 1; break; }
     // ohne ID (neu): gleiche Firma + gleicher Ansprechpartner schon da (z. B. von einem Kollegen) -> diesen ergänzen
     if (!row && !clean(kd.id, 40)) for (let i = 1; i < v.length; i++)
-      if (norm(v[i][1]) === norm(firma) && norm(v[i][2]) === norm(name)) { row = i + 1; ergaenzen = true; break; }
+      if (!v[i][10] && norm(v[i][1]) === norm(firma) && norm(v[i][2]) === norm(name)) { row = i + 1; ergaenzen = true; break; }
     if (row) {
       const a = v[row - 1];
       row = doppelteWeg(v, row);
@@ -582,6 +635,39 @@ function kundendatenAnfrage(d) {
     s.appendRow([mail, firma, name, em, tel, id, new Date(), strasse, ort, mail]);
     return id;
   }
+  // ---- verschlüsselte Kundendaten (Service-Mappe ab 1.20.59, kundenkrypto.go) ----
+  // Der Server sieht nur ID, Besitzer und den verschlüsselten Inhalt. Zusammenführen und doppelte Einträge erkennt das Programm.
+  if (ev === 'kd_holen2') {
+    const v = s.getDataRange().getValues(), out = [];
+    for (let i = 1; i < v.length; i++) {
+      const id = String(v[i][5] || ''); if (!id) continue;
+      if (v[i][10]) { out.push(id + '\tE\t' + String(v[i][10])); continue; }
+      const z = [v[i][1], v[i][2], v[i][3], v[i][4], v[i][7], v[i][8]].map(function (x) { return String(x == null ? '' : x).replace(/[\t\n]/g, ' '); });
+      if (z[0] || z[1] || z[2] || z[3]) out.push(id + '\tP\t' + z.join('\t'));
+    }
+    return out.join('\n');
+  }
+  if (ev === 'kd_speichern2') {
+    const liste = Array.isArray(kd.liste) ? kd.liste.slice(0, 500) : [kd];
+    const v = s.getDataRange().getValues(), zeilen = {}, ids = [];
+    for (let i = 1; i < v.length; i++) zeilen[String(v[i][5])] = i + 1;
+    liste.forEach(function (e) {
+      const blob = String(e.blob || '');
+      if (!/^[A-Za-z0-9+\/=]{40,20000}$/.test(blob)) throw new Error('Ungültige Daten.');
+      const id = clean(e.id, 40) || Utilities.getUuid().replace(/-/g, '').slice(0, 12);
+      const row = zeilen[id];
+      if (row) {
+        const a = s.getRange(row, 1, 1, 11).getValues()[0];
+        s.getRange(row, 1, 1, 11).setValues([[a[0] || mail, '', '', '', '', id, new Date(), '', '', mail, blob]]);
+      } else {
+        s.appendRow([mail, '', '', '', '', id, new Date(), '', '', mail, blob]);
+        zeilen[id] = s.getLastRow();
+      }
+      ids.push(id);
+    });
+    return ids.join('\n');
+  }
+  if (/^kd_krypto/.test(ev)) return kdKrypto(ev, d, mail);
   if (ev === 'kd_loeschen') {
     const id = clean(kd.id, 40); if (!id) throw new Error('Keine ID.');
     const v = s.getDataRange().getValues();
