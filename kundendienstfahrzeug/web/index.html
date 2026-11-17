@@ -117,6 +117,9 @@ td.name{overflow-wrap:anywhere}
 td.name .zeit{display:block;font-size:12px;color:var(--muted)}
 td.ort{color:var(--muted);white-space:nowrap}
 td.menge{white-space:nowrap;width:1%}
+td.soll{width:1%;white-space:nowrap}
+td.soll input{width:62px;text-align:center;font:600 14px var(--f-mono);padding:5px 6px}
+td.soll input.warn{color:var(--warn);border-color:var(--warn)}
 td.akt{white-space:nowrap;width:1%;text-align:right}
 .stepper{display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--sheet)}
 .stepper button{border:0;border-radius:0;padding:6px 11px;font-size:16px;line-height:1;background:transparent}
@@ -273,7 +276,7 @@ dialog::backdrop{background:rgba(10,15,30,.55)}
         </div>
         <div id="tableBox">
           <table>
-            <thead><tr><th>Teilenummer</th><th>Bezeichnung</th><th>Lagerort</th><th>Stück</th><th><span class="hint" style="font-weight:400;text-transform:none;letter-spacing:0"></span></th></tr></thead>
+            <thead><tr><th>Teilenummer</th><th>Bezeichnung</th><th>Lagerort</th><th>Stück</th><th id="thSoll" title="Soll-Bestand: sinkt der Bestand auf die Hälfte oder weniger, kommt das Teil von selbst auf die Bestellliste">Soll</th><th><span class="hint" style="font-weight:400;text-transform:none;letter-spacing:0"></span></th></tr></thead>
             <tbody id="rows"></tbody>
           </table>
         </div>
@@ -790,6 +793,7 @@ function render(){
     return;
   }
   const dis = kannAendern() ? "" : " disabled";
+  $("#thSoll").hidden = state.tab !== "bestand";
   $("#rows").innerHTML = liste.map(t => {
     const m = menge(t), o = offen.get(t.id);
     const akt = t.liste === "bestand"
@@ -799,7 +803,8 @@ function render(){
       <td class="nr"><button type="button" data-a="edit" title="Bearbeiten">${esc(t.nr)}</button></td>
       <td class="name">${esc(t.name)}${t.liste === "fehlt" && t.bestellt ? ` <span class="chip ok" title="Bestellung ans Lager geschickt">bestellt ${esc(new Date(t.bestellt).toLocaleDateString("de-DE", {day: "2-digit", month: "2-digit"}))}</span>` : ""}${state.sort === "zeit" && t.zeit ? `<span class="zeit">${esc(zeitText(t.zeit))}</span>` : ""}</td>
       <td class="ort">${esc(t.ort || "–")}</td>
-      <td class="menge"><span class="stepper${m === 0 && t.liste === "bestand" ? " leer" : ""}${o ? " wartet" : ""}"><button type="button" data-a="minus" aria-label="eins weniger"${dis}>−</button><output>${zahl(m)}</output><button type="button" data-a="plus" aria-label="eins mehr"${dis}>＋</button></span>${t.liste === "bestand" && t.soll > 0 ? `<span class="sollz${m * 2 <= t.soll ? " warn" : ""}" title="Soll-Bestand: bei der Hälfte oder weniger kommt das Teil automatisch auf die Bestellliste">Soll ${zahl(t.soll)}</span>` : ""}</td>
+      <td class="menge"><span class="stepper${m === 0 && t.liste === "bestand" ? " leer" : ""}${o ? " wartet" : ""}"><button type="button" data-a="minus" aria-label="eins weniger"${dis}>−</button><output>${zahl(m)}</output><button type="button" data-a="plus" aria-label="eins mehr"${dis}>＋</button></span></td>
+      ${t.liste === "bestand" ? `<td class="soll"><input type="number" class="sollIn${t.soll > 0 && m * 2 <= t.soll ? " warn" : ""}" min="0" max="999999" step="1" inputmode="numeric" value="${t.soll > 0 ? t.soll : ""}" placeholder="–" aria-label="Soll-Bestand von ${esc(t.name)}" title="Soll-Bestand eintragen – bei der Hälfte oder weniger kommt das Teil automatisch auf die Bestellliste"${dis}></td>` : ""}
       <td class="akt">${akt} <button type="button" class="ghost" data-a="edit" title="Bearbeiten" aria-label="Bearbeiten"><svg class="i solo" aria-hidden="true"><use href="#i-pencil"/></svg></button></td></tr>`;
   }).join("");
   neuMarkiert = new Set();
@@ -815,6 +820,22 @@ $("#rows").addEventListener("click", e => {
   if(a === "plus") return mengeAendern(t, +1);
   if(a === "nach") return nachbestellen(t);
   if(a === "da") return eingetroffen(t);
+});
+
+// Soll direkt in der Liste eintragen
+$("#rows").addEventListener("change", async e => {
+  const inp = e.target.closest("input.sollIn"); if(!inp) return;
+  const id = inp.closest("tr").dataset.id;
+  if(nichtJetzt()) return render();
+  const soll = inp.value.trim() === "" ? 0 : Number(inp.value);
+  if(!Number.isInteger(soll) || soll < 0 || soll > 999999){ toast("Das Soll muss eine ganze Zahl von 0 bis 999999 sein."); return render(); }
+  await offenSenden(); // offene Stückzahl-Änderungen zuerst, damit nichts überschrieben wird
+  const t = lager.teile.find(x => x.id === id); if(!t || (t.soll || 0) === soll) return render();
+  const vorher = lager.teile.filter(x => x.liste === "fehlt" && nrKey(x.nr) === nrKey(t.nr)).length;
+  const r = await aendern("wl_speichern", {teil: {id: t.id, v: t.v, liste: t.liste, nr: t.nr, name: t.name, ort: t.ort, menge: t.menge, soll}});
+  if(!r.ok) return;
+  const jetzt = lager.teile.filter(x => x.liste === "fehlt" && nrKey(x.nr) === nrKey(t.nr)).length;
+  toast(jetzt > vorher ? `Soll ${soll}: „${t.name}“ ist darunter – auf die Bestellliste gesetzt.` : (soll > 0 ? `Soll ${soll} gespeichert.` : "Soll entfernt."), 6000);
 });
 
 // Mehrere Klicks in kurzer Folge werden zu einer Änderung zusammengefasst

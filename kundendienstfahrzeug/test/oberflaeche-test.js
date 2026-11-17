@@ -261,7 +261,8 @@ const [app, mock, out = '.'] = process.argv.slice(2);
   await page.fill('#fNr', '4010-555'); await page.fill('#fName', 'Sollschraube'); await page.fill('#fMenge', '6'); await page.fill('#fSoll', '6');
   await shot('11-soll-dialog');
   await page.click('#teilOk');
-  await page.waitForSelector('tr:has-text("Sollschraube") .sollz:has-text("Soll 6")');
+  await page.waitForSelector('tr:has-text("Sollschraube") input.sollIn');
+  assert.strictEqual(await page.locator('tr', { hasText: 'Sollschraube' }).locator('input.sollIn').inputValue(), '6');
   const sollZeile = page.locator('tr', { hasText: 'Sollschraube' });
   for (let i = 0; i < 3; i++) { await sollZeile.locator('[data-a=minus]').click(); }
   await page.waitForFunction(() => document.querySelector('#toast') && /halben Soll/.test(document.querySelector('#toast').textContent), null, { timeout: 8000 });
@@ -270,6 +271,17 @@ const [app, mock, out = '.'] = process.argv.slice(2);
   assert.strictEqual(await page.locator('tr', { hasText: 'Sollschraube' }).locator('output').textContent(), '3');
   await page.click('#tabBestand');
   ok('Soll-Bestand: bei halbem Bestand automatisch auf der Bestellliste (Stückzahl bis Soll)');
+
+  // Soll direkt in der Liste eintragen (Spalte „Soll“ neben „Stück“)
+  assert(await page.isVisible('#thSoll'));
+  const akk = page.locator('tr', { hasText: 'Akkusäure' }).locator('input.sollIn');
+  await akk.fill('6'); await akk.press('Tab');
+  await page.waitForFunction(() => /auf die Bestellliste gesetzt/.test(document.querySelector('#toast').textContent), null, { timeout: 8000 });
+  await page.click('#tabFehlt'); await page.waitForSelector('tr:has-text("Akkusäure")');
+  assert.strictEqual(await page.locator('tr', { hasText: 'Akkusäure' }).locator('output').textContent(), '4');
+  assert(!(await page.isVisible('#thSoll')));
+  await page.click('#tabBestand'); await shot('12-soll-spalte');
+  ok('Soll-Spalte: Wert in der Liste eingeben → Teil kommt automatisch auf die Bestellliste');
 
   await page.click('#helpBtn'); await page.waitForSelector('#helpDlg[open]'); await shot('08-anleitung'); await page.keyboard.press('Escape');
 
