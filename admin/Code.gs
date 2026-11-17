@@ -74,6 +74,11 @@ function doPost(e) {
     return ContentService.createTextOutput(t).setMimeType(ContentService.MimeType.TEXT);
   }
   // Kundendienst Montageberichte: unterschriebene Berichte von der Service-Mappe ablegen (server/Montageberichte.js im Repository kundendienst-montageberichte)
+  // öffentlicher Schlüssel des Büros für verschlüsselte Montageberichte (Montageberichte.js)
+  if (d && d.key === KEY && d.event === 'mb_pubkey') {
+    let t; try { t = 'OK\n' + mbPubText(); } catch (x) { t = 'FEHLER\n' + x.message; }
+    return ContentService.createTextOutput(t).setMimeType(ContentService.MimeType.TEXT);
+  }
   if (d && d.key === KEY && d.event === 'mb_hoch') {
     const l = LockService.getScriptLock();
     l.waitLock(25000);
@@ -83,7 +88,7 @@ function doPost(e) {
     return ContentService.createTextOutput(t).setMimeType(ContentService.MimeType.TEXT);
   }
   // … und vom Büro-Programm lesen (nur freigeschaltete und berechtigte Rechner, ohne Sperre)
-  if (d && d.key === KEY && d.app === 'montageberichte' && /^mb_(monteure|liste|datei)$/.test(String(d.event || ''))) {
+  if (d && d.key === KEY && d.app === 'montageberichte' && /^mb_(monteure|liste|datei|schluessel_holen|schluessel_setzen)$/.test(String(d.event || ''))) {
     try { return out(montageberichteAnfrage(d)); } catch (x) { return out({ ok: false, error: x.message }); }
   }
   // Fotos vom Handy (QR-Code) – ohne Sperre

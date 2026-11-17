@@ -645,8 +645,28 @@ func (a *app) handleMontagebericht(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]any{"ok": false, "aus": true})
 		return
 	}
-	t, err := serverText(map[string]any{"key": ReportKey, "event": "mb_hoch", "id": u.ID, "name": u.Name, "email": u.Email,
-		"nr": in.Nr, "art": in.Art, "datum": in.Datum, "serie": in.Serie, "datei": in.Datei, "b64": in.B64}, 90*time.Second)
+	daten := map[string]any{"key": ReportKey, "event": "mb_hoch", "id": u.ID, "name": u.Name, "email": u.Email,
+		"nr": in.Nr, "art": in.Art, "datum": in.Datum, "serie": in.Serie, "datei": in.Datei, "b64": in.B64}
+	// Verschlüsseln, sobald das Büro einen Schlüssel eingerichtet hat (mbkrypto.go)
+	pub, err := mbOeffentlich()
+	if err != nil {
+		writeJSON(w, map[string]any{"ok": false, "error": "Keine Verbindung zum Server."})
+		return
+	}
+	if pub != nil {
+		pdf, err := base64.StdEncoding.DecodeString(in.B64)
+		if err != nil {
+			writeJSON(w, map[string]any{"ok": false, "error": "Ungültige PDF."})
+			return
+		}
+		enc, sha, err := mbVerschluesseln(pub, pdf)
+		if err != nil {
+			writeJSON(w, map[string]any{"ok": false, "error": "Verschlüsseln fehlgeschlagen."})
+			return
+		}
+		daten["b64"], daten["sha"], daten["enc"] = base64.StdEncoding.EncodeToString(enc), sha, 1
+	}
+	t, err := serverText(daten, 90*time.Second)
 	if err != nil {
 		writeJSON(w, map[string]any{"ok": false, "error": "Keine Verbindung zum Server."})
 		return
