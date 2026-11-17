@@ -255,6 +255,21 @@ const [app, mock, out = '.'] = process.argv.slice(2);
   await page.waitForFunction(() => [...document.querySelectorAll('tr')].some(t => t.textContent.includes('Ölfilter') && t.querySelector('output').textContent === '2'));
   ok('Änderung vom Handy übernommen');
 
+  // Soll-Bestand: Teil mit Soll 6 anlegen, Bestand auf die Hälfte senken → landet von selbst auf der Bestellliste
+  await page.click('#tabBestand');
+  await page.click('#neuBtn'); await page.waitForSelector('#teilDlg[open]');
+  await page.fill('#fNr', '4010-555'); await page.fill('#fName', 'Sollschraube'); await page.fill('#fMenge', '6'); await page.fill('#fSoll', '6');
+  await page.click('#teilOk');
+  await page.waitForSelector('tr:has-text("Sollschraube") .chip:has-text("Soll 6")');
+  const sollZeile = page.locator('tr', { hasText: 'Sollschraube' });
+  for (let i = 0; i < 3; i++) { await sollZeile.locator('[data-a=minus]').click(); }
+  await page.waitForFunction(() => document.querySelector('#toast') && /halben Soll/.test(document.querySelector('#toast').textContent), null, { timeout: 8000 });
+  await page.click('#tabFehlt');
+  await page.waitForSelector('tr:has-text("Sollschraube")');
+  assert.strictEqual(await page.locator('tr', { hasText: 'Sollschraube' }).locator('output').textContent(), '3');
+  await page.click('#tabBestand');
+  ok('Soll-Bestand: bei halbem Bestand automatisch auf der Bestellliste (Stückzahl bis Soll)');
+
   await page.click('#helpBtn'); await page.waitForSelector('#helpDlg[open]'); await shot('08-anleitung'); await page.keyboard.press('Escape');
 
   // Dunkles Design + schmales Fenster

@@ -124,6 +124,7 @@ label{display:flex;flex-direction:column;gap:5px;font-size:13.5px;font-weight:50
     <label>Lagerort<input id="fOrt" placeholder="z. B. Fach A" list="orte"></label>
     <datalist id="orte"></datalist>
     <label>Stückzahl<span class="mengen"><button type="button" id="fMinus">−</button><input id="fMenge" type="number" inputmode="numeric" min="0" max="999999" value="1"><button type="button" id="fPlus">＋</button></span></label>
+    <label id="sollBox">Soll-Bestand <small>(leer = keine Automatik; bei der Hälfte oder weniger kommt das Teil von selbst auf die Bestellliste)</small><input id="fSoll" type="number" inputmode="numeric" min="0" max="999999" placeholder="z. B. 10"></label>
     <p class="err" id="teilErr" hidden></p>
     <button class="primary" id="teilOk">Speichern</button>
     <div class="zeile" style="justify-content:space-between"><button type="button" class="ghost" id="teilDel" style="color:var(--bad)" hidden>Löschen</button><button type="button" class="ghost" id="teilNach" hidden>Nachbestellen</button></div>
@@ -301,7 +302,7 @@ function zeichnen(){
   }
   $("liste").innerHTML = a.map(function(t){
     var m = menge(t);
-    return '<div class="karte" data-id="' + esc(t.id) + '"><span class="name" data-a="edit">' + esc(t.name) + '</span><span class="nr" data-a="edit">' + esc(t.nr) + '</span><span class="ort">' + esc(t.ort || "") + '</span>' +
+    return '<div class="karte" data-id="' + esc(t.id) + '"><span class="name" data-a="edit">' + esc(t.name) + '</span><span class="nr" data-a="edit">' + esc(t.nr) + '</span><span class="ort">' + esc(t.ort || "") + (t.liste === "bestand" && t.soll > 0 ? ' · Soll ' + t.soll : "") + '</span>' +
       '<span class="rechts"><span class="stepper' + (m === 0 && t.liste === "bestand" ? " leer" : "") + (offen[t.id] ? " wartet" : "") + '"><button data-a="minus" aria-label="weniger">−</button><output>' + m + '</output><button data-a="plus" aria-label="mehr">＋</button></span>' +
       (t.liste === "fehlt" ? '<button class="klein" data-a="da">✓ Eingetroffen</button>' : "") + '</span></div>';
   }).join("");
@@ -324,7 +325,8 @@ function senden(id){
   var o = offen[id]; delete offen[id]; if(!o || !o.delta){ zeichnen(); return; }
   aendern({event: "wl_menge", teilId: id, delta: o.delta}).then(function(r){
     var t = lager.teile.filter(function(x){ return x.id === id; })[0];
-    if(r.ok && t && t.liste === "bestand" && t.menge === 0 && o.delta < 0)
+    if(r.ok && r.autoBestellt && t) toast("„" + t.name + "“ ist unter dem halben Soll – automatisch auf der Bestellliste.", 9000);
+    else if(r.ok && t && t.liste === "bestand" && t.menge === 0 && o.delta < 0)
       toast("„" + t.name + "“ ist aufgebraucht.", 9000, {text: "Nachbestellen", run: function(){ oeffnen({liste: "fehlt", nr: t.nr, name: t.name, ort: t.ort, menge: 1}, "Nachbestellen"); }});
     if(!r.ok) zeichnen();
   });
@@ -356,7 +358,7 @@ $("tlFehlt").onclick = function(){ liste("fehlt"); };
 function oeffnen(t, titel){
   teil = t ? JSON.parse(JSON.stringify(t)) : {liste: tab, nr: "", name: "", ort: "", menge: 1};
   $("teilTitel").textContent = titel || (teil.id ? "Teil bearbeiten" : "Neues Teil");
-  $("fNr").value = teil.nr; $("fName").value = teil.name; $("fOrt").value = teil.ort || ""; $("fMenge").value = teil.menge;
+  $("fNr").value = teil.nr; $("fName").value = teil.name; $("fOrt").value = teil.ort || ""; $("fMenge").value = teil.menge; $("fSoll").value = teil.soll > 0 ? teil.soll : ""; $("sollBox").hidden = teil.liste !== "bestand";
   $("teilDel").hidden = !teil.id; $("teilNach").hidden = !(teil.id && teil.liste === "bestand"); fehler("teilErr", "");
   $("fTdoc").hidden = false; $("fTdoc").disabled = false; hinweisName("");
   liste(teil.liste); $("teilBlatt").hidden = false;
@@ -385,7 +387,7 @@ $("teilBlatt").onclick = function(e){ if(e.target === $("teilBlatt")) $("teilZu"
 $("teilForm").onsubmit = function(e){
   e.preventDefault();
   $("fNr").onblur();
-  var x = {id: teil.id || "", v: teil.v || 0, liste: teil.liste, nr: teileNr($("fNr").value), name: $("fName").value.trim(), ort: $("fOrt").value.trim(), menge: mengeWert()};
+  var x = {id: teil.id || "", v: teil.v || 0, liste: teil.liste, nr: teileNr($("fNr").value), name: $("fName").value.trim(), ort: $("fOrt").value.trim(), menge: mengeWert(), soll: teil.liste === "bestand" ? Math.max(0, Math.min(999999, parseInt($("fSoll").value, 10) || 0)) : (teil.soll || 0)};
   if(x.nr.length < 3) return fehler("teilErr", "Bitte eine Teilenummer eintragen.");
   if(!x.name) return fehler("teilErr", "Bitte eine Bezeichnung eintragen.");
   $("teilOk").disabled = true;

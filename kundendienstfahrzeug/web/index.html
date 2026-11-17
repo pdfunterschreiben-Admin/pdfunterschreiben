@@ -290,6 +290,10 @@ dialog::backdrop{background:rgba(10,15,30,.55)}
           <span class="mengen"><button type="button" id="fMinus" aria-label="weniger">−</button><input type="number" id="fMenge" min="0" max="999999" step="1" value="1" inputmode="numeric"><button type="button" id="fPlus" aria-label="mehr">＋</button></span>
         </label>
       </div>
+      <label class="field" id="sollBox">Soll-Bestand <span class="hint">(leer = keine Automatik)</span>
+        <input type="number" id="fSoll" min="0" max="999999" step="1" inputmode="numeric" placeholder="z. B. 10">
+        <span class="hint">Sinkt der Bestand auf die Hälfte oder weniger, kommt das Teil von selbst auf die Bestellliste – so viele, dass wieder das Soll im Wagen ist.</span>
+      </label>
       <p class="err" id="teilErr" hidden></p>
     </div>
     <div class="dlg-foot">
@@ -408,6 +412,7 @@ dialog::backdrop{background:rgba(10,15,30,.55)}
       <ul>
         <li><b>Fahrzeugbestand</b> – was im Servicewagen liegt, mit Lagerort und Stückzahl.</li>
         <li><b>Bestellliste</b> – was nachbestellt werden muss. Im Bestand auf <b>Nachbestellen</b> klicken, dann steht das Teil gleich hier. Mit <b>📧 Ans Lager schicken</b> geht die Liste als Excel-Mappe per E-Mail (Outlook) ans Lager – mit Vermerk „per NSE“ oder „ins Fach“. Ist ein Teil da, auf <b>✓ Eingetroffen</b> klicken: es wandert mit seiner Stückzahl in den Bestand.</li>
+        <li><b>Soll-Bestand</b> – beim Teil (✎) einen Soll eintragen. Sinkt der Bestand auf die Hälfte oder weniger, setzt das Programm das Teil <b>von selbst auf die Bestellliste</b> – so viele Stück, dass wieder das Soll im Wagen ist. Steht es schon unbestellt auf der Liste, bleibt es dort.</li>
       </ul>
       <h3>Teile erfassen</h3>
       <ul>
@@ -769,7 +774,7 @@ function render(){
       : `<button type="button" data-a="da" title="Ist eingetroffen – in den Fahrzeugbestand übernehmen"${dis}>✓ Eingetroffen</button>`;
     return `<tr data-id="${esc(t.id)}" class="${neuMarkiert.has(t.id) ? "neu" : ""}">
       <td class="nr"><button type="button" data-a="edit" title="Bearbeiten">${esc(t.nr)}</button></td>
-      <td class="name">${esc(t.name)}${t.liste === "fehlt" && t.bestellt ? ` <span class="chip ok" title="Bestellung ans Lager geschickt">bestellt ${esc(new Date(t.bestellt).toLocaleDateString("de-DE", {day: "2-digit", month: "2-digit"}))}</span>` : ""}${state.sort === "zeit" && t.zeit ? `<span class="zeit">${esc(zeitText(t.zeit))}</span>` : ""}</td>
+      <td class="name">${esc(t.name)}${t.liste === "bestand" && t.soll > 0 ? ` <span class="chip${m * 2 <= t.soll ? " warn" : ""}" title="Soll-Bestand: bei der Hälfte oder weniger kommt das Teil automatisch auf die Bestellliste">Soll ${zahl(t.soll)}</span>` : ""}${t.liste === "fehlt" && t.bestellt ? ` <span class="chip ok" title="Bestellung ans Lager geschickt">bestellt ${esc(new Date(t.bestellt).toLocaleDateString("de-DE", {day: "2-digit", month: "2-digit"}))}</span>` : ""}${state.sort === "zeit" && t.zeit ? `<span class="zeit">${esc(zeitText(t.zeit))}</span>` : ""}</td>
       <td class="ort">${esc(t.ort || "–")}</td>
       <td class="menge"><span class="stepper${m === 0 && t.liste === "bestand" ? " leer" : ""}${o ? " wartet" : ""}"><button type="button" data-a="minus" aria-label="eins weniger"${dis}>−</button><output>${zahl(m)}</output><button type="button" data-a="plus" aria-label="eins mehr"${dis}>＋</button></span></td>
       <td class="akt">${akt} <button type="button" class="ghost" data-a="edit" title="Bearbeiten">✎</button></td></tr>`;
@@ -804,7 +809,8 @@ async function mengeSenden(id){
   const r = await aendern("wl_menge", {teilId: id, delta: o.delta});
   if(r.ok){
     const t = lager.teile.find(x => x.id === id);
-    if(t && t.liste === "bestand" && t.menge === 0 && o.delta < 0)
+    if(r.autoBestellt) toast(`„${t.name}“ ist unter dem halben Soll – automatisch auf die Bestellliste gesetzt.`, 8000, {text: "Zur Bestellliste", run: () => { state.tab = "fehlt"; persist(); render(); }});
+    else if(t && t.liste === "bestand" && t.menge === 0 && o.delta < 0)
       toast(`„${t.name}“ ist aufgebraucht.`, 9000, {text: "Nachbestellen", run: () => nachbestellen(t)});
   } else render();
 }
@@ -840,9 +846,9 @@ $("#tlFehlt").onclick = () => teilListe("fehlt");
 const teilErr = m => { $("#teilErr").textContent = m || ""; $("#teilErr").hidden = !m; };
 function oeffneTeil(t, titel){
   if(locked()) return checkAccess();
-  teil = t ? {...t} : {liste: state.tab, nr: "", name: "", ort: $("#ortFilter").value || "", menge: 1};
+  teil = t ? {...t} : {liste: state.tab, nr: "", name: "", ort: $("#ortFilter").value || "", menge: 1, soll: 0};
   $("#teilTitle").textContent = titel || (teil.id ? "Teil bearbeiten" : "Neues Teil");
-  $("#fNr").value = teil.nr || ""; $("#fName").value = teil.name || ""; $("#fOrt").value = teil.ort || ""; $("#fMenge").value = teil.menge != null ? teil.menge : 1;
+  $("#fNr").value = teil.nr || ""; $("#fName").value = teil.name || ""; $("#fOrt").value = teil.ort || ""; $("#fMenge").value = teil.menge != null ? teil.menge : 1; $("#fSoll").value = teil.soll > 0 ? teil.soll : ""; $("#sollBox").hidden = teil.liste !== "bestand";
   $("#teilDel").hidden = !teil.id; $("#teilNachbestellen").hidden = !(teil.id && teil.liste === "bestand");
   $("#ocrBox").hidden = true; $("#nameHint").hidden = true; teilErr("");
   nameVonHand = !!teil.name;
@@ -1008,11 +1014,11 @@ $("#teilForm").addEventListener("submit", async e => {
   e.preventDefault();
   if(nichtJetzt()) return;
   nrUebernehmen();
-  const x = {...teil, nr: teileNr($("#fNr").value), name: $("#fName").value.trim(), ort: $("#fOrt").value.trim(), menge: mengeWert()};
+  const x = {...teil, nr: teileNr($("#fNr").value), name: $("#fName").value.trim(), ort: $("#fOrt").value.trim(), menge: mengeWert(), soll: teil.liste === "bestand" ? Math.max(0, Math.min(999999, parseInt($("#fSoll").value, 10) || 0)) : (teil.soll || 0)};
   if(x.nr.replace(/[\s-]/g, "").length < 3) return teilErr("Bitte eine Teilenummer eintragen.");
   if(!x.name) return teilErr("Bitte eine Bezeichnung eintragen.");
   $("#teilOk").disabled = true; teilErr("");
-  const r = await server("wl_speichern", {teil: {id: x.id || "", v: x.v || 0, liste: x.liste, nr: x.nr, name: x.name, ort: x.ort, menge: x.menge}});
+  const r = await server("wl_speichern", {teil: {id: x.id || "", v: x.v || 0, liste: x.liste, nr: x.nr, name: x.name, ort: x.ort, menge: x.menge, soll: x.soll || 0}});
   $("#teilOk").disabled = false;
   if(!r.ok){
     teilErr(r.error || "Speichern fehlgeschlagen.");
@@ -1032,7 +1038,7 @@ $("#teilDel").onclick = async () => {
   const r = await aendern("wl_loeschen", {teilId: t.id, v: t.v});
   if(r.ok){
     teilZu();
-    toast("Gelöscht.", 8000, {text: "Rückgängig", run: () => aendern("wl_speichern", {teil: {liste: t.liste, nr: t.nr, name: t.name, ort: t.ort, menge: t.menge}}, () => toast("Wiederhergestellt."))});
+    toast("Gelöscht.", 8000, {text: "Rückgängig", run: () => aendern("wl_speichern", {teil: {liste: t.liste, nr: t.nr, name: t.name, ort: t.ort, menge: t.menge, soll: t.soll || 0}}, () => toast("Wiederhergestellt."))});
   }
 };
 $("#teilNachbestellen").onclick = () => { if(teil && teil.id){ const t = lager.teile.find(x => x.id === teil.id); teilZu(); if(t) nachbestellen(t); } };

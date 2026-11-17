@@ -166,6 +166,35 @@ pruefe('Nachbestellen und als bestellt markieren', () => {
   assert.strictEqual(r.teile.filter(t => t.liste === 'fehlt' && t.nr === b.nr).length, 2);
   assert.strictEqual(u.sheets['Kundendienstfahrzeug'].rows[0][10], 'Bestellt am');
 });
+pruefe('Soll-Bestand: bei der Hälfte oder weniger automatisch auf die Bestellliste', () => {
+  const nr = '4010-777';
+  let r = u.post({ ...pc, event: 'wl_speichern', teil: { liste: 'bestand', nr, name: 'Sollteil', ort: 'Fach S', menge: 10, soll: 10 } });
+  assert(r.ok, JSON.stringify(r));
+  let t = r.teile.find(x => x.nr === nr && x.liste === 'bestand');
+  assert.strictEqual(t.soll, 10);
+  assert(!r.teile.some(x => x.nr === nr && x.liste === 'fehlt'), 'bei vollem Bestand nichts bestellen');
+  r = u.post({ ...pc, event: 'wl_menge', teilId: t.id, delta: -4 }); // 6 von 10: noch über der Hälfte
+  assert(r.ok && !r.autoBestellt && !r.teile.some(x => x.nr === nr && x.liste === 'fehlt'));
+  r = u.post({ ...pc, event: 'wl_menge', teilId: t.id, delta: -1 }); // 5 von 10: genau die Hälfte → bestellen
+  assert(r.ok && r.autoBestellt, JSON.stringify(r));
+  let f = r.teile.filter(x => x.nr === nr && x.liste === 'fehlt');
+  assert.strictEqual(f.length, 1); assert.strictEqual(f[0].menge, 5); // auf Soll auffüllen
+  r = u.post({ ...pc, event: 'wl_menge', teilId: t.id, delta: -1 }); // weiter runter: nicht doppelt
+  assert(!r.autoBestellt && r.teile.filter(x => x.nr === nr && x.liste === 'fehlt').length === 1);
+  r = u.post({ ...pc, event: 'wl_umbuchen', teilId: f[0].id }); // eingetroffen
+  assert(r.ok);
+  t = r.teile.find(x => x.nr === nr && x.liste === 'bestand');
+  assert.strictEqual(t.menge, 9); assert.strictEqual(t.soll, 10);
+  // Soll nachträglich setzen bei schon niedrigem Bestand → gleich bestellen
+  r = u.post({ ...pc, event: 'wl_speichern', teil: { liste: 'bestand', nr: '4010-888', name: 'Ohne Soll', ort: '', menge: 2 } });
+  const o = r.teile.find(x => x.nr === '4010-888');
+  assert(!r.teile.some(x => x.nr === '4010-888' && x.liste === 'fehlt'));
+  r = u.post({ ...pc, event: 'wl_speichern', teil: { id: o.id, v: o.v, liste: 'bestand', nr: '4010-888', name: 'Ohne Soll', ort: '', menge: 2, soll: 8 } });
+  const g = r.teile.find(x => x.nr === '4010-888' && x.liste === 'fehlt');
+  assert(g && g.menge === 6, JSON.stringify(g));
+  r = u.post({ ...pc, event: 'wl_speichern', teil: { liste: 'bestand', nr: '4010-999', name: 'x', ort: '', menge: 1, soll: -3 } });
+  assert(!r.ok && /Soll/.test(r.error));
+});
 pruefe('Handy-Kopplung: Nummer vom Handy zum PC', () => {
   const tok = 'a1b2c3d4e5f60718';
   let r = u.post({ ...pc, event: 'wl_kopplung_holen', token: tok });

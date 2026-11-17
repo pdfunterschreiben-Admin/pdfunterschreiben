@@ -14,7 +14,7 @@
 //   „Kundendienstfahrzeuge“         – je Nutzer Kennzeichen und Fahrer
 
 const WL_BLATT = 'Kundendienstfahrzeug';
-const WL_HEAD = ['ID', 'E-Mail', 'Liste', 'Teilenummer', 'Bezeichnung', 'Lagerort', 'Stückzahl', 'Version', 'Geändert', 'Geändert über', 'Bestellt am'];
+const WL_HEAD = ['ID', 'E-Mail', 'Liste', 'Teilenummer', 'Bezeichnung', 'Lagerort', 'Stückzahl', 'Version', 'Geändert', 'Geändert über', 'Bestellt am', 'Soll'];
 const WL_KATALOG = 'Kundendienstfahrzeug Katalog';
 const WL_FAHRZEUGE = 'Kundendienstfahrzeuge';
 const WL_FAHRZEUG_HEAD = ['E-Mail', 'Kennzeichen', 'Fahrer', 'Geändert', 'Geändert über'];
@@ -59,7 +59,7 @@ function wlLaden(ss) {
 // Schreibt alle Zeilen zurück (die Datenmenge ist klein, so bleiben Löschen und Umbuchen einfach).
 function wlSchreiben(t) {
   const s = t.s, alt = Math.max(0, s.getLastRow() - 1);
-  const werte = t.rows.map(r => [r[0], r[1], r[2], wlZelle(String(r[3])), wlZelle(String(r[4])), wlZelle(String(r[5])), Number(r[6]) || 0, Number(r[7]) || 1, r[8], r[9], r[10] || '']);
+  const werte = t.rows.map(r => [r[0], r[1], r[2], wlZelle(String(r[3])), wlZelle(String(r[4])), wlZelle(String(r[5])), Number(r[6]) || 0, Number(r[7]) || 1, r[8], r[9], r[10] || '', Number(r[11]) || 0]);
   if (werte.length) s.getRange(2, 1, werte.length, WL_HEAD.length).setValues(werte);
   if (alt > werte.length) s.getRange(werte.length + 2, 1, alt - werte.length, WL_HEAD.length).clearContent();
 }
@@ -67,7 +67,19 @@ function wlSchreiben(t) {
 function wlTeil(r) {
   return { id: String(r[0]), liste: r[2] === WL_LISTEN.fehlt ? 'fehlt' : 'bestand', nr: String(r[3]), name: String(r[4]),
     ort: String(r[5]), menge: Number(r[6]) || 0, v: Number(r[7]) || 1, zeit: r[8] instanceof Date ? r[8].toISOString() : String(r[8] || ''),
-    bestellt: r[10] instanceof Date ? r[10].toISOString() : String(r[10] || '') };
+    bestellt: r[10] instanceof Date ? r[10].toISOString() : String(r[10] || ''), soll: Number(r[11]) || 0 };
+}
+
+// Soll-Bestand: Sinkt der Bestand auf die Hälfte des Solls oder weniger (und war vorher darüber), kommt das Teil
+// von selbst auf die Bestellliste – so viele, dass der Bestand wieder auf Soll steht. Ist es schon unbestellt
+// auf der Liste, bleibt es dort, wie es ist.
+function wlSollPruefen(t, mail, i, vorher, jetzt, ueber) {
+  const r = t.rows[i], soll = Number(r[11]) || 0, neu = Number(r[6]) || 0;
+  if (r[2] !== WL_LISTEN.bestand || soll < 1 || neu * 2 > soll || vorher * 2 <= soll) return false;
+  const offen = t.rows.some(q => String(q[1]).toLowerCase() === mail && q[2] === WL_LISTEN.fehlt && wlKey(q[3]) === wlKey(r[3]) && !q[10]);
+  if (offen) return false;
+  t.rows.push([Utilities.getUuid(), mail, WL_LISTEN.fehlt, r[3], r[4], r[5], Math.min(WL_MAX, Math.max(1, soll - neu)), 1, jetzt, ueber + ' (Soll)', '', soll]);
+  return true;
 }
 
 function wlStand(mail, neu) {
@@ -186,19 +198,24 @@ function wagenlagerAnfrage(d) {
   if (ev === 'wl_speichern') {
     const x = d.teil || {};
     const liste = WL_LISTEN[x.liste] || WL_LISTEN.bestand;
-    const nr = wlNr(x.nr), name = wlText(x.name, 250), ort = wlText(x.ort, 150), menge = Number(x.menge);
+    const nr = wlNr(x.nr), name = wlText(x.name, 250), ort = wlText(x.ort, 150), menge = Number(x.menge), soll = x.soll == null || x.soll === '' ? 0 : Number(x.soll);
     if (!nr || nr.length < 3) return { ok: false, error: 'Bitte eine Teilenummer eintragen.' };
     if (!name) return { ok: false, error: 'Bitte eine Bezeichnung eintragen.' };
     if (!Number.isInteger(menge) || menge < 0 || menge > WL_MAX) return { ok: false, error: 'Die Stückzahl muss eine ganze Zahl von 0 bis 999999 sein.' };
+    if (!Number.isInteger(soll) || soll < 0 || soll > WL_MAX) return { ok: false, error: 'Das Soll muss eine ganze Zahl von 0 bis 999999 sein.' };
     const doppelt = gleich(liste, nr, ort, x.id);
     if (doppelt >= 0) return { ok: false, vorhanden: String(t.rows[doppelt][0]), error: 'Diese Teilenummer gibt es an diesem Lagerort schon. Bitte den vorhandenen Eintrag ändern.' };
     if (x.id) {
       const i = finde(x.id);
       if (i < 0) return { ok: false, error: 'Der Eintrag wurde inzwischen gelöscht.' };
       if (Number(x.v) && Number(t.rows[i][7]) !== Number(x.v)) return { ok: false, konflikt: true, error: 'Der Eintrag wurde inzwischen auf einem anderen Gerät geändert. Bitte neu öffnen.' };
-      t.rows[i] = [t.rows[i][0], mail, liste, nr, name, ort, menge, (Number(t.rows[i][7]) || 1) + 1, jetzt, ueber];
+      const vorher = Number(t.rows[i][6]) || 0, vorherSoll = Number(t.rows[i][11]) || 0;
+      t.rows[i] = [t.rows[i][0], mail, liste, nr, name, ort, menge, (Number(t.rows[i][7]) || 1) + 1, jetzt, ueber, t.rows[i][10] || '', soll];
+      // Bestand verringert oder Soll neu gesetzt → prüfen (bei neuem Soll zählt der Bestand vorher als „ausreichend“, wenn er es vorher war)
+      wlSollPruefen(t, mail, i, vorherSoll === soll ? vorher : (vorher * 2 > soll ? vorher : soll), jetzt, ueber);
     } else {
-      t.rows.push([Utilities.getUuid(), mail, liste, nr, name, ort, menge, 1, jetzt, ueber]);
+      t.rows.push([Utilities.getUuid(), mail, liste, nr, name, ort, menge, 1, jetzt, ueber, '', soll]);
+      wlSollPruefen(t, mail, t.rows.length - 1, soll, jetzt, ueber);
     }
     wlKatalogMerken(ss, [{ nr: nr, name: name }], mail, false);
     return fertig({ gespeichert: true });
@@ -211,8 +228,10 @@ function wagenlagerAnfrage(d) {
     const neu = (Number(t.rows[i][6]) || 0) + delta;
     if (neu < 0) return { ok: false, error: 'Es sind nur noch ' + (Number(t.rows[i][6]) || 0) + ' Stück da.' };
     if (neu > WL_MAX) return { ok: false, error: 'Zu viele Teile.' };
+    const vorher = Number(t.rows[i][6]) || 0;
     t.rows[i][6] = neu; t.rows[i][7] = (Number(t.rows[i][7]) || 1) + 1; t.rows[i][8] = jetzt; t.rows[i][9] = ueber;
-    return fertig({ menge: neu });
+    const auto = wlSollPruefen(t, mail, i, vorher, jetzt, ueber);
+    return fertig({ menge: neu, autoBestellt: auto });
   }
 
   if (ev === 'wl_loeschen') {
@@ -237,7 +256,7 @@ function wagenlagerAnfrage(d) {
       t.rows[j][7] = (Number(t.rows[j][7]) || 1) + 1; t.rows[j][8] = jetzt; t.rows[j][9] = ueber;
       t.rows.splice(i, 1);
     } else {
-      t.rows[i] = [r[0], mail, ziel, r[3], r[4], ort, menge, (Number(r[7]) || 1) + 1, jetzt, ueber];
+      t.rows[i] = [r[0], mail, ziel, r[3], r[4], ort, menge, (Number(r[7]) || 1) + 1, jetzt, ueber, '', Number(r[11]) || 0];
     }
     return fertig({ umgebucht: true });
   }
@@ -252,7 +271,7 @@ function wagenlagerAnfrage(d) {
       t.rows[j][6] = Math.min(WL_MAX, (Number(t.rows[j][6]) || 0) + menge);
       t.rows[j][7] = (Number(t.rows[j][7]) || 1) + 1; t.rows[j][8] = jetzt; t.rows[j][9] = ueber;
     } else {
-      t.rows.push([Utilities.getUuid(), mail, WL_LISTEN.fehlt, q[3], q[4], q[5], menge, 1, jetzt, ueber, '']);
+      t.rows.push([Utilities.getUuid(), mail, WL_LISTEN.fehlt, q[3], q[4], q[5], menge, 1, jetzt, ueber, '', Number(q[11]) || 0]);
     }
     return fertig({ nachbestellt: true, menge: j >= 0 ? Number(t.rows[j][6]) : menge });
   }
@@ -285,7 +304,7 @@ function wagenlagerAnfrage(d) {
         t.rows[j][7] = (Number(t.rows[j][7]) || 1) + 1; t.rows[j][8] = jetzt; t.rows[j][9] = 'Excel';
         geaendert++;
       } else {
-        t.rows.push([Utilities.getUuid(), mail, l, nr, name, ort, menge, 1, jetzt, 'Excel']);
+        t.rows.push([Utilities.getUuid(), mail, l, nr, name, ort, menge, 1, jetzt, 'Excel', '', 0]);
         neu++;
       }
       if (name) kat.push({ nr: nr, name: name });
