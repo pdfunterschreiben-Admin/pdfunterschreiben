@@ -261,7 +261,7 @@ function farbZeile(u){
 const kdChip = u => S.kdDa && u.kd ? '<span class="chip ok" title="An Kundendienst senden">📤</span>' : "";
 function userDetails(u, ohneKd){
   return `<div class="muted">${esc(u.email)}</div>
-      <div class="muted">Version ${esc(u.version)} · zuletzt aktiv ${esc(ago(u.last))} · ${u.starts} Starts</div>
+      <div class="muted">Version ${esc(u.version)} · zuletzt aktiv ${esc(ago(u.last))}</div>
       <div class="muted">Erste Anmeldung ${esc(fmt(u.first))}</div>
       ${ohneKd ? "" : kdZeile(u) + farbZeile(u)}
       ${u.id === me().id ? "" : `<div class="row" style="margin-top:8px;justify-content:flex-end">
@@ -289,7 +289,7 @@ function usersHtml(){
     const gb = us.filter(u => u.blocked).length, starts = us.reduce((a, u) => a + (Number(u.starts) || 0), 0);
     const chip = gb === us.length ? '<span class="chip warn">gesperrt</span>' : gb ? `<span class="chip warn">${gb} gesperrt</span>` : us.some(u => u.verified) ? '<span class="chip ok">frei</span>' : '<span class="chip">Code offen</span>';
     return fold("gruppe:" + k, false, `<span>${esc(us[0].name)}</span><span class="chip">${us.length}×</span>${chip}${kdChip(us[0])}`, esc(ago(us[0].last)),
-      `<div class="in"><div class="muted">${us.length} Anmeldungen (z. B. verschiedene Rechner) · zusammen ${starts} Starts</div>
+      `<div class="in"><div class="muted">${us.length} Anmeldungen (z. B. verschiedene Rechner)</div>
       ${kdZeile(us[0])}${farbZeile(us[0])}
       <div class="row" style="margin-top:8px;justify-content:flex-end"><button data-keepnewest="${esc(k)}">Nur die neueste behalten</button></div>
       ${us.map((u, i) => `<div class="who"><div style="display:flex;gap:8px;align-items:center"><b>Anmeldung ${i + 1}</b>${userChip(u)}</div>${userDetails(u, true)}</div>`).join("")}</div>`);

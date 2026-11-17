@@ -159,11 +159,13 @@ function handle(d) {
   if (ev === 'adminfarbe') return adminFarbe(users, id, mail, d.code, d.text);
   if (ev === 'adminuserdelete') return adminUserDelete(users, id, mail, d.code);
   if (ev === 'admindelete') return adminDelete(ss, users, id, mail, d.code, d.text);
-  if (ev !== 'check') log.appendRow([now, name, mail, ev, "'" + (mb ? 'MB ' : wl ? (d.quelle === 'handy' ? 'KDF-Handy ' : 'KDF ') : pptx ? 'PPTX ' : '') + ver, n]);
+  // Protokoll nur für Anmeldung/Freischaltung – keine Nutzung (Start, Speichern, Drucken, Mailen) mehr je Person
+  if (['register', 'update', 'resend', 'verify'].indexOf(ev) >= 0) log.appendRow([now, name, mail, ev, "'" + (mb ? 'MB ' : wl ? (d.quelle === 'handy' ? 'KDF-Handy ' : 'KDF ') : pptx ? 'PPTX ' : '') + ver, n]);
   protokollKuerzen(log, now);
+  zaehlerLoeschen(ss, log);
 
   let row = findRow(users, id);
-  if (row < 0) { users.appendRow([name, mail, id, "'" + ver, now, now, 'nein', '', 0, 0, 0, 0]); row = users.getLastRow(); }
+  if (row < 0) { users.appendRow([name, mail, id, "'" + ver, now, now, 'nein', '', '', '', '', '']); row = users.getLastRow(); }
   users.getRange(row, 1, 1, 4).setValues([[name, mail, id, "'" + ver]]);
   users.getRange(row, 6).setValue(now);
   const r = users.getRange(row, 1, 1, 12).getValues()[0];
@@ -203,8 +205,6 @@ function handle(d) {
     return { ok: true, verified: true, blocked: blocked };
   }
 
-  const col = { start: 9, save: 10, print: 11, mail: 12 }[ev];
-  if (col) { const cell = users.getRange(row, col); cell.setValue((Number(cell.getValue()) || 0) + n); }
   // kd: Schaltfläche „An Kundendienst senden“ zeigen (nur Service-Mappe; mbFreiFuer steht in Montageberichte.js)
   let kd = false;
   if (!pptx && (ev === 'start' || ev === 'check')) { try { kd = mbFreiFuer(mail, users); } catch (x) { } }
@@ -906,6 +906,26 @@ const FOTO_SEITE = '<style>body{font:16px system-ui,sans-serif;margin:0;padding:
   '<label class="btn">Fotos auswählen<input type="file" id="f" accept="image/*" multiple></label>' +
   '<div id="liste"></div><div id="fertig"></div>' +
   '<script>' + "var T=\"%TOKEN%\",q=[],aktiv=0,n=0,MAX=3;\nfunction exifZeit(buf){try{var v=new DataView(buf);if(v.getUint16(0)!==0xFFD8)return 0;var o=2;\nwhile(o<v.byteLength-10){var m=v.getUint16(o),len=v.getUint16(o+2);\nif(m===0xFFE1&&v.getUint32(o+4)===0x45786966){var t=o+10,le=v.getUint16(t)===0x4949;\nvar u16=function(p){return v.getUint16(p,le)},u32=function(p){return v.getUint32(p,le)};\nvar ex=0,dt=0,scan=function(p){var c=u16(p);for(var i=0;i<c;i++){var e=p+2+i*12,tag=u16(e);\nif(tag===0x8769)ex=t+u32(e+8);if(tag===0x9003||(tag===0x0132&&!dt))dt=t+u32(e+8);}};\nscan(t+u32(t+4));if(ex)scan(ex);if(!dt)return 0;var s=\"\";for(var k=0;k<19;k++)s+=String.fromCharCode(v.getUint8(dt+k));\nvar a=/(\\d{4}):(\\d{2}):(\\d{2}) (\\d{2}):(\\d{2}):(\\d{2})/.exec(s);return a?new Date(+a[1],a[2]-1,+a[3],+a[4],+a[5],+a[6]).getTime():0;}\nif((m&0xFF00)!==0xFF00)break;o+=2+len;}}catch(e){}return 0;}\nfunction lesen(f,wie){return new Promise(function(ok,no){var r=new FileReader();r.onload=function(){ok(r.result)};r.onerror=no;wie===\"buf\"?r.readAsArrayBuffer(f):r.readAsDataURL(f);});}\nfunction verkleinern(f){return createImageBitmap(f).then(function(b){var s=Math.min(1,2400/Math.max(b.width,b.height)),c=document.createElement(\"canvas\");\nc.width=Math.round(b.width*s);c.height=Math.round(b.height*s);c.getContext(\"2d\").drawImage(b,0,0,c.width,c.height);return c.toDataURL(\"image/jpeg\",0.88).split(\",\")[1];});}\ndocument.getElementById(\"f\").onchange=function(e){for(var i=0;i<e.target.files.length;i++){var f=e.target.files[i],z=document.createElement(\"div\");\nz.className=\"z\";z.innerHTML=\"<span></span><span>wartet …</span>\";z.firstChild.textContent=f.name;document.getElementById(\"liste\").appendChild(z);q.push({f:f,z:z,nr:q.length});}\ne.target.value=\"\";for(var k=0;k<MAX;k++)weiter();};\nfunction weiter(){if(aktiv>=MAX)return;var j=q.shift();if(!j){if(!aktiv&&n)document.getElementById(\"fertig\").textContent=\"Fertig – \"+n+\" Foto(s) gesendet. Du kannst weitere auswählen oder die Seite schließen.\";return;}\naktiv++;j.z.lastChild.textContent=\"wird vorbereitet …\";var zeit=0;\nlesen(j.f.slice(0,262144),\"buf\").then(function(b){zeit=exifZeit(b);return verkleinern(j.f).catch(function(){return lesen(j.f).then(function(d){return String(d).split(\",\")[1];});});})\n.then(function(b64){var versuch=0;var senden=function(){versuch++;j.z.lastChild.textContent=versuch>1?\"neuer Versuch (\"+versuch+\") …\":\"wird gesendet …\";\ngoogle.script.run.withSuccessHandler(function(){n++;j.z.lastChild.textContent=\"✓ gesendet\";j.z.lastChild.className=\"ok\";aktiv--;weiter();})\n.withFailureHandler(function(err){var t=String(err&&err.message||err);if(versuch<3&&!/abgelaufen/.test(t)){setTimeout(senden,2000*versuch);return;}\nj.z.lastChild.textContent=\"Fehler: \"+t;j.z.lastChild.className=\"err\";aktiv--;weiter();})\n.fotoHochladen(T,j.f.name.replace(/\\.[^.]+$/,\"\")+\".jpg\",zeit||j.f.lastModified,\"image/jpeg\",b64,zeit?1:0);};senden();})\n.catch(function(err){j.z.lastChild.textContent=\"Fehler: \"+err;j.z.lastChild.className=\"err\";aktiv--;weiter();});}\n" + '</script>';
+
+// ---------------- Nutzungszähler abgeschafft (Datenschutz, 17.11.2026) ----------------
+// Früher wurde je Person gezählt, wie oft gestartet, gespeichert, gedruckt und gemailt wurde, und jede Nutzung
+// protokolliert. Einmalig: alte Zähler in allen Nutzer-Blättern leeren und Nutzungs-Einträge aus dem Protokoll löschen.
+function zaehlerLoeschen(ss, log) {
+  const p = PropertiesService.getScriptProperties();
+  if (p.getProperty('zaehler_geloescht') === 'ja') return;
+  p.setProperty('zaehler_geloescht', 'ja');
+  ['Nutzer', 'Nutzer Kundendienstfahrzeug', 'Nutzer PDF zu PowerPoint', 'Nutzer Montageberichte'].forEach(function (n) {
+    const s = ss.getSheetByName(n);
+    if (s && s.getLastRow() > 1) s.getRange(2, 9, s.getLastRow() - 1, 4).clearContent();
+  });
+  const last = log.getLastRow();
+  if (last < 2) return;
+  const v = log.getRange(2, 1, last - 1, 6).getValues();
+  const bleibt = v.filter(function (r) { return ['start', 'save', 'print', 'mail', 'check'].indexOf(String(r[3])) < 0; });
+  log.getRange(2, 1, last - 1, 6).clearContent();
+  if (bleibt.length) log.getRange(2, 1, bleibt.length, 6).setValues(bleibt);
+  if (last - 1 > bleibt.length) log.deleteRows(2 + bleibt.length, last - 1 - bleibt.length);
+}
 
 // ---------------- Protokoll klein halten ----------------
 // Einmal am Tag: Einträge, die älter als PROTOKOLL_MONATE sind, löschen (das Protokoll ist nach Zeit sortiert).
