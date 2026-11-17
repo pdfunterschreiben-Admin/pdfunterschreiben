@@ -42,6 +42,10 @@ main{padding:12px 16px;display:flex;flex-direction:column;gap:10px}
 .karte .nr{font:13.5px var(--f-mono);color:var(--muted)}
 .karte .ort{font-size:13px;color:var(--muted)}
 .karte .rechts{grid-row:1/4;grid-column:2;display:flex;flex-direction:column;gap:6px;align-items:flex-end}
+.i{width:1.15em;height:1.15em;flex:none;vertical-align:-.2em;margin-right:.45em;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.i.solo{margin:0}
+a{color:var(--pen);text-underline-offset:3px;text-decoration-thickness:1px}
+.fab,.fab2,.klein{display:inline-flex;align-items:center;justify-content:center}
 .stepper{display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:10px;overflow:hidden}
 .stepper button{border:0;border-radius:0;padding:9px 14px;font-size:19px;line-height:1;background:transparent}
 .stepper output{min-width:42px;text-align:center;font:600 17px var(--f-mono)}
@@ -51,7 +55,7 @@ main{padding:12px 16px;display:flex;flex-direction:column;gap:10px}
 .leer-box{text-align:center;color:var(--muted);padding:40px 16px}
 .leer-box b{display:block;color:var(--ink);font-size:17px;margin-bottom:4px}
 .fabs{position:fixed;right:16px;bottom:calc(18px + env(safe-area-inset-bottom));z-index:6;display:flex;gap:10px;align-items:center}
-.fab{border-radius:99px;padding:14px 22px;font:600 17px var(--f-body);box-shadow:0 8px 24px rgba(20,40,120,.35);background:var(--pen);color:#fff;display:inline-block}
+.fab{border-radius:99px;padding:14px 22px;font:600 17px var(--f-body);box-shadow:0 8px 24px rgba(20,40,120,.35);background:var(--pen);color:#fff;display:inline-flex;align-items:center}
 .fab2{border-radius:99px;width:52px;height:52px;padding:0;font-size:24px;box-shadow:0 6px 18px rgba(20,40,120,.2)}
 .app-hinweis{margin:0 16px;background:var(--pen-soft);border-radius:12px;padding:12px 14px;font-size:14px;display:flex;gap:10px;align-items:center;justify-content:space-between}
 .cands{display:flex;flex-wrap:wrap;gap:8px}.cands button{font:15px var(--f-mono)}.cands button.gut{border-color:var(--pen);color:var(--pen);background:var(--pen-soft)}
@@ -82,6 +86,18 @@ label{display:flex;flex-direction:column;gap:5px;font-size:13.5px;font-weight:50
 </style>
 </head>
 <body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs>
+<symbol id="i-camera" viewBox="0 0 24 24"><path d="M4 8h3l2-2.5h6L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13.5" r="3.5"/></symbol>
+<symbol id="i-list" viewBox="0 0 24 24"><path d="M9 4h6v3H9z M7 5.5H6a1 1 0 0 0-1 1V20a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V6.5a1 1 0 0 0-1-1h-1 M9 12h6 M9 16h6"/></symbol>
+<symbol id="i-down" viewBox="0 0 24 24"><path d="M12 4v11 M7.5 10.5L12 15l4.5-4.5 M5 19h14"/></symbol>
+<symbol id="i-up" viewBox="0 0 24 24"><path d="M12 15V4 M7.5 8.5L12 4l4.5 4.5 M5 19h14"/></symbol>
+<symbol id="i-mail" viewBox="0 0 24 24"><path d="M4 6h16a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1z M3.5 7.5l8.5 6 8.5-6"/></symbol>
+<symbol id="i-phone" viewBox="0 0 24 24"><path d="M8 3h8a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z M11 18h2"/></symbol>
+<symbol id="i-pencil" viewBox="0 0 24 24"><path d="M4 20l1-4L16.5 4.5a2 2 0 0 1 2.8 0l.2.2a2 2 0 0 1 0 2.8L8 19z M14.5 6.5l3 3"/></symbol>
+<symbol id="i-ext" viewBox="0 0 24 24"><path d="M14 4h6v6 M20 4l-9 9 M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+<symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14 M5 12h14"/></symbol>
+</defs></svg>
 
 <div id="anmeldung" class="anmelden" hidden>
   <div><h1>Kundendienstfahrzeug</h1><p class="hint">Dein Ersatzteil-Bestand im Fahrzeug – derselbe wie im Programm auf dem Laptop.</p></div>
@@ -111,7 +127,7 @@ label{display:flex;flex-direction:column;gap:5px;font-size:13.5px;font-weight:50
   <div class="app-hinweis" id="apkHinweis" hidden><span>Mit der Android-App holt die Kamera-Erkennung die Bezeichnung direkt aus T-Doc.</span><a class="primary" id="apkLink" href="https://github.com/pdfunterschreiben-Admin/pdfunterschreiben/releases/download/kundendienstfahrzeug-android/Kundendienstfahrzeug.apk" style="padding:8px 12px;border-radius:9px;background:var(--pen);color:#fff;text-decoration:none;white-space:nowrap">App laden</a></div>
   <main id="liste"></main>
   <p class="hint" style="text-align:center;padding:8px 16px" id="userLine"></p>
-  <div class="fabs"><button class="fab2" id="neuBtn" aria-label="Teil von Hand eintragen">＋</button><label class="primary fab" id="scanBtn">📷 Scannen<input type="file" id="scanIn" accept="image/*" capture="environment" hidden></label></div>
+  <div class="fabs"><button class="fab2" id="neuBtn" aria-label="Teil von Hand eintragen"><svg class="i solo" aria-hidden="true"><use href="#i-plus"/></svg></button><label class="primary fab" id="scanBtn"><svg class="i" aria-hidden="true"><use href="#i-camera"/></svg>Scannen<input type="file" id="scanIn" accept="image/*" capture="environment" hidden></label></div>
 </div>
 
 <div class="blatt" id="teilBlatt" hidden>
@@ -149,7 +165,7 @@ label{display:flex;flex-direction:column;gap:5px;font-size:13.5px;font-weight:50
   <form onsubmit="return false">
     <h2>Teilenummer für den PC</h2>
     <p class="hint">Das Foto der Teilenummer wird gelesen und an den PC geschickt, von dem du den QR-Code gescannt hast.</p>
-    <label class="primary fab" style="position:static;justify-content:center;text-align:center">📷 Teilenummer fotografieren<input type="file" id="koppelIn" accept="image/*" capture="environment" hidden></label>
+    <label class="primary fab" style="position:static;justify-content:center;text-align:center"><svg class="i" aria-hidden="true"><use href="#i-camera"/></svg>Teilenummer fotografieren<input type="file" id="koppelIn" accept="image/*" capture="environment" hidden></label>
     <p class="hint" id="koppelInfo"></p>
     <div class="cands" id="koppelCands"></div>
     <button type="button" class="ghost" id="koppelZu">Fertig</button>
@@ -308,7 +324,7 @@ function zeichnen(){
     var m = menge(t);
     return '<div class="karte" data-id="' + esc(t.id) + '"><span class="name" data-a="edit">' + esc(t.name) + '</span><span class="nr" data-a="edit">' + esc(t.nr) + '</span><span class="ort">' + esc(t.ort || "") + '</span>' +
       '<span class="rechts"><span class="stepper' + (m === 0 && t.liste === "bestand" ? " leer" : "") + (offen[t.id] ? " wartet" : "") + '"><button data-a="minus" aria-label="weniger">−</button><output>' + m + '</output><button data-a="plus" aria-label="mehr">＋</button></span>' + (t.liste === "bestand" && t.soll > 0 ? '<span class="soll' + (m * 2 <= t.soll ? " warn" : "") + '">Soll ' + t.soll + '</span>' : "") +
-      (t.liste === "fehlt" ? '<button class="klein" data-a="da">✓ Eingetroffen</button>' : "") + '</span></div>';
+      (t.liste === "fehlt" ? '<button class="klein" data-a="da"><svg class="i" aria-hidden="true"><use href="#i-check"/></svg>Eingetroffen</button>' : "") + '</span></div>';
   }).join("");
 }
 $("liste").onclick = function(e){

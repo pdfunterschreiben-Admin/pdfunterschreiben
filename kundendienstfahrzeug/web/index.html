@@ -39,6 +39,8 @@ h1{font:700 30px/1.1 var(--f-display);margin:0;letter-spacing:-.01em}
 .panel{background:var(--sheet);border:1px solid var(--line);border-radius:10px;padding:18px;display:flex;flex-direction:column;gap:12px}
 aside{display:flex;flex-direction:column;gap:18px;position:sticky;top:12px}
 @media (max-width:960px){aside{position:static}}
+.i{width:1.15em;height:1.15em;flex:none;vertical-align:-.2em;margin-right:.45em;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.i.solo{margin:0}
 .step{display:flex;align-items:baseline;gap:10px}
 .step b{font:500 12px var(--f-mono);color:var(--pen);letter-spacing:.06em}
 .step h2{font:600 18px var(--f-display);margin:0}
@@ -58,6 +60,11 @@ button.primary:hover{filter:brightness(1.08)}
 button:disabled{opacity:.45;cursor:not-allowed}
 button.ghost{border-color:transparent;background:transparent;color:var(--muted);padding:6px 8px}
 button.ghost:hover{color:var(--ink)}
+button.quiet{border-color:transparent;background:transparent;color:var(--pen);padding:6px 9px}
+button.quiet:hover{border-color:var(--line);background:var(--sheet)}
+a{color:var(--pen);text-underline-offset:2px;text-decoration-thickness:1px}
+a:hover{text-decoration-thickness:2px}
+tr button.ghost .i{width:1.05em;height:1.05em}
 button.link{border:0;background:none;padding:0;color:var(--pen);font-size:13px;text-decoration:underline;cursor:pointer}
 button.wide,.btn.wide{width:100%;justify-content:center}
 button.danger{color:var(--bad)}
@@ -169,6 +176,18 @@ dialog::backdrop{background:rgba(10,15,30,.55)}
 </style>
 </head>
 <body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs>
+<symbol id="i-camera" viewBox="0 0 24 24"><path d="M4 8h3l2-2.5h6L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13.5" r="3.5"/></symbol>
+<symbol id="i-list" viewBox="0 0 24 24"><path d="M9 4h6v3H9z M7 5.5H6a1 1 0 0 0-1 1V20a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V6.5a1 1 0 0 0-1-1h-1 M9 12h6 M9 16h6"/></symbol>
+<symbol id="i-down" viewBox="0 0 24 24"><path d="M12 4v11 M7.5 10.5L12 15l4.5-4.5 M5 19h14"/></symbol>
+<symbol id="i-up" viewBox="0 0 24 24"><path d="M12 15V4 M7.5 8.5L12 4l4.5 4.5 M5 19h14"/></symbol>
+<symbol id="i-mail" viewBox="0 0 24 24"><path d="M4 6h16a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1z M3.5 7.5l8.5 6 8.5-6"/></symbol>
+<symbol id="i-phone" viewBox="0 0 24 24"><path d="M8 3h8a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z M11 18h2"/></symbol>
+<symbol id="i-pencil" viewBox="0 0 24 24"><path d="M4 20l1-4L16.5 4.5a2 2 0 0 1 2.8 0l.2.2a2 2 0 0 1 0 2.8L8 19z M14.5 6.5l3 3"/></symbol>
+<symbol id="i-ext" viewBox="0 0 24 24"><path d="M14 4h6v6 M20 4l-9 9 M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+<symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14 M5 12h14"/></symbol>
+</defs></svg>
 <div class="wrap">
   <div class="top">
     <div>
@@ -177,7 +196,7 @@ dialog::backdrop{background:rgba(10,15,30,.55)}
       <button type="button" class="fz" id="fzBtn" title="Kennzeichen und Fahrer ändern" hidden>
         <span class="schild"><span class="eu">D</span><span id="fzKz">–</span></span>
         <span class="col" style="gap:0;align-items:flex-start"><span class="hint">Fahrer</span><b id="fzFahrer">–</b></span>
-        <span class="hint" style="margin-left:4px">✎</span>
+        <svg class="i" aria-hidden="true"><use href="#i-pencil"/></svg>
       </button>
     </div>
     <div class="ver"><span id="verText">Version …</span><button class="ghost" id="checkBtn" hidden>Nach Updates suchen</button><button id="helpBtn">Anleitung</button></div>
@@ -194,10 +213,10 @@ dialog::backdrop{background:rgba(10,15,30,.55)}
         <div class="step"><b>01</b><h2 id="h-neu">Teil erfassen</h2></div>
         <button class="primary wide" id="neuBtn">＋ Neues Teil</button>
         <div class="grid2" style="gap:8px">
-          <label class="btn file-btn" style="justify-content:center" title="Foto vom Etikett oder der Verpackung – die Teilenummer wird gelesen">📷 Vom Foto<input type="file" id="fotoIn" accept="image/*"></label>
-          <button id="tdocBtn" style="justify-content:center" title="Teile, die in T-Doc mit dem Lesezeichen gesammelt wurden">📋 Aus T-Doc</button>
+          <label class="btn file-btn" style="justify-content:center" title="Foto vom Etikett oder der Verpackung – die Teilenummer wird gelesen"><svg class="i" aria-hidden="true"><use href="#i-camera"/></svg>Vom Foto<input type="file" id="fotoIn" accept="image/*"></label>
+          <button id="tdocBtn" style="justify-content:center" title="Teile, die in T-Doc mit dem Lesezeichen gesammelt wurden"><svg class="i" aria-hidden="true"><use href="#i-list"/></svg>Aus T-Doc</button>
         </div>
-        <button id="etBtn" class="wide" title="Dieselbe Ersatzteilliste wie im Reparaturauftrag der Service-Mappe">📋 Ersatzteilliste</button>
+        <button id="etBtn" class="wide" title="Dieselbe Ersatzteilliste wie im Reparaturauftrag der Service-Mappe"><svg class="i" aria-hidden="true"><use href="#i-list"/></svg>Ersatzteilliste</button>
         <p class="hint"><span id="erwTeil">T-Doc-Bezeichnungen automatisch: <button class="link" id="erwEinrichten">T-Doc-Verbindung einrichten</button> (einmalig).</span> <span class="chip info" id="tdocChip" hidden></span> Mehrere Teile aus T-Doc: Teile anklicken, Lesezeichen „T-Doc → Excel“, dann „Aus T-Doc“. <button class="link" id="lesezeichenBtn">Lesezeichen einrichten</button></p>
         <p class="hint" id="userLine" hidden></p>
       </section>
@@ -215,8 +234,8 @@ dialog::backdrop{background:rgba(10,15,30,.55)}
       <section class="panel" aria-labelledby="h-excel">
         <div class="step"><b>03</b><h2 id="h-excel">Excel</h2></div>
         <div class="grid2" style="gap:8px">
-          <button id="exportBtn" style="justify-content:center">⬇ Exportieren</button>
-          <label class="btn file-btn" style="justify-content:center">⬆ Importieren<input type="file" id="importIn" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"></label>
+          <button id="exportBtn" style="justify-content:center"><svg class="i" aria-hidden="true"><use href="#i-down"/></svg>Exportieren</button>
+          <label class="btn file-btn" style="justify-content:center"><svg class="i" aria-hidden="true"><use href="#i-up"/></svg>Importieren<input type="file" id="importIn" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"></label>
         </div>
         <p class="hint">Exportiert Bestand und Fehlteile in eine Excel-Mappe. Beim Import werden Tabellen mit den Spalten Ersatzteilnummer, Bezeichnung, Stückzahl und Lagerort übernommen – auch die Excel-Datei aus dem früheren Wagenlager. Kennzeichen und Fahrer stehen oben in der Mappe.</p>
       </section>
@@ -243,7 +262,7 @@ dialog::backdrop{background:rgba(10,15,30,.55)}
         <div class="doc-head">
           <div class="col" style="gap:2px"><span class="doc-name" id="listTitle">Fahrzeugbestand</span><span class="hint" id="listInfo"></span></div>
           <div class="row"><span class="chip warn" id="offlineBox" hidden>Offline – nur Ansicht</span>
-            <button type="button" class="primary" id="bestellBtn" hidden>📧 Ans Lager schicken</button>
+            <button type="button" class="primary" id="bestellBtn" hidden><svg class="i" aria-hidden="true"><use href="#i-mail"/></svg>Ans Lager schicken</button>
             <select id="sortSel" aria-label="Sortierung" style="width:auto;padding:5px 8px;font-size:13.5px;background:var(--sheet)">
               <option value="name">nach Bezeichnung</option>
               <option value="nr">nach Teilenummer</option>
@@ -275,9 +294,9 @@ dialog::backdrop{background:rgba(10,15,30,.55)}
       <label class="field">Teilenummer
         <span class="row" style="flex-wrap:nowrap">
           <input type="text" id="fNr" class="mono" placeholder="67405-T1000-71 oder BT7643266" required>
-          <label class="btn file-btn" title="Teilenummer vom Foto lesen">📷<input type="file" id="fFoto" accept="image/*"></label>
-          <button type="button" id="fHandy" title="QR-Code mit dem Handy scannen und die Teilenummer mit dem Handy fotografieren">📱 Handy</button>
-          <button type="button" id="fTdoc" title="Diese Nummer in Toyota T-Doc nachschlagen">T-Doc ↗</button>
+          <label class="btn file-btn" title="Teilenummer vom Foto lesen" aria-label="Teilenummer vom Foto lesen"><svg class="i solo" aria-hidden="true"><use href="#i-camera"/></svg><input type="file" id="fFoto" accept="image/*"></label>
+          <button type="button" id="fHandy" title="QR-Code mit dem Handy scannen und die Teilenummer mit dem Handy fotografieren"><svg class="i" aria-hidden="true"><use href="#i-phone"/></svg>Handy</button>
+          <button type="button" id="fTdoc" title="Diese Nummer in Toyota T-Doc nachschlagen">T-Doc<svg class="i" style="margin:0 0 0 .4em" aria-hidden="true"><use href="#i-ext"/></svg></button>
         </span>
       </label>
       <div class="col" id="ocrBox" style="gap:6px" hidden><span class="hint" id="ocrInfo"></span><div class="cands" id="cands"></div></div>
@@ -400,7 +419,7 @@ dialog::backdrop{background:rgba(10,15,30,.55)}
         <li>Im Browser in die Adresszeile <b>chrome://extensions</b> eintippen (bei Edge: <b>edge://extensions</b>) und Enter drücken.</li>
         <li>Rechts oben bzw. links unten den <b>Entwicklermodus</b> einschalten.</li>
         <li><b>„Entpackte Erweiterung laden“</b> klicken und diesen Ordner wählen (er ist schon im Explorer geöffnet):<br><span class="val" id="erwOrdner" style="word-break:break-all"></span> <button type="button" class="link" id="erwKopieren">Pfad kopieren</button></li>
-        <li>Fertig. Ab jetzt reicht im Programm <b>T-Doc ↗</b> (danach sogar nur die Nummer) – T-Doc wird unsichtbar im Hintergrund gefragt und die Bezeichnung eingetragen.</li>
+        <li>Fertig. Ab jetzt reicht im Programm <b>T-Doc</b> (danach sogar nur die Nummer) – T-Doc wird unsichtbar im Hintergrund gefragt und die Bezeichnung eingetragen.</li>
         <li>Nach einem Programm-Update aktualisiert sich die Erweiterung von selbst.</li>
       </ol>
       <p class="hint">Falls „Entwicklermodus“ gesperrt ist (Firmenrichtlinie), geht es weiter wie bisher über das Lesezeichen „T-Doc → Excel“.</p>
@@ -415,17 +434,17 @@ dialog::backdrop{background:rgba(10,15,30,.55)}
       <h3>Zwei Listen</h3>
       <ul>
         <li><b>Fahrzeugbestand</b> – was im Servicewagen liegt, mit Lagerort und Stückzahl.</li>
-        <li><b>Bestellliste</b> – was nachbestellt werden muss. Im Bestand auf <b>Nachbestellen</b> klicken, dann steht das Teil gleich hier. Mit <b>📧 Ans Lager schicken</b> geht die Liste als Excel-Mappe per E-Mail (Outlook) ans Lager – mit Vermerk „per NSE“ oder „ins Fach“. Ist ein Teil da, auf <b>✓ Eingetroffen</b> klicken: es wandert mit seiner Stückzahl in den Bestand.</li>
-        <li><b>Soll-Bestand</b> – beim Teil (✎) einen Soll eintragen. Sinkt der Bestand auf die Hälfte oder weniger, setzt das Programm das Teil <b>von selbst auf die Bestellliste</b> – so viele Stück, dass wieder das Soll im Wagen ist. Steht es schon unbestellt auf der Liste, bleibt es dort.</li>
+        <li><b>Bestellliste</b> – was nachbestellt werden muss. Im Bestand auf <b>Nachbestellen</b> klicken, dann steht das Teil gleich hier. Mit <b>Ans Lager schicken</b> geht die Liste als Excel-Mappe per E-Mail (Outlook) ans Lager – mit Vermerk „per NSE“ oder „ins Fach“. Ist ein Teil da, auf <b>✓ Eingetroffen</b> klicken: es wandert mit seiner Stückzahl in den Bestand.</li>
+        <li><b>Soll-Bestand</b> – beim Teil (Stift-Symbol) einen Soll eintragen. Sinkt der Bestand auf die Hälfte oder weniger, setzt das Programm das Teil <b>von selbst auf die Bestellliste</b> – so viele Stück, dass wieder das Soll im Wagen ist. Steht es schon unbestellt auf der Liste, bleibt es dort.</li>
       </ul>
       <h3>Teile erfassen</h3>
       <ul>
         <li><b>＋ Neues Teil</b>: Teilenummer eintragen. Toyota-Nummern (12345-ABCDE-12) und BT-Nummern (BT 1234567) werden einheitlich geschrieben, alle anderen Nummern (z. B. 4010-004) bleiben genau so, wie du sie einträgst.</li>
         <li>Ist die Nummer schon bekannt (bei dir oder bei Kollegen), wird die Bezeichnung automatisch eingetragen.</li>
-        <li><b>📷 Vom Foto</b>: Foto vom Etikett wählen – die Teilenummer wird gelesen. Bitte die erkannte Nummer kurz prüfen.</li>
-        <li><b>T-Doc ↗</b> öffnet die Nummer in Toyota T-Doc (im Browser, in dem du bei Toyota angemeldet bist). Dort auf das Lesezeichen „T-Doc → Excel“ klicken und zurück ins Programm – die Bezeichnung wird dann automatisch eingetragen.</li>
-        <li><b>📋 Ersatzteilliste</b>: dieselbe Liste wie im Reparaturauftrag der Service-Mappe (Außendienst &amp; Werkstatt, Batteriedienst). Mengen eintragen und übernehmen – in den Bestand oder auf die Bestellliste.</li>
-        <li><b>📋 Aus T-Doc</b>: In T-Doc die gewünschten Teile anklicken (rot markiert), das Lesezeichen „T-Doc → Excel“ drücken und dann hier auf „Aus T-Doc“. Das Lesezeichen ist dasselbe wie in der Service-Mappe.</li>
+        <li><b>Vom Foto</b>: Foto vom Etikett wählen – die Teilenummer wird gelesen. Bitte die erkannte Nummer kurz prüfen.</li>
+        <li><b>T-Doc</b> öffnet die Nummer in Toyota T-Doc (im Browser, in dem du bei Toyota angemeldet bist). Dort auf das Lesezeichen „T-Doc → Excel“ klicken und zurück ins Programm – die Bezeichnung wird dann automatisch eingetragen.</li>
+        <li><b>Ersatzteilliste</b>: dieselbe Liste wie im Reparaturauftrag der Service-Mappe (Außendienst &amp; Werkstatt, Batteriedienst). Mengen eintragen und übernehmen – in den Bestand oder auf die Bestellliste.</li>
+        <li><b>Aus T-Doc</b>: In T-Doc die gewünschten Teile anklicken (rot markiert), das Lesezeichen „T-Doc → Excel“ drücken und dann hier auf „Aus T-Doc“. Das Lesezeichen ist dasselbe wie in der Service-Mappe.</li>
       </ul>
       <h3>Entnehmen und nachfüllen</h3>
       <p>In der Liste mit <b>−</b> und <b>＋</b> die Stückzahl ändern. Mehrere Klicks hintereinander werden zusammen gespeichert. Ist ein Teil aufgebraucht, bietet das Programm an, es gleich auf die Bestellliste zu setzen.</p>
@@ -774,14 +793,14 @@ function render(){
   $("#rows").innerHTML = liste.map(t => {
     const m = menge(t), o = offen.get(t.id);
     const akt = t.liste === "bestand"
-      ? `<button type="button" data-a="nach" title="Gleich auf die Bestellliste setzen"${dis}>Nachbestellen</button>`
-      : `<button type="button" data-a="da" title="Ist eingetroffen – in den Fahrzeugbestand übernehmen"${dis}>✓ Eingetroffen</button>`;
+      ? `<button type="button" class="quiet" data-a="nach" title="Gleich auf die Bestellliste setzen"${dis}>Nachbestellen</button>`
+      : `<button type="button" class="quiet" data-a="da" title="Ist eingetroffen – in den Fahrzeugbestand übernehmen"${dis}><svg class="i" aria-hidden="true"><use href="#i-check"/></svg>Eingetroffen</button>`;
     return `<tr data-id="${esc(t.id)}" class="${neuMarkiert.has(t.id) ? "neu" : ""}">
       <td class="nr"><button type="button" data-a="edit" title="Bearbeiten">${esc(t.nr)}</button></td>
       <td class="name">${esc(t.name)}${t.liste === "fehlt" && t.bestellt ? ` <span class="chip ok" title="Bestellung ans Lager geschickt">bestellt ${esc(new Date(t.bestellt).toLocaleDateString("de-DE", {day: "2-digit", month: "2-digit"}))}</span>` : ""}${state.sort === "zeit" && t.zeit ? `<span class="zeit">${esc(zeitText(t.zeit))}</span>` : ""}</td>
       <td class="ort">${esc(t.ort || "–")}</td>
       <td class="menge"><span class="stepper${m === 0 && t.liste === "bestand" ? " leer" : ""}${o ? " wartet" : ""}"><button type="button" data-a="minus" aria-label="eins weniger"${dis}>−</button><output>${zahl(m)}</output><button type="button" data-a="plus" aria-label="eins mehr"${dis}>＋</button></span>${t.liste === "bestand" && t.soll > 0 ? `<span class="sollz${m * 2 <= t.soll ? " warn" : ""}" title="Soll-Bestand: bei der Hälfte oder weniger kommt das Teil automatisch auf die Bestellliste">Soll ${zahl(t.soll)}</span>` : ""}</td>
-      <td class="akt">${akt} <button type="button" class="ghost" data-a="edit" title="Bearbeiten">✎</button></td></tr>`;
+      <td class="akt">${akt} <button type="button" class="ghost" data-a="edit" title="Bearbeiten" aria-label="Bearbeiten"><svg class="i solo" aria-hidden="true"><use href="#i-pencil"/></svg></button></td></tr>`;
   }).join("");
   neuMarkiert = new Set();
 }
