@@ -33,9 +33,15 @@ h1{font:700 30px/1.1 var(--f-display);margin:0;letter-spacing:-.01em}
 .burger{width:42px;height:42px;padding:0;justify-content:center;border-radius:10px}
 .burger[aria-expanded="true"]{border-color:var(--pen);color:var(--pen);background:var(--pen-soft)}
 .menu{position:absolute;right:0;top:50px;z-index:40;width:min(380px,92vw);max-height:calc(100vh - 90px);overflow:auto;background:var(--sheet);border:1px solid var(--line);border-radius:12px;box-shadow:0 14px 36px rgba(15,23,42,.22);padding:4px 16px}
-.msec{display:flex;flex-direction:column;gap:10px;padding:14px 0;border-top:1px solid var(--line)}
+.msec{border-top:1px solid var(--line);padding:0}
 .msec:first-child,.msec[hidden]+.msec{border-top:0}
-.msec h3{font:600 13px var(--f-body);color:var(--muted);margin:0}
+.msec>summary{list-style:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:13px 2px;font:600 14px var(--f-body);color:var(--ink);border-radius:6px;user-select:none}
+.msec>summary::-webkit-details-marker{display:none}
+.msec>summary::after{content:"";width:8px;height:8px;border-right:2px solid var(--muted);border-bottom:2px solid var(--muted);transform:rotate(45deg) translateY(-2px);transition:transform .15s;margin-right:4px}
+.msec[open]>summary::after{transform:rotate(-135deg) translateY(-2px)}
+.msec>summary:hover{color:var(--pen)}
+.msec>summary:focus-visible{outline:2px solid var(--pen);outline-offset:1px}
+.msecBody{display:flex;flex-direction:column;gap:10px;padding:2px 2px 14px}
 .msec .grid2 button,.msec .grid2 .btn{justify-content:center}
 .ver{font:12.5px var(--f-mono);color:var(--muted);display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 .ver button{font:12.5px var(--f-body);padding:4px 8px}
@@ -206,7 +212,7 @@ dialog::backdrop{background:rgba(10,15,30,.55)}
   <div class="top">
     <div>
       <h1>Kundendienstfahrzeug</h1>
-      <p class="lead">Ersatzteile im Fahrzeug: was im Wagen liegt und was fehlt. Der Bestand gehört zu deiner Arbeits-E-Mail und ist auch auf dem Handy da.</p>
+      <p class="lead">Ersatzteile im Fahrzeug – auch auf dem Handy.</p>
       <button type="button" class="fz" id="fzBtn" title="Kennzeichen und Fahrer ändern" hidden>
         <span class="schild"><span class="eu">D</span><span id="fzKz">–</span></span>
         <span class="col" style="gap:0;align-items:flex-start"><span class="hint">Fahrer</span><b id="fzFahrer">–</b></span>
@@ -216,28 +222,28 @@ dialog::backdrop{background:rgba(10,15,30,.55)}
     <div class="menuwrap">
       <button type="button" id="menuBtn" class="burger" aria-label="Menü" aria-haspopup="true" aria-expanded="false" aria-controls="menuPanel"><svg class="i solo" aria-hidden="true"><use href="#i-menu"/></svg></button>
       <div id="menuPanel" class="menu" hidden>
-        <section class="msec" id="kontoSec" hidden><h3>Konto</h3>
+        <details class="msec" id="kontoSec" hidden><summary>Konto</summary><div class="msecBody">
         <p class="hint" id="userLine" hidden></p>
-        </section>
-        <section class="msec"><h3>Excel</h3>
+        </div></details>
+        <details class="msec"><summary>Excel</summary><div class="msecBody">
         <div class="grid2" style="gap:8px">
           <button id="exportBtn" style="justify-content:center"><svg class="i" aria-hidden="true"><use href="#i-down"/></svg>Exportieren</button>
           <label class="btn file-btn" style="justify-content:center"><svg class="i" aria-hidden="true"><use href="#i-up"/></svg>Importieren<input type="file" id="importIn" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"></label>
         </div>
         <p class="hint">Exportiert Bestand und Fehlteile in eine Excel-Mappe. Beim Import werden Tabellen mit den Spalten Ersatzteilnummer, Bezeichnung, Stückzahl und Lagerort übernommen – auch die Excel-Datei aus dem früheren Wagenlager. Kennzeichen und Fahrer stehen oben in der Mappe.</p>
-              </section>
-        <section class="msec"><h3>T-Doc</h3>
+              </div></details>
+        <details class="msec"><summary>T-Doc</summary><div class="msecBody">
         <p class="hint"><span id="erwTeil">T-Doc-Bezeichnungen automatisch: <button class="link" id="erwEinrichten">T-Doc-Verbindung einrichten</button> (einmalig).</span> <span class="chip info" id="tdocChip" hidden></span> Mehrere Teile aus T-Doc: Teile anklicken, Lesezeichen „T-Doc → Excel“, dann „Aus T-Doc“. <button class="link" id="lesezeichenBtn">Lesezeichen einrichten</button></p>
-        </section>
-        <section class="msec" id="adminPanel" hidden><h3>Testkanal (Admin)</h3>
+        </div></details>
+        <details class="msec" id="adminPanel" hidden><summary>Testkanal (Admin)</summary><div class="msecBody">
         <label class="check"><input type="checkbox" id="testChannel"> Testversionen vor allen anderen bekommen</label>
         <p class="hint">Neue Funktionen kommen hier zuerst an. Erst wenn du sie freigibst, bekommen alle anderen das Update.</p>
         <p class="hint">Nutzer, Sperren und alle Lager: <button class="link" id="openSheet">Google-Tabelle öffnen</button></p>
-              </section>
-        <section class="msec"><h3>Programm</h3>
+              </div></details>
+        <details class="msec"><summary>Programm</summary><div class="msecBody">
           <div class="ver"><span id="verText">Version …</span><button class="ghost" id="checkBtn" hidden>Nach Updates suchen</button></div>
           <button id="helpBtn"><svg class="i" aria-hidden="true"><use href="#i-help"/></svg>Anleitung</button>
-        </section>
+        </div></details>
       </div>
     </div>
   </div>
@@ -250,7 +256,7 @@ dialog::backdrop{background:rgba(10,15,30,.55)}
   <div class="grid">
     <aside>
       <section class="panel" aria-labelledby="h-neu">
-        <div class="step"><b>01</b><h2 id="h-neu">Teil erfassen</h2></div>
+        <div class="step"><h2 id="h-neu">Teil erfassen</h2></div>
         <button class="primary wide" id="neuBtn">＋ Neues Teil</button>
         <div class="grid2" style="gap:8px">
           <label class="btn file-btn" style="justify-content:center" title="Foto vom Etikett oder der Verpackung – die Teilenummer wird gelesen"><svg class="i" aria-hidden="true"><use href="#i-camera"/></svg>Vom Foto<input type="file" id="fotoIn" accept="image/*"></label>
@@ -260,7 +266,7 @@ dialog::backdrop{background:rgba(10,15,30,.55)}
       </section>
 
       <section class="panel" aria-labelledby="h-stand">
-        <div class="step"><b>02</b><h2 id="h-stand">Überblick</h2></div>
+        <div class="step"><h2 id="h-stand">Überblick</h2></div>
         <div class="stats">
           <div class="stat"><b id="stPos">–</b><span>Positionen</span></div>
           <div class="stat"><b id="stStk">–</b><span>Stück im Wagen</span></div>
@@ -1530,6 +1536,7 @@ $("#exportBtn").onclick = async () => {
   btn.onclick = e => { e.stopPropagation(); panel.hidden ? auf() : zu(); };
   document.addEventListener("click", e => { if(!panel.hidden && !e.target.closest("#menuPanel")) zu(); });
   document.addEventListener("keydown", e => { if(e.key === "Escape" && !panel.hidden && !document.querySelector("dialog[open]")){ zu(); btn.focus(); } });
+  panel.addEventListener("toggle", e => { const d = e.target; if(d.open && d.classList.contains("msec")) panel.querySelectorAll("details.msec[open]").forEach(o => { if(o !== d) o.open = false; }); }, true);
   panel.addEventListener("click", e => { if(e.target.closest("button") && !e.target.closest("#testChannel")) setTimeout(zu, 0); });
   $("#importIn").addEventListener("change", zu);
   window.menuZu = zu; window.menuAuf = auf;

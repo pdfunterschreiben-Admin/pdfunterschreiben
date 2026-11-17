@@ -286,7 +286,14 @@ const [app, mock, out = '.'] = process.argv.slice(2);
   // Burger-Menü oben rechts: Selten Gebrauchtes liegt dort
   assert(!(await page.isVisible('#exportBtn')) && !(await page.isVisible('#helpBtn')), 'Menüinhalt darf zu Beginn nicht sichtbar sein');
   await page.click('#menuBtn'); await page.waitForSelector('#menuPanel:not([hidden])');
-  for (const id of ['#exportBtn', '#helpBtn', '#verText', '#userLine', '#erwEinrichten']) assert(await page.isVisible(id), id + ' fehlt im Menü');
+  // Abschnitte sind zugeklappt und gehen einzeln auf (immer nur einer offen)
+  assert(!(await page.isVisible('#exportBtn')), 'Abschnitte müssen zu Beginn zugeklappt sein');
+  await shot('13-menue-zu');
+  const sum = t => page.locator('#menuPanel summary', { hasText: t });
+  await sum('Excel').click(); assert(await page.isVisible('#exportBtn'));
+  await sum('Konto').click(); await page.waitForSelector('#exportBtn', { state: 'hidden' }); assert(await page.isVisible('#userLine'), 'nur ein Abschnitt offen');
+  await sum('T-Doc').click(); assert(await page.isVisible('#erwEinrichten'));
+  await sum('Programm').click(); assert(await page.isVisible('#helpBtn') && await page.isVisible('#verText'));
   await shot('13-menue');
   await page.keyboard.press('Escape'); await page.waitForSelector('#menuPanel', { state: 'hidden' });
   await page.click('#menuBtn'); await page.mouse.click(600, 500); await page.waitForSelector('#menuPanel', { state: 'hidden' });
