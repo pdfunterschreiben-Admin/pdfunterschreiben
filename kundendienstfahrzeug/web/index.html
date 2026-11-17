@@ -131,7 +131,11 @@ td.akt{white-space:nowrap;width:1%;text-align:right}
 .mengen input{text-align:center;font:600 16px var(--f-mono);width:110px}
 .mengen button{width:40px;justify-content:center;font-size:17px;padding:7px 0}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-@media (max-width:520px){.grid2{grid-template-columns:1fr}}
+.grid3{display:grid;grid-template-columns:1.1fr 1.3fr .8fr;gap:12px;align-items:end}
+.grid3.ohnesoll{grid-template-columns:1fr 1fr}
+.sollz{font-size:12.5px;color:var(--muted,#6b7280);margin-left:6px;white-space:nowrap}
+.sollz.warn{color:var(--warn);font-weight:600}
+@media (max-width:520px){.grid2{grid-template-columns:1fr}.grid3{grid-template-columns:1fr 1fr}.grid3 label:first-child{grid-column:1/3}}
 .preview{max-height:280px;overflow:auto;border:1px solid var(--line);border-radius:8px;background:var(--sheet)}
 .preview td,.preview th{padding:6px 10px;font-size:13px}
 #toast{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;background:var(--ink);color:var(--paper);padding:10px 16px;border-radius:8px;font-size:14px;max-width:min(560px,calc(100% - 32px));box-shadow:0 6px 20px rgba(0,0,0,.2);z-index:30;display:flex;gap:12px;align-items:center}
@@ -282,18 +286,18 @@ dialog::backdrop{background:rgba(10,15,30,.55)}
         <input type="text" id="fName" placeholder="z. B. Filter-Teilgruppe" required list="nameListe">
       </label>
       <span class="hint" id="nameHint" hidden></span>
-      <div class="grid2">
+      <div class="grid3" id="mengenZeile">
         <label class="field">Lagerort
           <input type="text" id="fOrt" placeholder="z. B. Fach A, Kiste 3" list="ortListe">
         </label>
         <label class="field">Stückzahl
           <span class="mengen"><button type="button" id="fMinus" aria-label="weniger">−</button><input type="number" id="fMenge" min="0" max="999999" step="1" value="1" inputmode="numeric"><button type="button" id="fPlus" aria-label="mehr">＋</button></span>
         </label>
+        <label class="field" id="sollBox">Soll-Bestand
+          <input type="number" id="fSoll" min="0" max="999999" step="1" inputmode="numeric" placeholder="leer = aus" style="text-align:center;font:600 16px var(--f-mono)">
+        </label>
       </div>
-      <label class="field" id="sollBox">Soll-Bestand <span class="hint">(leer = keine Automatik)</span>
-        <input type="number" id="fSoll" min="0" max="999999" step="1" inputmode="numeric" placeholder="z. B. 10">
-        <span class="hint">Sinkt der Bestand auf die Hälfte oder weniger, kommt das Teil von selbst auf die Bestellliste – so viele, dass wieder das Soll im Wagen ist.</span>
-      </label>
+      <span class="hint" id="sollHint">Soll-Bestand: Sinkt der Bestand auf die Hälfte oder weniger, kommt das Teil von selbst auf die Bestellliste – so viele, dass wieder das Soll im Wagen ist.</span>
       <p class="err" id="teilErr" hidden></p>
     </div>
     <div class="dlg-foot">
@@ -774,9 +778,9 @@ function render(){
       : `<button type="button" data-a="da" title="Ist eingetroffen – in den Fahrzeugbestand übernehmen"${dis}>✓ Eingetroffen</button>`;
     return `<tr data-id="${esc(t.id)}" class="${neuMarkiert.has(t.id) ? "neu" : ""}">
       <td class="nr"><button type="button" data-a="edit" title="Bearbeiten">${esc(t.nr)}</button></td>
-      <td class="name">${esc(t.name)}${t.liste === "bestand" && t.soll > 0 ? ` <span class="chip${m * 2 <= t.soll ? " warn" : ""}" title="Soll-Bestand: bei der Hälfte oder weniger kommt das Teil automatisch auf die Bestellliste">Soll ${zahl(t.soll)}</span>` : ""}${t.liste === "fehlt" && t.bestellt ? ` <span class="chip ok" title="Bestellung ans Lager geschickt">bestellt ${esc(new Date(t.bestellt).toLocaleDateString("de-DE", {day: "2-digit", month: "2-digit"}))}</span>` : ""}${state.sort === "zeit" && t.zeit ? `<span class="zeit">${esc(zeitText(t.zeit))}</span>` : ""}</td>
+      <td class="name">${esc(t.name)}${t.liste === "fehlt" && t.bestellt ? ` <span class="chip ok" title="Bestellung ans Lager geschickt">bestellt ${esc(new Date(t.bestellt).toLocaleDateString("de-DE", {day: "2-digit", month: "2-digit"}))}</span>` : ""}${state.sort === "zeit" && t.zeit ? `<span class="zeit">${esc(zeitText(t.zeit))}</span>` : ""}</td>
       <td class="ort">${esc(t.ort || "–")}</td>
-      <td class="menge"><span class="stepper${m === 0 && t.liste === "bestand" ? " leer" : ""}${o ? " wartet" : ""}"><button type="button" data-a="minus" aria-label="eins weniger"${dis}>−</button><output>${zahl(m)}</output><button type="button" data-a="plus" aria-label="eins mehr"${dis}>＋</button></span></td>
+      <td class="menge"><span class="stepper${m === 0 && t.liste === "bestand" ? " leer" : ""}${o ? " wartet" : ""}"><button type="button" data-a="minus" aria-label="eins weniger"${dis}>−</button><output>${zahl(m)}</output><button type="button" data-a="plus" aria-label="eins mehr"${dis}>＋</button></span>${t.liste === "bestand" && t.soll > 0 ? `<span class="sollz${m * 2 <= t.soll ? " warn" : ""}" title="Soll-Bestand: bei der Hälfte oder weniger kommt das Teil automatisch auf die Bestellliste">Soll ${zahl(t.soll)}</span>` : ""}</td>
       <td class="akt">${akt} <button type="button" class="ghost" data-a="edit" title="Bearbeiten">✎</button></td></tr>`;
   }).join("");
   neuMarkiert = new Set();
@@ -848,7 +852,7 @@ function oeffneTeil(t, titel){
   if(locked()) return checkAccess();
   teil = t ? {...t} : {liste: state.tab, nr: "", name: "", ort: $("#ortFilter").value || "", menge: 1, soll: 0};
   $("#teilTitle").textContent = titel || (teil.id ? "Teil bearbeiten" : "Neues Teil");
-  $("#fNr").value = teil.nr || ""; $("#fName").value = teil.name || ""; $("#fOrt").value = teil.ort || ""; $("#fMenge").value = teil.menge != null ? teil.menge : 1; $("#fSoll").value = teil.soll > 0 ? teil.soll : ""; $("#sollBox").hidden = teil.liste !== "bestand";
+  $("#fNr").value = teil.nr || ""; $("#fName").value = teil.name || ""; $("#fOrt").value = teil.ort || ""; $("#fMenge").value = teil.menge != null ? teil.menge : 1; $("#fSoll").value = teil.soll > 0 ? teil.soll : ""; $("#mengenZeile").classList.toggle("ohnesoll", teil.liste !== "bestand"); $("#sollBox").hidden = $("#sollHint").hidden = teil.liste !== "bestand";
   $("#teilDel").hidden = !teil.id; $("#teilNachbestellen").hidden = !(teil.id && teil.liste === "bestand");
   $("#ocrBox").hidden = true; $("#nameHint").hidden = true; teilErr("");
   nameVonHand = !!teil.name;

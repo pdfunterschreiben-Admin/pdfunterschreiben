@@ -45,6 +45,7 @@ main{padding:12px 16px;display:flex;flex-direction:column;gap:10px}
 .stepper{display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:10px;overflow:hidden}
 .stepper button{border:0;border-radius:0;padding:9px 14px;font-size:19px;line-height:1;background:transparent}
 .stepper output{min-width:42px;text-align:center;font:600 17px var(--f-mono)}
+.karte .soll{font-size:13px;color:#6b7280}.karte .soll.warn{color:#b45309;font-weight:600}
 .stepper.leer output{color:var(--bad)} .stepper.wartet output{color:var(--pen)}
 .klein{font-size:13px;padding:6px 10px}
 .leer-box{text-align:center;color:var(--muted);padding:40px 16px}
@@ -123,8 +124,11 @@ label{display:flex;flex-direction:column;gap:5px;font-size:13.5px;font-weight:50
     <p class="hint" id="nameHint" hidden></p>
     <label>Lagerort<input id="fOrt" placeholder="z. B. Fach A" list="orte"></label>
     <datalist id="orte"></datalist>
-    <label>Stückzahl<span class="mengen"><button type="button" id="fMinus">−</button><input id="fMenge" type="number" inputmode="numeric" min="0" max="999999" value="1"><button type="button" id="fPlus">＋</button></span></label>
-    <label id="sollBox">Soll-Bestand <small>(leer = keine Automatik; bei der Hälfte oder weniger kommt das Teil von selbst auf die Bestellliste)</small><input id="fSoll" type="number" inputmode="numeric" min="0" max="999999" placeholder="z. B. 10"></label>
+    <div style="display:flex;gap:10px;align-items:flex-end">
+      <label style="flex:1.6">Stückzahl<span class="mengen"><button type="button" id="fMinus">−</button><input id="fMenge" type="number" inputmode="numeric" min="0" max="999999" value="1"><button type="button" id="fPlus">＋</button></span></label>
+      <label id="sollBox" style="flex:1">Soll-Bestand<input id="fSoll" type="number" inputmode="numeric" min="0" max="999999" placeholder="leer = aus" style="text-align:center;font:600 18px var(--f-mono)"></label>
+    </div>
+    <small id="sollHint">Sinkt der Bestand auf die Hälfte des Solls oder weniger, kommt das Teil von selbst auf die Bestellliste.</small>
     <p class="err" id="teilErr" hidden></p>
     <button class="primary" id="teilOk">Speichern</button>
     <div class="zeile" style="justify-content:space-between"><button type="button" class="ghost" id="teilDel" style="color:var(--bad)" hidden>Löschen</button><button type="button" class="ghost" id="teilNach" hidden>Nachbestellen</button></div>
@@ -302,8 +306,8 @@ function zeichnen(){
   }
   $("liste").innerHTML = a.map(function(t){
     var m = menge(t);
-    return '<div class="karte" data-id="' + esc(t.id) + '"><span class="name" data-a="edit">' + esc(t.name) + '</span><span class="nr" data-a="edit">' + esc(t.nr) + '</span><span class="ort">' + esc(t.ort || "") + (t.liste === "bestand" && t.soll > 0 ? ' · Soll ' + t.soll : "") + '</span>' +
-      '<span class="rechts"><span class="stepper' + (m === 0 && t.liste === "bestand" ? " leer" : "") + (offen[t.id] ? " wartet" : "") + '"><button data-a="minus" aria-label="weniger">−</button><output>' + m + '</output><button data-a="plus" aria-label="mehr">＋</button></span>' +
+    return '<div class="karte" data-id="' + esc(t.id) + '"><span class="name" data-a="edit">' + esc(t.name) + '</span><span class="nr" data-a="edit">' + esc(t.nr) + '</span><span class="ort">' + esc(t.ort || "") + '</span>' +
+      '<span class="rechts"><span class="stepper' + (m === 0 && t.liste === "bestand" ? " leer" : "") + (offen[t.id] ? " wartet" : "") + '"><button data-a="minus" aria-label="weniger">−</button><output>' + m + '</output><button data-a="plus" aria-label="mehr">＋</button></span>' + (t.liste === "bestand" && t.soll > 0 ? '<span class="soll' + (m * 2 <= t.soll ? " warn" : "") + '">Soll ' + t.soll + '</span>' : "") +
       (t.liste === "fehlt" ? '<button class="klein" data-a="da">✓ Eingetroffen</button>' : "") + '</span></div>';
   }).join("");
 }
@@ -358,7 +362,7 @@ $("tlFehlt").onclick = function(){ liste("fehlt"); };
 function oeffnen(t, titel){
   teil = t ? JSON.parse(JSON.stringify(t)) : {liste: tab, nr: "", name: "", ort: "", menge: 1};
   $("teilTitel").textContent = titel || (teil.id ? "Teil bearbeiten" : "Neues Teil");
-  $("fNr").value = teil.nr; $("fName").value = teil.name; $("fOrt").value = teil.ort || ""; $("fMenge").value = teil.menge; $("fSoll").value = teil.soll > 0 ? teil.soll : ""; $("sollBox").hidden = teil.liste !== "bestand";
+  $("fNr").value = teil.nr; $("fName").value = teil.name; $("fOrt").value = teil.ort || ""; $("fMenge").value = teil.menge; $("fSoll").value = teil.soll > 0 ? teil.soll : ""; $("sollBox").hidden = $("sollHint").hidden = teil.liste !== "bestand";
   $("teilDel").hidden = !teil.id; $("teilNach").hidden = !(teil.id && teil.liste === "bestand"); fehler("teilErr", "");
   $("fTdoc").hidden = false; $("fTdoc").disabled = false; hinweisName("");
   liste(teil.liste); $("teilBlatt").hidden = false;

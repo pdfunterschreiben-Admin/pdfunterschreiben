@@ -259,8 +259,9 @@ const [app, mock, out = '.'] = process.argv.slice(2);
   await page.click('#tabBestand');
   await page.click('#neuBtn'); await page.waitForSelector('#teilDlg[open]');
   await page.fill('#fNr', '4010-555'); await page.fill('#fName', 'Sollschraube'); await page.fill('#fMenge', '6'); await page.fill('#fSoll', '6');
+  await shot('11-soll-dialog');
   await page.click('#teilOk');
-  await page.waitForSelector('tr:has-text("Sollschraube") .chip:has-text("Soll 6")');
+  await page.waitForSelector('tr:has-text("Sollschraube") .sollz:has-text("Soll 6")');
   const sollZeile = page.locator('tr', { hasText: 'Sollschraube' });
   for (let i = 0; i < 3; i++) { await sollZeile.locator('[data-a=minus]').click(); }
   await page.waitForFunction(() => document.querySelector('#toast') && /halben Soll/.test(document.querySelector('#toast').textContent), null, { timeout: 8000 });
