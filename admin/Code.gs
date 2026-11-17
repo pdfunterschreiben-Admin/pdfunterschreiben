@@ -2,10 +2,12 @@
 // Läuft als Apps Script in der Google-Tabelle „PDF Unterschreiben – Nutzer“ und ist als Web-App
 // veröffentlicht (Ausführen als: Ich, Zugriff: Jeder). In KEY steht derselbe Schlüssel wie im
 // GitHub-Secret REPORT_KEY – im Repository steht hier nur ein Platzhalter.
-// Beim Einspielen werden admin/Typenschild.js, admin/QrCode.js, admin/Vorlagen.js und admin/Kundendienstfahrzeug.js unten angehängt (jeweils ohne die letzte module.exports-Zeile).
+// Live-Datei im Apps-Script-Projekt = diese Datei + admin/Typenschild.js + admin/QrCode.js + admin/Vorlagen.js
+// + admin/Kundendienstfahrzeug.js + server/Montageberichte.js aus dem Repository pdfunterschreiben-Admin/kundendienst-montageberichte
+// (jeweils ohne die letzte module.exports-Zeile). NIE die ganze Datei ersetzen – nur den geänderten Abschnitt (siehe CLAUDE.md).
 const KEY = 'HIER_SCHLUESSEL_EINTRAGEN';
 const DOMAIN = 'schlueter-gabelstapler.de';
-const ADMIN_MAILS = ['b.stockey@hotmail.de', 'b.stockey@schlueter-gabelstapler.de']; // Admin darf sich mit dieser Adresse anmelden
+const ADMIN_MAILS = ['b.stockey@hotmail.de', 'b.stockey@schlueter-gabelstapler.de', 'benjaminstockey@gmail.com']; // Admin darf sich mit dieser Adresse anmelden
 const CODE_MINUTEN = 30;
 // Gerätelisten (Excel) melden sich mit diesem eigenen Schlüssel. Er erlaubt NUR die Nutzungsmeldung
 // der Listen – keine Anmeldung, keine Admin-Funktionen. Muss mit MELDE_KEY in den Listen übereinstimmen.
@@ -52,7 +54,7 @@ function doPost(e) {
     return ContentService.createTextOutput(t).setMimeType(ContentService.MimeType.TEXT);
   }
   // Handy-Seite (GitHub Pages, ohne Google-Anmeldung): nur mit gültigem QR-Code-Token
-  if (d && /^h_(check|foto|ts|vk|vorschau|vorschaubild)$/.test(String(d.event || ''))) {
+  if (d && /^h_(check|foto|ts|vk|vorschau|vorschaubild|sig)$/.test(String(d.event || ''))) {
     let t;
     try { t = 'OK\n' + handyAnfrage(d); } catch (x) { t = 'FEHLER\n' + x.message; }
     return ContentService.createTextOutput(t).setMimeType(ContentService.MimeType.TEXT);
@@ -88,7 +90,7 @@ function doPost(e) {
     return ContentService.createTextOutput(t).setMimeType(ContentService.MimeType.TEXT);
   }
   // … und vom Büro-Programm lesen (nur freigeschaltete und berechtigte Rechner, ohne Sperre)
-  if (d && d.key === KEY && d.app === 'montageberichte' && /^mb_(monteure|liste|datei|schluessel_holen|schluessel_setzen)$/.test(String(d.event || ''))) {
+  if (d && d.key === KEY && d.app === 'montageberichte' && /^mb_(monteure|liste|datei|vermerke|korrektur|klaerung|abzeichnen|unterschrift_datei|unterschrift_code|unterschrift_abholen|uebersicht|schluessel_holen|schluessel_setzen)$/.test(String(d.event || ''))) {
     try { return out(montageberichteAnfrage(d)); } catch (x) { return out({ ok: false, error: x.message }); }
   }
   // Fotos vom Handy (QR-Code) – ohne Sperre
@@ -792,6 +794,7 @@ function neueVersion(v, ab) {
   return true;
 }
 function handyAnfrage(d) {
+  if (d.event === 'h_sig') return mbHandySig(d);
   const token = String(d.token || '');
   if (d.event === 'h_check') {
     if (d.modus === 'ts') return CacheService.getScriptCache().get('ts_' + token.replace(/[^a-f0-9]/g, '')) === 'WARTEN' ? '1' : '0';
@@ -855,8 +858,8 @@ function visitenkarteAuswerten(text) {
     if (em && !email) { email = em[0]; return; }
     if (FAX_LABEL.test(z)) return;
     if (!tel) {
-      const m = z.match(TEL_RE);
-      if (m && (TEL_LABEL.test(z) || m[0].replace(/\D/g, '').length >= 7)) { tel = TEL_LABEL.test(z) ? z.replace(TEL_LABEL, '').trim() : m[0].trim(); return; }
+      const m2 = z.match(TEL_RE);
+      if (m2 && (TEL_LABEL.test(z) || m2[0].replace(/\D/g, '').length >= 7)) { tel = TEL_LABEL.test(z) ? z.replace(TEL_LABEL, '').trim() : m2[0].trim(); return; }
     }
     if (!ort && PLZ_ORT_RE.test(z)) { ort = z; return; }
     if (!strasse && STRASSE_RE.test(z)) { strasse = z; return; }
