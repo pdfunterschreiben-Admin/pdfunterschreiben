@@ -4629,9 +4629,11 @@ async function kundenLaden(){
   }catch(e){}
   meineKundenLaden();
 }
+let kdFehler = "";
 async function meineKundenLaden(){
   try{
     const x = await (await fetch("/api/formular/geraete", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({event: "kd_holen"})})).json();
+    kdFehler = x.ok || x.offline ? "" : (x.error || "");   // z. B. „wird gerade eingerichtet“ (verschlüsselte Kundendaten)
     if(x.ok) meineKunden = (x.text || "").split("\n").filter(z => z.trim()).map(z => { const c = z.split("\t"); return {id: c[0], firma: c[1] || "", name: c[2] || "", email: c[3] || "", tel: c[4] || "", strasse: c[5] || "", ort: c[6] || ""}; });
   }catch(e){}
   return meineKunden;
@@ -5442,8 +5444,8 @@ function kdZeigen(){
     const b = document.createElement("button"); b.type = "button"; b.textContent = "Ändern"; b.onclick = () => kdEditOeffnen(k); tr.lastChild.appendChild(b);
     tb.appendChild(tr);
   }
-  if(!l.length) tb.insertAdjacentHTML("beforeend", `<tr><td colspan="5" class="hint" style="padding:14px 6px">${meineKunden && meineKunden.length ? "Nichts gefunden." : "Noch keine Kundendaten. Mit „＋ Kunde hinzufügen“ anlegen" + ($("#kdScan").hidden ? "" : " oder eine Visitenkarte scannen") + "."}</td></tr>`);
-  $("#kdStand").textContent = (meineKunden || []).length + " Kunde(n) · gemeinsam für alle Kollegen";
+  if(!l.length) tb.insertAdjacentHTML("beforeend", `<tr><td colspan="5" class="hint" style="padding:14px 6px">${kdFehler && !(meineKunden && meineKunden.length) ? esc(kdFehler) : meineKunden && meineKunden.length ? "Nichts gefunden." : "Noch keine Kundendaten. Mit „＋ Kunde hinzufügen“ anlegen" + ($("#kdScan").hidden ? "" : " oder eine Visitenkarte scannen") + "."}</td></tr>`);
+  $("#kdStand").textContent = (meineKunden || []).length + " Kunde(n) · gemeinsam für alle Kollegen · verschlüsselt";
 }
 function kdEditOeffnen(k){
   kdBearbeitet = k || {id: "", firma: "", name: "", email: "", tel: "", strasse: "", ort: ""};
