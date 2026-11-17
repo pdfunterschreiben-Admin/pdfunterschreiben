@@ -28,6 +28,15 @@ body{background:var(--paper);color:var(--ink);font:15px/1.5 var(--f-body);paddin
 .top{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;justify-content:space-between}
 h1{font:700 30px/1.1 var(--f-display);margin:0;letter-spacing:-.01em}
 .lead{margin:6px 0 0;color:var(--muted);max-width:68ch}
+.top{align-items:flex-start}
+.menuwrap{position:relative;margin-left:auto}
+.burger{width:42px;height:42px;padding:0;justify-content:center;border-radius:10px}
+.burger[aria-expanded="true"]{border-color:var(--pen);color:var(--pen);background:var(--pen-soft)}
+.menu{position:absolute;right:0;top:50px;z-index:40;width:min(380px,92vw);max-height:calc(100vh - 90px);overflow:auto;background:var(--sheet);border:1px solid var(--line);border-radius:12px;box-shadow:0 14px 36px rgba(15,23,42,.22);padding:4px 16px}
+.msec{display:flex;flex-direction:column;gap:10px;padding:14px 0;border-top:1px solid var(--line)}
+.msec:first-child,.msec[hidden]+.msec{border-top:0}
+.msec h3{font:600 13px var(--f-body);color:var(--muted);margin:0}
+.msec .grid2 button,.msec .grid2 .btn{justify-content:center}
 .ver{font:12.5px var(--f-mono);color:var(--muted);display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 .ver button{font:12.5px var(--f-body);padding:4px 8px}
 .banner{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;background:var(--pen);color:#fff;border-radius:10px;padding:12px 16px}
@@ -190,6 +199,8 @@ dialog::backdrop{background:rgba(10,15,30,.55)}
 <symbol id="i-ext" viewBox="0 0 24 24"><path d="M14 4h6v6 M20 4l-9 9 M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></symbol>
 <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
 <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14 M5 12h14"/></symbol>
+<symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16 M4 12h16 M4 17h16"/></symbol>
+<symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.6 2.2c-.7.4-1.1.9-1.1 1.8 M12 17h.01"/></symbol>
 </defs></svg>
 <div class="wrap">
   <div class="top">
@@ -202,7 +213,33 @@ dialog::backdrop{background:rgba(10,15,30,.55)}
         <svg class="i" aria-hidden="true"><use href="#i-pencil"/></svg>
       </button>
     </div>
-    <div class="ver"><span id="verText">Version …</span><button class="ghost" id="checkBtn" hidden>Nach Updates suchen</button><button id="helpBtn">Anleitung</button></div>
+    <div class="menuwrap">
+      <button type="button" id="menuBtn" class="burger" aria-label="Menü" aria-haspopup="true" aria-expanded="false" aria-controls="menuPanel"><svg class="i solo" aria-hidden="true"><use href="#i-menu"/></svg></button>
+      <div id="menuPanel" class="menu" hidden>
+        <section class="msec" id="kontoSec" hidden><h3>Konto</h3>
+        <p class="hint" id="userLine" hidden></p>
+        </section>
+        <section class="msec"><h3>Excel</h3>
+        <div class="grid2" style="gap:8px">
+          <button id="exportBtn" style="justify-content:center"><svg class="i" aria-hidden="true"><use href="#i-down"/></svg>Exportieren</button>
+          <label class="btn file-btn" style="justify-content:center"><svg class="i" aria-hidden="true"><use href="#i-up"/></svg>Importieren<input type="file" id="importIn" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"></label>
+        </div>
+        <p class="hint">Exportiert Bestand und Fehlteile in eine Excel-Mappe. Beim Import werden Tabellen mit den Spalten Ersatzteilnummer, Bezeichnung, Stückzahl und Lagerort übernommen – auch die Excel-Datei aus dem früheren Wagenlager. Kennzeichen und Fahrer stehen oben in der Mappe.</p>
+              </section>
+        <section class="msec"><h3>T-Doc</h3>
+        <p class="hint"><span id="erwTeil">T-Doc-Bezeichnungen automatisch: <button class="link" id="erwEinrichten">T-Doc-Verbindung einrichten</button> (einmalig).</span> <span class="chip info" id="tdocChip" hidden></span> Mehrere Teile aus T-Doc: Teile anklicken, Lesezeichen „T-Doc → Excel“, dann „Aus T-Doc“. <button class="link" id="lesezeichenBtn">Lesezeichen einrichten</button></p>
+        </section>
+        <section class="msec" id="adminPanel" hidden><h3>Testkanal (Admin)</h3>
+        <label class="check"><input type="checkbox" id="testChannel"> Testversionen vor allen anderen bekommen</label>
+        <p class="hint">Neue Funktionen kommen hier zuerst an. Erst wenn du sie freigibst, bekommen alle anderen das Update.</p>
+        <p class="hint">Nutzer, Sperren und alle Lager: <button class="link" id="openSheet">Google-Tabelle öffnen</button></p>
+              </section>
+        <section class="msec"><h3>Programm</h3>
+          <div class="ver"><span id="verText">Version …</span><button class="ghost" id="checkBtn" hidden>Nach Updates suchen</button></div>
+          <button id="helpBtn"><svg class="i" aria-hidden="true"><use href="#i-help"/></svg>Anleitung</button>
+        </section>
+      </div>
+    </div>
   </div>
 
   <div class="banner" id="banner" hidden>
@@ -220,8 +257,6 @@ dialog::backdrop{background:rgba(10,15,30,.55)}
           <button id="tdocBtn" style="justify-content:center" title="Teile, die in T-Doc mit dem Lesezeichen gesammelt wurden"><svg class="i" aria-hidden="true"><use href="#i-list"/></svg>Aus T-Doc</button>
         </div>
         <button id="etBtn" class="wide" title="Dieselbe Ersatzteilliste wie im Reparaturauftrag der Service-Mappe"><svg class="i" aria-hidden="true"><use href="#i-list"/></svg>Ersatzteilliste</button>
-        <p class="hint"><span id="erwTeil">T-Doc-Bezeichnungen automatisch: <button class="link" id="erwEinrichten">T-Doc-Verbindung einrichten</button> (einmalig).</span> <span class="chip info" id="tdocChip" hidden></span> Mehrere Teile aus T-Doc: Teile anklicken, Lesezeichen „T-Doc → Excel“, dann „Aus T-Doc“. <button class="link" id="lesezeichenBtn">Lesezeichen einrichten</button></p>
-        <p class="hint" id="userLine" hidden></p>
       </section>
 
       <section class="panel" aria-labelledby="h-stand">
@@ -234,21 +269,7 @@ dialog::backdrop{background:rgba(10,15,30,.55)}
         <div class="row" style="justify-content:space-between"><span class="chip info" id="syncChip">Wird geladen …</span><button class="ghost" id="syncBtn" title="Jetzt mit dem Server abgleichen">↻ Abgleichen</button></div>
       </section>
 
-      <section class="panel" aria-labelledby="h-excel">
-        <div class="step"><b>03</b><h2 id="h-excel">Excel</h2></div>
-        <div class="grid2" style="gap:8px">
-          <button id="exportBtn" style="justify-content:center"><svg class="i" aria-hidden="true"><use href="#i-down"/></svg>Exportieren</button>
-          <label class="btn file-btn" style="justify-content:center"><svg class="i" aria-hidden="true"><use href="#i-up"/></svg>Importieren<input type="file" id="importIn" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"></label>
-        </div>
-        <p class="hint">Exportiert Bestand und Fehlteile in eine Excel-Mappe. Beim Import werden Tabellen mit den Spalten Ersatzteilnummer, Bezeichnung, Stückzahl und Lagerort übernommen – auch die Excel-Datei aus dem früheren Wagenlager. Kennzeichen und Fahrer stehen oben in der Mappe.</p>
-      </section>
 
-      <section class="panel" id="adminPanel" aria-labelledby="h-adm" hidden>
-        <div class="step"><b>ADMIN</b><h2 id="h-adm">Testkanal</h2></div>
-        <label class="check"><input type="checkbox" id="testChannel"> Testversionen vor allen anderen bekommen</label>
-        <p class="hint">Neue Funktionen kommen hier zuerst an. Erst wenn du sie freigibst, bekommen alle anderen das Update.</p>
-        <p class="hint">Nutzer, Sperren und alle Lager: <button class="link" id="openSheet">Google-Tabelle öffnen</button></p>
-      </section>
     </aside>
 
     <main>
@@ -1501,6 +1522,18 @@ $("#exportBtn").onclick = async () => {
 };
 
 
+// Burger-Menü oben rechts: alles, was man selten braucht
+(function(){
+  const btn = $("#menuBtn"), panel = $("#menuPanel");
+  const zu = () => { panel.hidden = true; btn.setAttribute("aria-expanded", "false"); };
+  const auf = () => { panel.hidden = false; btn.setAttribute("aria-expanded", "true"); };
+  btn.onclick = e => { e.stopPropagation(); panel.hidden ? auf() : zu(); };
+  document.addEventListener("click", e => { if(!panel.hidden && !e.target.closest("#menuPanel")) zu(); });
+  document.addEventListener("keydown", e => { if(e.key === "Escape" && !panel.hidden && !document.querySelector("dialog[open]")){ zu(); btn.focus(); } });
+  panel.addEventListener("click", e => { if(e.target.closest("button") && !e.target.closest("#testChannel")) setTimeout(zu, 0); });
+  $("#importIn").addEventListener("change", zu);
+  window.menuZu = zu; window.menuAuf = auf;
+})();
 $("#helpBtn").onclick = () => $("#helpDlg").showModal();
 
 /* ---------- Updates ---------- */
@@ -1666,8 +1699,8 @@ $("#testChannel").onchange = e => { state.testChannel = e.target.checked; persis
 function renderUser(){
   renderAdmin();
   const el = $("#userLine");
-  if(!state.user){ el.hidden = true; return; }
-  el.hidden = false;
+  if(!state.user){ el.hidden = true; $("#kontoSec").hidden = true; return; }
+  el.hidden = false; $("#kontoSec").hidden = false;
   el.innerHTML = `Angemeldet als ${esc(state.user.name)} (${esc(state.user.email)}) · <button class="link" id="userChange">ändern</button> · <button class="link" id="userLogout">abmelden</button>`;
   $("#userChange").onclick = openRegistration;
   $("#userLogout").onclick = () => $("#logoutDlg").showModal();

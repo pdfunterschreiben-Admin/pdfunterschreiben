@@ -283,6 +283,15 @@ const [app, mock, out = '.'] = process.argv.slice(2);
   await page.click('#tabBestand'); await shot('12-soll-spalte');
   ok('Soll-Spalte: Wert in der Liste eingeben → Teil kommt automatisch auf die Bestellliste');
 
+  // Burger-Menü oben rechts: Selten Gebrauchtes liegt dort
+  assert(!(await page.isVisible('#exportBtn')) && !(await page.isVisible('#helpBtn')), 'Menüinhalt darf zu Beginn nicht sichtbar sein');
+  await page.click('#menuBtn'); await page.waitForSelector('#menuPanel:not([hidden])');
+  for (const id of ['#exportBtn', '#helpBtn', '#verText', '#userLine', '#erwEinrichten']) assert(await page.isVisible(id), id + ' fehlt im Menü');
+  await shot('13-menue');
+  await page.keyboard.press('Escape'); await page.waitForSelector('#menuPanel', { state: 'hidden' });
+  await page.click('#menuBtn'); await page.mouse.click(600, 500); await page.waitForSelector('#menuPanel', { state: 'hidden' });
+  ok('Burger-Menü: öffnet, Esc und Klick daneben schließen');
+  await page.click('#menuBtn');
   await page.click('#helpBtn'); await page.waitForSelector('#helpDlg[open]'); await shot('08-anleitung'); await page.keyboard.press('Escape');
 
   // Dunkles Design + schmales Fenster
