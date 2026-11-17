@@ -3845,7 +3845,8 @@ async function handyUnterschrift(box, abbruch, vorschau){
   const api = async (event, extra = {}) => (await fetch("/api/fotos", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({event, ...extra})})).json();
   box.innerHTML = '<span class="hint">QR-Code wird erstellt …</span>';
   let s; try{ s = await api("fotostart"); if(!s.ok) throw new Error(s.error); }catch(e){ box.innerHTML = '<span class="hint">Handy: ' + esc(e.message || String(e)) + '</span>'; return null; }
-  const url = s.url + (s.url.includes("?") ? "&" : "?") + "u=1";
+  const [basis, frag] = s.url.split("#");   // Schlüssel hinter „#“ bleibt am Ende
+  const url = basis + (basis.includes("?") ? "&" : "?") + "u=1" + (frag ? "#" + frag : "");
   box.innerHTML = '<div class="sig-qr"><img alt="QR-Code"><span class="hint">Den Kunden den QR-Code mit seinem Handy scannen lassen – oder mit deinem Handy scannen und dem Kunden geben. Die Unterschrift erscheint dann automatisch hier.</span></div>';
   box.querySelector("img").src = "/api/fotos/qr?u=" + encodeURIComponent(url);
   // Vorschau der Berichte im Hintergrund hochladen – der QR-Code ist sofort da, das Handy lädt die Seiten nach

@@ -4,6 +4,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -58,6 +59,22 @@ func (a *app) handleFotos(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]any{"ok": false, "error": "Bitte zuerst im Programm anmelden."})
 		return
 	}
+	// Ende-zu-Ende-Verschlüsselung (fotokrypto.go): Vorschaubilder gehen nur verschlüsselt zum Server
+	if req.Event == "fotovorschau" {
+		if k := fotoSchluessel(req.Token); k != nil {
+			roh, err := base64.StdEncoding.DecodeString(req.B64)
+			if err != nil {
+				writeJSON(w, map[string]any{"ok": false, "error": "Ungültige Vorschau."})
+				return
+			}
+			enc, err := fotoVerschluesseln(k, map[string]any{"titel": req.Titel}, roh)
+			if err != nil {
+				writeJSON(w, map[string]any{"ok": false, "error": "Verschlüsseln fehlgeschlagen."})
+				return
+			}
+			req.B64, req.Titel = base64.StdEncoding.EncodeToString(enc), ""
+		}
+	}
 	payload, _ := json.Marshal(map[string]any{
 		"key": ReportKey, "event": req.Event, "token": req.Token, "id": req.ID, "ack": req.Ack,
 		"nr": req.Nr, "titel": req.Titel, "b64": req.B64,
@@ -75,6 +92,7 @@ func (a *app) handleFotos(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]any{"ok": false, "error": "Der Server hat nicht richtig geantwortet."})
 		return
 	}
+	body = fotoAntwort(req.Event, req.Token, body)
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
 	w.Write(body)
