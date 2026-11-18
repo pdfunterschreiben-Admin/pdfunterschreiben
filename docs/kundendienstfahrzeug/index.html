@@ -4,20 +4,20 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="robots" content="noindex">
-<meta name="theme-color" content="#1d3fb8">
+<meta name="theme-color" content="#c8102e">
 <title>Kundendienstfahrzeug</title>
 <link rel="icon" href="icon.png">
 <link rel="apple-touch-icon" href="icon.png">
 <style>
 :root{
-  --paper:#f3f5f9; --sheet:#ffffff; --ink:#18233a; --muted:#5b6880; --line:#d8deea;
-  --pen:#1d3fb8; --pen-soft:#e5ebfb; --ok:#13703a; --ok-soft:#e3f4ea; --warn:#9a4a07; --warn-soft:#fbefdf; --bad:#b42318; --bad-soft:#fdecea;
+  --paper:#eef1f6; --sheet:#ffffff; --ink:#18233a; --muted:#5b6880; --line:#d8deea;
+  --pen:#c8102e; --pen-soft:#fbe9ec; --shadow:0 1px 2px rgba(20,30,50,.06),0 6px 20px rgba(20,30,50,.07); --ok:#13703a; --ok-soft:#e3f4ea; --warn:#9a4a07; --warn-soft:#fbefdf; --bad:#b42318; --bad-soft:#fdecea;
   --f-body:"Segoe UI",system-ui,-apple-system,Roboto,sans-serif; --f-mono:ui-monospace,"Cascadia Mono",Consolas,monospace;
   color-scheme:light;
 }
 @media (prefers-color-scheme: dark){:root{
   --paper:#0f131b; --sheet:#171d29; --ink:#e5e9f2; --muted:#98a3b8; --line:#2a3345;
-  --pen:#86a6ff; --pen-soft:#1c2a4d; --ok:#5ad38c; --ok-soft:#14301f; --warn:#f0b35a; --warn-soft:#352610; --bad:#ff8a7a; --bad-soft:#3a1714; color-scheme:dark}}
+  --pen:#ff5a6e; --pen-soft:#3a1a20; --shadow:0 1px 2px rgba(0,0,0,.4),0 6px 20px rgba(0,0,0,.35); --ok:#5ad38c; --ok-soft:#14301f; --warn:#f0b35a; --warn-soft:#352610; --bad:#ff8a7a; --bad-soft:#3a1714; color-scheme:dark}}
 *{box-sizing:border-box}
 [hidden]{display:none!important}
 /* Firmengebäude als Kopfband, Firmenlogo als Wasserzeichen (wie die Service-Mappe) */
@@ -29,7 +29,7 @@ body::before{content:"";position:fixed;left:50%;top:58%;width:min(760px,92vw);as
 #app{position:relative;z-index:1}
 html,body{margin:0}
 body{background:var(--paper);color:var(--ink);font:16px/1.45 var(--f-body);padding:0 0 calc(90px + env(safe-area-inset-bottom))}
-header{position:sticky;top:0;z-index:5;background:var(--paper);padding:14px 16px 10px;display:flex;flex-direction:column;gap:10px;border-bottom:1px solid var(--line)}
+header{position:sticky;top:0;z-index:5;background:var(--sheet);box-shadow:var(--shadow);padding:14px 16px 10px;display:flex;flex-direction:column;gap:10px;border-bottom:1px solid var(--line)}
 .kopf{display:flex;align-items:center;justify-content:space-between;gap:10px}
 h1{font:700 22px/1.1 var(--f-body);margin:0}
 .chip{display:inline-flex;align-items:center;font-size:12.5px;padding:2px 9px;border-radius:99px;white-space:nowrap}
@@ -44,7 +44,7 @@ button.primary{background:var(--pen);border-color:var(--pen);color:#fff;font-wei
 button.ghost{background:transparent;border-color:transparent;color:var(--muted)}
 button:disabled{opacity:.45}
 main{padding:12px 16px;display:flex;flex-direction:column;gap:10px}
-.karte{background:var(--sheet);border:1px solid var(--line);border-radius:12px;padding:12px 12px 12px 14px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 10px;align-items:center}
+.karte{background:var(--sheet);border:1px solid color-mix(in srgb,var(--line) 60%,transparent);box-shadow:var(--shadow);border-radius:14px;padding:12px 12px 12px 14px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 10px;align-items:center}
 .karte .name{font-weight:600;overflow-wrap:anywhere}
 .karte .nr{font:13.5px var(--f-mono);color:var(--muted)}
 .karte .ort{font-size:13px;color:var(--muted)}
