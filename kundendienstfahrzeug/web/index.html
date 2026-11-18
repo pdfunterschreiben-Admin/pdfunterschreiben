@@ -40,6 +40,19 @@ h1{font:700 24px/1.1 var(--f-display);margin:0;letter-spacing:-.01em}
 .menu-schleier{position:fixed;inset:0;z-index:55;background:rgba(15,23,42,.45)}
 .menu-kopf{display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:var(--sheet);padding:14px 0 10px;border-bottom:1px solid var(--line);z-index:1}
 .menu-kopf strong{font:700 17px var(--f-display)}
+/* Kopfleiste mit Firmengebäude und Firmenlogo als Wasserzeichen (wie die Service-Mappe) */
+.top{background:#0b1a3a url("/kopf.jpg") center 58%/cover no-repeat;border-bottom:3px solid var(--pen);min-height:104px;color:#fff;position:sticky;box-shadow:var(--shadow)}
+.top::before{content:"";position:absolute;inset:0;background:linear-gradient(90deg,rgba(6,14,36,.82) 0%,rgba(6,14,36,.45) 45%,rgba(6,14,36,.15) 75%,rgba(6,14,36,.35) 100%);pointer-events:none}
+.top>*{position:relative}
+.top h1{color:#fff;text-shadow:0 2px 8px rgba(0,0,0,.5)}
+.top .lead{color:rgba(255,255,255,.88);text-shadow:0 1px 6px rgba(0,0,0,.5)}
+.top .burger{background:rgba(255,255,255,.16);border-color:rgba(255,255,255,.4);color:#fff;backdrop-filter:blur(6px)}
+.top .burger:hover{background:rgba(255,255,255,.28)}
+.top .burger[aria-expanded="true"]{background:rgba(255,255,255,.3);color:#fff;border-color:#fff}
+body::before{content:"";position:fixed;left:61%;top:60%;width:min(760px,62vw);aspect-ratio:803/150;transform:translate(-50%,-50%);background:url("/wasserzeichen.png") center/contain no-repeat;opacity:.07;pointer-events:none;z-index:0}
+@media (prefers-color-scheme: dark){body::before{opacity:.10;filter:grayscale(.3) brightness(1.6)}}
+.wrap{position:relative;z-index:1}
+.top{z-index:30}
 .msec{border-top:1px solid var(--line);padding:0}
 .msec:first-child,.msec[hidden]+.msec{border-top:0}
 .msec>summary{list-style:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:13px 2px;font:600 14px var(--f-body);color:var(--ink);border-radius:6px;user-select:none}
